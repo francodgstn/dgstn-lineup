@@ -1752,8 +1752,8 @@
     "waitlistEnabledHint": "Ist eine Einheit ausgebucht, landen Besucher auf einer Warteliste statt in einer Sackgasse. Wird ein Platz frei, wird er automatisch der ersten Person angeboten.",
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
-    "sectionBookingTitle": "Buchung und Preise",
-    "sectionBookingSubtitle": "Wer das buchen kann und was es kostet.",
+    "sectionBookingTitle": "Buchungsoptionen",
+    "sectionBookingSubtitle": "Wie eine Buchung nach dem Absenden behandelt wird — und bei Terminen die angebotenen Längen. Preise und Zugang stehen im Katalog.",
     "moreOptionsLabel": "Weitere Optionen",
     "moreOptionsHint": "Farbe, Niveau und die Angaben auf deiner öffentlichen Seite",
     "viewSchedule": "Zeitplan ansehen",
@@ -7431,7 +7431,7 @@
   },
   "OfferCatalogue": {
     "title": "Katalog",
-    "toPricing": "Preise ansehen",
+    "toPricing": "Preise",
     "tabActivities": "Aktivitäten",
     "tabProducts": "Produkte",
     "noProducts": "Noch keine Produkte.",
@@ -7513,7 +7513,8 @@
     "hintCourses": "Was Ihre Onlinekurse kosten und welche Pläne sie freischalten. Die Inhalte bearbeiten Sie unter Onlinekurse.",
     "hintProducts": "Was Sie zusätzlich zu Ihrem Angebot verkaufen. Den ganzen Katalog bearbeiten Sie unter Produkte.",
     "summaryClassOpen": "Für alle offen — für die Buchung ist kein Plan nötig.",
-    "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wer buchen darf, ändern Sie in der Aktivität selbst."
+    "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wählen Sie oben „Alle Mitglieder“ oder „Bestimmte Abos“, um Pläne zu verknüpfen.",
+    "editDetails": "Details bearbeiten"
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

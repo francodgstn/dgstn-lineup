@@ -966,6 +966,13 @@ apps/web/
 
 ## Development commands
 
+**Before starting or stopping ANY local process, run `node scripts/local-env.mjs
+status`.** Several worktrees develop this repo at once and they all want the same
+ports; both ways that goes wrong are silent (the seeder wipes another checkout's
+data behind a clean success banner, and the functions emulator keeps serving the
+`dist` of whichever checkout started it). `.claude/skills/local-env/SKILL.md`
+owns the port slots, the fresh-worktree bootstrap, and the traps.
+
 **Local dev = one process per terminal.**
 
 In VS Code (the usual way): **Ctrl+Shift+P → "Tasks: Run Task"** → pick a service or a

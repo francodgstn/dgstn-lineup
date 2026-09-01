@@ -97,3 +97,23 @@ Safe fields per entity (from firestore.rules):
 - [ ] If new Firestore collection: `firestore.rules` updated
 - [ ] If new queries needed: indexes added to `firestore.index.json`
 - [ ] Build passes: `pnpm --filter @linyup/functions run build`
+
+
+## Verifying locally
+
+**Do not start a Firebase emulator or a dev server yourself before running
+`node scripts/local-env.mjs status`.** Several git worktrees develop this repo at
+once and they all want the same ports. The two ways that goes wrong are silent:
+the seeder wipes ANOTHER checkout's data while printing a clean success banner,
+and the functions emulator keeps serving the `packages/functions/dist` of
+whichever checkout started it — so you can rebuild all day and keep observing
+another branch's behaviour, with no error anywhere.
+
+`status` reports which checkout owns each running slot and flags an emulator
+that predates your last build. Read **`.claude/skills/local-env/SKILL.md`**
+before starting, stopping, resetting or seeding anything local; it owns the port
+slots, the fresh-worktree bootstrap (`init` — a worktree has none of the
+untracked env/secret/lead files), the dataset choices and the traps.
+
+Deployed environments are never yours: hand anything touching sandbox, staging
+or production to `ops-agent`.

@@ -1752,8 +1752,8 @@
     "waitlistEnabledHint": "Quand une séance est complète, les visiteurs rejoignent une file au lieu d’aboutir à une impasse. Dès qu’une place se libère, elle est proposée automatiquement à la première personne.",
     "waitlistRequiresCapacity": "N’a d’effet que sur les séances avec une limite de participants — une séance sans limite n’est jamais complète.",
     "waitlistRequiresPlan": "Disponible à partir de la formule {plan}.",
-    "sectionBookingTitle": "Réservation et tarifs",
-    "sectionBookingSubtitle": "Qui peut réserver, et à quel prix.",
+    "sectionBookingTitle": "Options de réservation",
+    "sectionBookingSubtitle": "Comment une réservation est traitée une fois faite — et, pour les rendez-vous, les durées proposées. Les prix et l'accès sont dans le catalogue.",
     "moreOptionsLabel": "Plus d'options",
     "moreOptionsHint": "Couleur, niveau et les informations affichées sur votre page publique",
     "viewSchedule": "Voir le planning",
@@ -7431,7 +7431,7 @@
   },
   "OfferCatalogue": {
     "title": "Catalogue",
-    "toPricing": "Voir les prix",
+    "toPricing": "Tarifs",
     "tabActivities": "Activités",
     "tabProducts": "Produits",
     "noProducts": "Aucun produit pour l'instant.",
@@ -7513,7 +7513,8 @@
     "hintCourses": "Ce que coûtent vos cours en ligne et quelles formules les ouvrent. Modifiez leur contenu sur la page Cours en ligne.",
     "hintProducts": "Ce que vous vendez en plus de votre offre. Modifiez tout le catalogue sur la page Produits.",
     "summaryClassOpen": "Ouvert à tous — aucune formule n'est nécessaire pour réserver.",
-    "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Changez qui peut réserver dans l'activité elle-même."
+    "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Choisissez « Tout membre » ou « Abonnements spécifiques » ci-dessus pour lier des formules.",
+    "editDetails": "Modifier les détails"
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",
