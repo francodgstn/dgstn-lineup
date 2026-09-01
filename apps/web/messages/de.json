@@ -7513,7 +7513,8 @@
     "hintCourses": "Was Ihre Onlinekurse kosten und welche Pläne sie freischalten. Die Inhalte bearbeiten Sie unter Onlinekurse.",
     "hintProducts": "Was Sie zusätzlich zu Ihrem Angebot verkaufen. Den ganzen Katalog bearbeiten Sie unter Produkte.",
     "summaryClassOpen": "Für alle offen — für die Buchung ist kein Plan nötig.",
-    "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wählen Sie oben „Alle Mitglieder“ oder „Bestimmte Abos“, um Pläne zu verknüpfen."
+    "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wählen Sie oben „Alle Mitglieder“ oder „Bestimmte Abos“, um Pläne zu verknüpfen.",
+    "editDetails": "Details bearbeiten"
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

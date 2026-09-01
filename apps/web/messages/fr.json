@@ -7513,7 +7513,8 @@
     "hintCourses": "Ce que coûtent vos cours en ligne et quelles formules les ouvrent. Modifiez leur contenu sur la page Cours en ligne.",
     "hintProducts": "Ce que vous vendez en plus de votre offre. Modifiez tout le catalogue sur la page Produits.",
     "summaryClassOpen": "Ouvert à tous — aucune formule n'est nécessaire pour réserver.",
-    "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Choisissez « Tout membre » ou « Abonnements spécifiques » ci-dessus pour lier des formules."
+    "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Choisissez « Tout membre » ou « Abonnements spécifiques » ci-dessus pour lier des formules.",
+    "editDetails": "Modifier les détails"
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",
