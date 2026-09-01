@@ -34,6 +34,11 @@ a session transcript.
 | Functions env | `packages/functions/.env.*` |
 | Ops scripts | `scripts/` — `stripe-sync`, `promote-team`, `backfill:*`, `seed:*`, `reset:*`, `messaging-policy`, `vendor-shared-for-deploy.mjs`, `verify-waiver-ledger`, `audit-*` |
 
+**You do NOT own the LOCAL stack.** Firebase emulators, dev servers, seeding a
+worktree, port collisions between checkouts — that is
+`.claude/skills/local-env/SKILL.md` and `scripts/local-env.mjs`. Your project
+aliases start at `sandbox`; `demo-linyup` on localhost is never yours.
+
 **You do NOT own** application code. If a fix requires changing `apps/*/src` or
 `packages/functions/src`, say so and hand it to the right specialist —
 `functions-agent`, `web-agent`, `mobile-agent`. The exception is when the *only* change is

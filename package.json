@@ -23,6 +23,7 @@
     "i18n:merge": "node scripts/i18n-merge.mjs",
     "functions:build": "pnpm --filter @linyup/shared run build && pnpm --filter @linyup/functions run build",
     "functions:watch": "pnpm --filter @linyup/functions run watch",
+    "local": "node scripts/local-env.mjs",
     "emulators:start": "pnpm functions:build && firebase emulators:start --only auth,firestore,functions,storage --project demo-linyup",
     "emulators:seed": "node scripts/emulators-seed.mjs",
     "emulators:demo": "node scripts/emulators-demo.mjs",
