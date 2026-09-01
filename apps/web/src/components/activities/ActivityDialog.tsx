@@ -25,16 +25,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FormSection } from '@/components/ui/form-section'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { ACTIVITIES_COLLECTION, resolveActivityAccessRule, resolveAutoConfirm } from '@linyup/shared'
+import { ACTIVITIES_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
-import { activityRateChoiceOf, gatedPlanIds, ratedPlanIds } from '@linyup/shared'
+import { activityRateChoiceOf, ratedPlanIds } from '@linyup/shared'
 import { MAX_ACTIVITY_TAGS, normalizeActivityTags, normalizeBookingQuestions } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityType, DurationSaleMode, SaasPlan, SubscriptionType, FormField, BookingContactField } from '@linyup/shared'
+import type { Activity, ActivityDuration, ActivityType, DurationSaleMode, SaasPlan, FormField, BookingContactField } from '@linyup/shared'
 
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
 import { ActivityTagsEditor } from '@/components/activities/ActivityTagsEditor'
 import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
-import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -176,19 +175,13 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
     color: z.string().optional(),
     // CLASS-ONLY paid-access gate (supersedes the legacy isFreeTrial toggle;
     // 'open' === free trial). Appointments dropped this entirely — the price is
-    // the only gate; see `memberBenefit` below.
-    accessTier: z.enum(['open', 'members', 'subscription'] as const),
     // Drop-in / pay-per-class: an uncovered contact may pay this to book a single
     // session. CLASS-ONLY.
-    dropInEnabled: z.boolean(),
-    dropInPrice: z.string(),
     // CLASS-ONLY: independent of accessTier — a gated class still takes a
     // newcomer's trial booking when this is on.
-    trialEnabled: z.boolean(),
     // CLASS-ONLY: reduced trial price, kept as a string in form state ('' = free
     // trial, today's behaviour). A number reduces the trial to that price
     // instead of the class's normal price.
-    trialPrice: z.string(),
     // CLASS-ONLY: a full session offers a queue instead of a dead end. This is
     // the ONLY place the flag lives — sessions carry no copy of it, so turning
     // it on here reaches every session of the activity, past and future, with
@@ -209,12 +202,6 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
       })
     ),
   }).superRefine((d, ctx) => {
-    if (d.dropInEnabled && !(d.dropInPrice.trim() !== '' && parsePriceInput(d.dropInPrice) >= 0.5)) {
-      ctx.addIssue({ code: 'custom', path: ['dropInPrice'], message: t('dropInPriceValidation') })
-    }
-    if (d.trialPrice.trim() !== '' && !(parsePriceInput(d.trialPrice) >= 0.5)) {
-      ctx.addIssue({ code: 'custom', path: ['trialPrice'], message: t('trialPriceValidation') })
-    }
     if (d.type === 'appointment' && d.durations.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['durations'], message: t('durationsRequiredValidation') })
     }
@@ -245,8 +232,7 @@ export function ActivityDialog({
   duplicating,
   nextOrder,
   currency,
-  subscriptionTypes,
-  canEditPlanLinks,
+  onCreated,
 }: {
   open: boolean
   onClose: () => void
@@ -273,10 +259,15 @@ export function ActivityDialog({
   nextOrder: number
   /** Team's billing currency (ISO code), shown next to duration price inputs. */
   currency: string
-  /** The team's plans — the rows of the in-place plan editor. */
-  subscriptionTypes: SubscriptionType[]
-  /** `team.settings`, the same capability the catalogue gates that editor on. */
-  canEditPlanLinks: boolean
+  /**
+   * Called with the new id after a CREATE, before `onClose`.
+   *
+   * A brand-new activity has no price, no tier and no plans, and this form no
+   * longer asks for any of them — so the host selects it in the catalogue,
+   * where those controls now live. Without this the studio would save a class
+   * and then have to go and find it to finish the job (Franco, 2026-09-01).
+   */
+  onCreated?: (activityId: string) => void
 }) {
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
@@ -325,7 +316,6 @@ export function ActivityDialog({
   // Does the mounted plan editor hold ticks it has not written yet? It reports
   // this upward because THIS form's Save writes the same document and carries
   // the STORED plan list through — so pressing it would discard them.
-  const [planLinksDirty, setPlanLinksDirty] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   // A copy keeps the cover image: `image_url` is a download URL for a file that
   // outlives the source (activities are ARCHIVED, never deleted), and a new
@@ -339,9 +329,6 @@ export function ActivityDialog({
   // one being copied. `editing` alone still decides which BRANCH of onSubmit
   // runs — a duplicate is a create, and must go down the create path.
   const seed = editing ?? duplicating
-  const initialRule = seed
-    ? resolveActivityAccessRule(seed)
-    : { type: 'open' as const, subscriptionTypeIds: [] as string[] }
 
   const {
     register,
@@ -349,7 +336,6 @@ export function ActivityDialog({
     control,
     watch,
     setValue,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<ActivityFormData>({
     resolver: zodResolver(activitySchema),
@@ -374,11 +360,6 @@ export function ActivityDialog({
           // screen, is a dead form with no way to diagnose it.
           tags: normalizeActivityTags(seed.tags ?? []),
           color: seed.color ?? '',
-          accessTier: initialRule.type,
-          dropInEnabled: seed.dropIn?.enabled ?? false,
-          dropInPrice: seed.dropIn?.priceAmount != null ? String(seed.dropIn.priceAmount) : '',
-          trialEnabled: seed.trialEnabled ?? false,
-          trialPrice: seed.trialPriceAmount != null ? String(seed.trialPriceAmount) : '',
           waitlistEnabled: seed.waitlistEnabled ?? false,
           durations: toDurationFormValues(seed.durations),
           autoConfirm: resolveAutoConfirm(seed),
@@ -395,8 +376,7 @@ export function ActivityDialog({
           // short-circuits it to `covered`) — the wrong thing to land on by
           // accident. A newcomer can still be let in via "Free trial for
           // newcomers" below, which is what makes 'members' safe as a default.
-          color: DEFAULT_ACCENT, accessTier: 'members',
-          dropInEnabled: false, dropInPrice: '', trialEnabled: false, trialPrice: '',
+          color: DEFAULT_ACCENT,
           waitlistEnabled: false,
           durations: [],
           // TRUE for a new activity of either kind. `resolveAutoConfirm` is left
@@ -407,9 +387,6 @@ export function ActivityDialog({
         },
   })
   const type = watch('type')
-  const accessTier = watch('accessTier')
-  const dropInEnabled = watch('dropInEnabled')
-  const trialEnabled = watch('trialEnabled')
   const waitlistEnabled = watch('waitlistEnabled')
   const durations = watch('durations') || []
   // Can a 'benefit_only' length actually be opened by anything? Only an
@@ -469,18 +446,6 @@ export function ActivityDialog({
     if (!autoConfirmTouched)
       setValue('autoConfirm', editing ? resolveAutoConfirm({ type }) : true)
   }, [type, autoConfirmTouched, setValue, editing])
-
-  // THE RADIO IS AUTHORITATIVE FOR THE TIER, so it has to follow the document
-  // when the plan editor below moves it — unticking the last plan there stores
-  // `members`, and a radio still reading "Subscription" would put the tier back
-  // over an empty allow-list on the next Save: a class nobody can book.
-  // Keyed on the VALUE, never the document: `editing` is a fresh object on every
-  // refetch, and re-running on those would wipe a tier the studio has chosen and
-  // not yet saved.
-  const storedAccessTier = editing ? resolveActivityAccessRule(editing).type : null
-  useEffect(() => {
-    if (storedAccessTier) setValue('accessTier', storedAccessTier)
-  }, [storedAccessTier, setValue])
 
   // Inline quick-create: "create or link a subscription to this activity" without
   // leaving the form. Writes a minimal type (pricing is configured later in the
@@ -553,64 +518,49 @@ export function ActivityDialog({
         durations: toActivityDurations(data.durations),
       }
     }
-    return {
-      isFreeTrial: data.accessTier === 'open',
-      // THE TIER IS THIS DIALOG'S; THE ALLOW-LIST IS THE PLAN EDITOR'S. The ids
-      // are carried through from the stored document rather than read off a
-      // control this form does not own — same rule as `waitlistEnabled` below.
-      // Without this, saving any edit would blank the plans that editor set.
-      //
-      // It reads `seed`, which for an edit is the LIVE document: the plan
-      // editor is mounted in this very dialog and writes this same field, so a
-      // snapshot taken when the dialog opened would put the pre-edit list
-      // straight back. For a COPY it is the activity being copied — a duplicate
-      // carries its plans like everything else, and a subscription-gated
-      // activity with an empty allow-list is one nobody can book.
-      accessRule: {
-        type: data.accessTier,
-        ...(data.accessTier === 'subscription'
-          ? { subscriptionTypeIds: gatedPlanIds(seed ?? { type: 'class' }) }
-          : {}),
-      },
-      dropIn: {
-        enabled: data.dropInEnabled,
-        ...(data.dropInPrice ? { priceAmount: parsePriceInput(data.dropInPrice) } : {}),
-      },
-      trialEnabled: data.trialEnabled,
-      // Cleared on an open tier — the field is hidden there (the trial door
-      // grants nothing extra on a free-to-book class), so a leftover price from
-      // a previous tier must not survive as inert data the UI can't show.
-      trialPriceAmount:
-        data.trialPrice && data.accessTier !== 'open' ? parsePriceInput(data.trialPrice) : null,
+    const base: Record<string, unknown> = {
       // Below the tier the stored value is carried through untouched rather than
       // read off a locked control: the gate stops a queue being OPENED, it does
       // not quietly strip one an activity already had (see WAITLIST_MIN_PLAN).
-      // Carried through untouched whenever the control was not rendered — below
-      // the plan tier, or with the studio-level switch off. Neither gate strips
-      // a queue an activity already had; they stop one being OPENED.
+      // Carried through whenever the control was not rendered — below the plan
+      // tier, or with the studio-level switch off.
       waitlistEnabled:
         waitlistAllowed && (waitlistOffered || editing?.waitlistEnabled === true)
           ? data.waitlistEnabled
           : (editing?.waitlistEnabled ?? false),
       durations: null,
-      // `memberBenefit` is NOT written here at all any more. It is the
-      // catalogue's, and a dialog that cleared it on an unrelated save would
-      // delete a rate the studio set on another screen.
+    }
+    // ── THE MONEY FIELDS ARE NOT THIS FORM'S ──────────────────────────────
+    //
+    // `accessRule`, `dropIn`, `trialEnabled`, `trialPriceAmount` and
+    // `memberBenefit` belong to ActivityPricingForm and the plan matcher, both
+    // in the catalogue. An EDIT here names none of them — that is the whole
+    // point of the split, and naming one would clobber a decision made on the
+    // other screen (the course settings form did exactly that, and un-linked
+    // plans for a week).
+    if (editing) return base
+
+    // A CREATE is different: the document does not exist yet, so there is no
+    // other writer to lose a race with, and something has to seed these. A COPY
+    // carries the original's — pricing is configuration like everything else,
+    // and a duplicate that silently lost its price would be worse than one that
+    // kept it. A blank activity starts on the tier the cards used to default to.
+    return {
+      ...base,
+      accessRule: duplicating?.accessRule ?? { type: 'members' as const },
+      isFreeTrial: duplicating?.isFreeTrial ?? false,
+      dropIn: duplicating?.dropIn ?? { enabled: false },
+      trialEnabled: duplicating?.trialEnabled ?? false,
+      trialPriceAmount: duplicating?.trialPriceAmount ?? null,
+      memberBenefit: duplicating?.memberBenefit ?? null,
     }
   }
 
   async function onSubmit(data: ActivityFormData) {
-    // A class gated to subscriptions with an empty allow-list is a class NOBODY
-    // can book, and nothing downstream refuses it. Checked here rather than in
-    // the schema because the ids are not a form field at all — they live on the
-    // stored document, written by the plan editor mounted above. Only while
-    // editing: a brand-new activity has no id to hang an edge on, which is what
-    // `accessPlansAfterSave` tells the studio to come back for.
-    if (editing && data.type === 'class' && data.accessTier === 'subscription' &&
-        gatedPlanIds(editing).length === 0) {
-      setError('accessTier', { type: 'manual', message: t('accessSubscriptionPlansValidation') })
-      return
-    }
+    // The "gated to subscriptions with nobody on the list" check that used to
+    // sit here is gone with the tier control. It is not lost: the catalogue
+    // reports it as `gated_empty_allowlist`, continuously and beside the
+    // matcher that fixes it, rather than only at the moment of a save.
     if (editing) {
       // EDIT: the image upload (when there's a new file) runs BEFORE the
       // write, so a throw anywhere in this block means updateDoc never ran —
@@ -683,6 +633,7 @@ export function ActivityDialog({
         await qc.invalidateQueries({ queryKey: ['activities'] })
         void invalidateSetupChecklist()
         toast.error(t('createdImageErrorToast'))
+        onCreated?.(newRef.id)
         onClose()
         return
       }
@@ -691,6 +642,7 @@ export function ActivityDialog({
     await qc.invalidateQueries({ queryKey: ['activities'] })
     void invalidateSetupChecklist()
     toast.success(t('createdToast'))
+    onCreated?.(newRef.id)
     onClose()
   }
 
@@ -808,89 +760,18 @@ export function ActivityDialog({
               charged and who can get in. Grouped and ordered here, and never
               hidden behind a disclosure — UX-11 is the public half of the same
               rule. This form no longer has one at all. */}
+          {/* WHAT IS LEFT AFTER THE MONEY MOVED OUT. The access tier, the
+              newcomer trial and the drop-in price now live in the catalogue
+              beside the plan matcher that reprices them — see
+              components/activities/ActivityPricingForm.tsx for why. What stays
+              here is not about money: whether a booking confirms itself,
+              whether a full session keeps a queue, and how long an appointment
+              runs. */}
           <FormSection
             title={t('sectionBookingTitle')}
             description={t('sectionBookingSubtitle')}
           >
 
-            {/* CLASS-ONLY: appointments dropped the access gate entirely — the
-                price is the only gate (see the member-benefit row below). */}
-            {type === 'class' && (
-              <div className="space-y-2">
-                <Label>{t('accessLabel')}</Label>
-                <Controller
-                  control={control}
-                  name="accessTier"
-                  render={({ field }) => (
-                    // Selectable tier cards (3-across when the dialog is wide) —
-                    // same pattern as the availability form's mode toggle.
-                    <div className="grid gap-2 lg:grid-cols-3">
-                      {(['open', 'members', 'subscription'] as const).map((tier) => (
-                        <label
-                          key={tier}
-                          className={`flex items-start gap-2 cursor-pointer text-sm rounded-lg border p-2.5 transition-colors ${
-                            field.value === tier ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            className="mt-0.5 accent-primary"
-                            checked={field.value === tier}
-                            onChange={() => field.onChange(tier)}
-                          />
-                          <span>
-                            <span className="font-medium">{t(`access_${tier}`)}</span>
-                            <span className="block text-xs text-muted-foreground">
-                              {t(`access_${tier}_desc`)}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                />
-                {accessTier === 'subscription' &&
-                  (editing ? (
-                    /* WHICH plans, EDITED HERE. For one release this was a link
-                       to the catalogue, which sent the studio out of a
-                       half-filled form — discarding every unsaved field — to
-                       answer the most obvious question the tier raises. The
-                       control is back and there is still exactly one writer of
-                       the edge, because this mounts THAT writer: the same
-                       `ActivityPlanLinks` the catalogue and the subscription
-                       editor mount, in its offering direction. The catalogue
-                       keeps the plan-side view of the same rows. */
-                    <div className="rounded-md border p-3">
-                      <ActivityPlanLinks
-                        direction="from-offering"
-                        offering={{
-                          id: editing.id,
-                          name: editing.name,
-                          collection: ACTIVITIES_COLLECTION,
-                          color: editing.color ?? '',
-                          target: { kind: 'activity', doc: editing },
-                        }}
-                        offerings={[]}
-                        plans={subscriptionTypes}
-                        currency={currency}
-                        canEdit={canEditPlanLinks}
-                        hostedInForm
-                        onDirtyChange={setPlanLinksDirty}
-                      />
-                    </div>
-                  ) : (
-                    /* An activity that does not exist yet has no id to hang an
-                       edge on. Say so, rather than showing ticks that would be
-                       discarded on save. */
-                    <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                      {t('accessPlansAfterSave')}
-                    </p>
-                  ))}
-                {errors.accessTier && (
-                  <p className="text-xs text-destructive">{errors.accessTier.message}</p>
-                )}
-              </div>
-            )}
 
             {/* The per-activity switches, gathered into one outlined group:
                 label (+ hint) on the left, control on the right, one per row.
@@ -916,46 +797,6 @@ export function ActivityDialog({
                 )}
               />
 
-              {/* CLASS-ONLY: independent of the access tier above — a gated class
-                  may still take a newcomer's trial booking. The optional trial
-                  price sits under the toggle: empty keeps the trial free (today's
-                  behaviour); a number reduces it to that price instead of the
-                  class's normal price. */}
-              {type === 'class' && (
-                <div className="p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 pr-4">
-                      <p className="text-sm font-medium">{t('fieldTrialEnabled')}</p>
-                      <p className="text-xs text-muted-foreground">{t('trialEnabledHint')}</p>
-                    </div>
-                    <input type="checkbox" {...register('trialEnabled')} className="accent-primary shrink-0" />
-                  </div>
-                  {/* Only on a GATED class — on an open one the trial door grants
-                      nothing extra (everyone books free), so a price there would be
-                      silently ignored by `bookSession`. Offering the field would
-                      promise a charge the backend never makes. */}
-                  {trialEnabled && accessTier !== 'open' && (
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0 pr-4">
-                        <p className="text-xs font-medium">{t('trialPriceLabel')}</p>
-                        <p className="text-xs text-muted-foreground">{t('trialPriceHint')}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">{currency}</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          {...register('trialPrice')}
-                          placeholder={t('trialPricePlaceholder')}
-                          className="h-8 w-24 text-sm"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {errors.trialPrice && <p className="text-destructive text-xs">{errors.trialPrice.message}</p>}
-                </div>
-              )}
 
               {/* CLASS-ONLY: the queue behind a full session. Independent of every
                   other door here — a members-only class, a drop-in class and an
@@ -990,45 +831,6 @@ export function ActivityDialog({
                 </div>
               )}
 
-              {/* CLASS-ONLY: the one drop-in concept — always visible, not nested
-                  under an access tier. */}
-              {type === 'class' && (
-                <div className="p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 pr-4">
-                      <p className="text-sm font-medium">{t('dropInLabel')}</p>
-                      <p className="text-xs text-muted-foreground">{t('dropInHelp')}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <input type="checkbox" {...register('dropInEnabled')} className="accent-primary" />
-                      {dropInEnabled && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">{currency}</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            {...register('dropInPrice')}
-                            placeholder={t('dropInPricePlaceholder')}
-                            className="h-8 w-24 text-sm"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {errors.dropInPrice && <p className="text-destructive text-xs">{errors.dropInPrice.message}</p>}
-
-                  {/* The member rate on this price is set in the catalogue,
-                      beside the plans it applies to — it is ONE rule shared by
-                      every plan on it, and this dialog could not show who else a
-                      change would reprice. */}
-                  {dropInEnabled && (
-                    <p className="mt-1 border-t pt-2 text-xs text-muted-foreground">
-                      {t('dropInRateInCatalogue')}
-                    </p>
-                  )}
-                </div>
-              )}
 
               {type === 'appointment' && (
                 <div className="p-3 space-y-3">
@@ -1321,14 +1123,11 @@ export function ActivityDialog({
           </FormSection>
           </DialogBody>
 
-          <DialogFooter className={planLinksDirty ? 'sm:justify-between' : undefined}>
-            {/* The plan editor above owns its own Save and its own document
-                write. Saving HERE carries the stored plan list through, so ticks
-                left unsaved there are lost — said out loud, next to the button
-                that would lose them, rather than after the fact. */}
-            {planLinksDirty && (
-              <p className="text-xs text-muted-foreground">{t('planLinksUnsaved')}</p>
-            )}
+          {/* The warning that stood here — "the plan editor has unsaved ticks
+              and this Save will lose them" — went with the plan editor itself.
+              This form no longer writes any field that editor writes, so its
+              Save cannot lose anything of theirs. */}
+          <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? t('saving') : editing ? t('saveChanges') : t('createActivity')}
             </Button>
