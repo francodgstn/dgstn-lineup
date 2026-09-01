@@ -22,6 +22,8 @@ reports **friction, not fixes**. Then relay its findings verbatim-in-substance.
 ## Preflight (main session, before launching)
 
 1. `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000` → expect 200/307.
+   Not running (or a fresh container)? Launch the stack per
+   `.claude/skills/run-web/SKILL.md` first.
 2. Firestore emulator on :8080, and confirm the login account exists in the Auth
    emulator (`studio@linyup.com` / `linyup123` unless the user names another).
 3. Do NOT reseed — a reseed wipes lead tenants and collides with a running

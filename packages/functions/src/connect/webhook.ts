@@ -1030,6 +1030,11 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
     reportStripeShape('subscription.current_period_end', sub.id, period.source, `event ${eventId}`)
   }
   const periodEnd = period.end === null ? null : Timestamp.fromMillis(period.end * 1000)
+  // Same item, same rail rule as the end (written whole, null included): the
+  // start says WHICH SERVICE PERIOD this invoice bought — accrual readiness
+  // (docs/finance-accrual.md, Phase 0). Docs from before 2026-08-31 carry only
+  // the end; `backfill:subscription-lifecycle` repairs them.
+  const periodStart = period.start === null ? null : Timestamp.fromMillis(period.start * 1000)
   const cancellation = readSubscriptionCancellation(sub)
   await memberSubscriptionRef(team.teamId, sub.id).set(
     {
@@ -1053,6 +1058,7 @@ async function handleSubscription(team: TeamRef, sub: any, eventId: string): Pro
       status: sub.status ?? 'incomplete',
       // Billing freeze (summer break / injury). When set, the rollup → 'paused'.
       pause_collection: sub.pause_collection ?? null,
+      current_period_start: periodStart,
       current_period_end: periodEnd,
       cancel_at_period_end: cancellation.cancelsAtPeriodEnd,
       // THE WHOLE CANCELLATION RECORD, and every field written on every event —
