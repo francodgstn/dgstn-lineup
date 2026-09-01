@@ -79,7 +79,7 @@ point at it rather than restating it.
 | `CONTACT_WEEKLY_REPORTS_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1530` | PRESENT `seed-sandbox.ts:2262` | PRESENT `seed-staging.ts:1559` | PRESENT `seed-lead.ts:1831` | PASS-THRU `passes/05-contacts.ts:20` | `/contacts/[id]` trend chart |
 | `CONTACT_GOALS_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1590` | PRESENT `seed-sandbox.ts:2326` | PRESENT `seed-staging.ts:1657` | PRESENT `seed-lead.ts:1897` | PASS-THRU `passes/05-contacts.ts:101` | `/contacts/[id]` goals |
 | `CONTACT_NOTES_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | MISSING | `/contacts/[id]` NotesTab — empty everywhere |
-| `CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | PASS-THRU `passes/05-contacts.ts:21` (renamed from `training_checkins`) | `/contacts/[id]` performance radar |
+| `CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION` | MISSING | PRESENT `lib/fixtures/coaching.ts:227` via `seed-sandbox.ts:2321` | MISSING | MISSING | PASS-THRU `passes/05-contacts.ts:21` (renamed from `training_checkins`) | `/contacts/[id]` performance radar |
 | `CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1411` | PRESENT `seed-sandbox.ts:2197` | PRESENT `seed-staging.ts:1494` | PRESENT `seed-lead.ts:1718` | PASS-THRU `passes/05-contacts.ts:16` | `/contacts/[id]` subscriptions |
 | `CONTACT_CREDIT_GRANTS_SUBCOLLECTION` | MISSING | MISSING | MISSING | PRESENT `seed-lead.ts:1761` | MISSING | `/contacts/[id]` credits; credit-pack booking |
 | `SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | PASS-THRU `passes/11-team-subcollections.ts:13` | `/subscriptions` transition history |

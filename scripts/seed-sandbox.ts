@@ -92,6 +92,7 @@ import {
   seedEventProgram,
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
+import { seedPerformanceCheckins } from './lib/fixtures/coaching'
 import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
 import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
@@ -2241,12 +2242,14 @@ async function seedDemoTeam(profile: SectorProfile) {
   // ── goals & tasks ──────────────────────────────────────────────────────────
   // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
   // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys.
-  // A goal created FROM a weak axis carries `from_dimension` instead; none is
-  // seeded, because no check-ins are seeded.
+  // A step created FROM a weak axis carries `from_dimension` instead — seeded
+  // by seedPerformanceCheckins below, which is where the axis comes from.
+  const goalContactIds: string[] = []
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]
     if (c.type !== 'student' || c.totalSessions < 5) continue
     const id = contactIds[i]
+    goalContactIds.push(id)
     const numGoals = i < 4 ? 2 : 1
     for (let g = 0; g < numGoals; g++) {
       const def = profile.goals[(i + g) % profile.goals.length]
@@ -2310,6 +2313,12 @@ async function seedDemoTeam(profile: SectorProfile) {
         completed_at: taskDone ? ts(daysFromNow(-2)) : null,
       })
   }
+
+  // ── performance check-ins ──────────────────────────────────────────────────
+  // Straight after the goals, because the arcs hang a `from_dimension` step off
+  // one. Capped at six: that is one contact per named profile the heuristic can
+  // report, and a seventh would only repeat a story. See lib/fixtures/coaching.ts.
+  const checkins = await seedPerformanceCheckins({ contactIds: goalContactIds.slice(0, 6) })
 
   // ── past-session participants + bookings ──────────────────────────────────
   const studentIdxs = pool
@@ -2582,9 +2591,23 @@ async function seedDemoTeam(profile: SectorProfile) {
   // by it. See scripts/lib/connect.ts for the one-time setup.
   await linkSeedConnectAccount({ db, teamId })
 
+  // The profile tally is printed, not asserted: the arcs in lib/fixtures/coaching.ts
+  // are built to land on six DIFFERENT named profiles, and a change to
+  // `detectPerformanceProfile` that collapsed them would otherwise be invisible.
+  const profileTally = Object.entries(checkins.profiles)
+    .map(([k, n]) => (n > 1 ? `${k}×${n}` : k))
+    .sort()
+    .join(', ')
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
+  console.log(
+    `     coaching: ${checkins.checkins} check-ins over ${checkins.contacts} contacts, ` +
+      `${checkins.steps} steps from a weak axis (${profileTally})`
+  )
+  for (const d of checkins.drifted) {
+    console.warn(`     ⚠ check-in arc built for '${d.intended}' now reads '${d.got}'`)
+  }
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────

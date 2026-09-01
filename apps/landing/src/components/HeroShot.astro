@@ -2,6 +2,7 @@
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
 import dashboard from '../assets/product/dashboard.webp';
+import dashboardDark from '../assets/product/dashboard-dark.webp';
 
 interface Props {
   lang: Language;
@@ -57,11 +58,24 @@ const DEMO_STUDIOS = [
             <span class="frame-url"><i data-lucide="lock"></i> app.linyup.com/dashboard</span>
           </div>
           <div class="frame-crop">
+            {/* Both themes ship; global.css shows one (img.shot-light /
+                img.shot-dark). Both are eager: whichever the visitor's theme
+                resolves to is the hero image, and lazily loading the dark one
+                would mean a dark-mode visitor waits for the LCP element. */}
             <img
-              class="frame-img"
+              class="frame-img shot-light"
               src={dashboard.src}
               width={dashboard.width}
               height={dashboard.height}
+              alt={t('showcase.dashboardAlt')}
+              loading="eager"
+              decoding="async"
+            />
+            <img
+              class="frame-img shot-dark"
+              src={dashboardDark.src}
+              width={dashboardDark.width}
+              height={dashboardDark.height}
               alt={t('showcase.dashboardAlt')}
               loading="eager"
               decoding="async"
@@ -174,7 +188,9 @@ const DEMO_STUDIOS = [
     border-radius: var(--radius-pill);
   }
   .frame-url :global(svg) { width: 12px; height: 12px; }
-  .frame-img { display: block; width: 100%; height: auto; }
+  /* `display` is deliberately absent: global.css owns it for the shot-light /
+     shot-dark pair, and an Astro-scoped rule here would outrank it. */
+  .frame-img { width: 100%; height: auto; }
 
   /* Tablet — narrower screenshot bleed, tighter gap */
   @media (max-width: 1100px) {
