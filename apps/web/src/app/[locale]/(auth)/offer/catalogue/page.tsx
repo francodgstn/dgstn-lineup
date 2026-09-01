@@ -631,9 +631,9 @@ export default function CataloguePage() {
    *  where that is decided, so this screen cannot drift from the write path. */
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
-  const openActivity =
-    !!selectedActivity && !activityPlanFacets(selectedActivity).access &&
-    !activityPlanFacets(selectedActivity).rate
+  /** An open class carries neither facet — see `activityPlanFacets`. Used for
+   *  the SUMMARY line only; what to render is the pricing form's decision. */
+  const openActivity = !!selectedActivity && !activityPlanFacets(selectedActivity).access
   const selectedCourse =
     selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
@@ -717,7 +717,7 @@ export default function CataloguePage() {
           minimum is what lets the pane shrink BELOW its content instead of
           shoving, which is also what makes its own overflow scrolling work
           (Franco, 2026-09-01). */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,300px)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
         <div className="space-y-3 rounded-xl border bg-card p-2">
           {/* THE TAB STRIP. Wraps rather than scrolls: there are at most four,
@@ -947,25 +947,22 @@ export default function CataloguePage() {
               facts={{
                 chips: activityChips(selectedActivity),
                 description: selectedActivity.description,
-                // SAME SHAPE AS A PRODUCT: where the edge editor would be, say
-                // why there is none. An open class is free to book for
-                // everybody, so there is nothing for a plan to open and no
-                // price for one to reduce — a fact about the class, not a gap
-                // in this screen.
-                ...(openActivity ? { note: t('openNoPlanEdge') } : {}),
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
             >
-              {/* A grid of four dashes would say "broken" where the sentence
-                  above says "open". */}
-              {!openActivity && (
-                <ActivityPricingForm
-                  activity={selectedActivity}
-                  plans={plans}
-                  currency={currency}
-                  canEdit={canEdit}
-                />
-              )}
+              {/* ALWAYS MOUNTED, and the guard that used to sit here was a dead
+                  end. It hid this whole form for an OPEN class, which is the
+                  one kind that has no other route out: the tier switch lives
+                  inside it, so an open activity could not be made anything else
+                  from anywhere in the product (Franco, 2026-09-01). Only the
+                  MATCHER is conditional, and that decision belongs inside the
+                  form, next to the switch that changes it. */}
+              <ActivityPricingForm
+                activity={selectedActivity}
+                plans={plans}
+                currency={currency}
+                canEdit={canEdit}
+              />
             </PaneBody>
           )}
 
