@@ -1,7 +1,7 @@
 'use client'
 
-import { forwardRef, useEffect, useMemo, useState } from 'react'
-import { useForm, useFieldArray, type UseFormRegister, type UseFormSetValue } from 'react-hook-form'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslations } from 'next-intl'
@@ -14,26 +14,8 @@ import {
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import {
-  ACTIVITIES_COLLECTION,
-  COURSES_COLLECTION,
-  TEAMS_COLLECTION,
-  SUBSCRIPTION_TYPES_SUBCOLLECTION,
-  INTRO_OFFER_MAX_PERIODS,
-  isAppointmentActivity,
-  introOfferProblem,
-  introOfferSupport,
-  introOffersOf,
-  isRecurringRecurrence,
-  resolveUsageLimit
-} from '@linyup/shared'
-import type {
-  SubscriptionType,
-  SubscriptionPrice,
-  SubscriptionIntroOffer,
-  IntroOfferProblem,
-  IntroOfferSupport,
-} from '@linyup/shared'
+import { TEAMS_COLLECTION, SUBSCRIPTION_TYPES_SUBCOLLECTION } from '@linyup/shared'
+import type { SubscriptionType } from '@linyup/shared'
 import {
   Dialog,
   DialogBody,
@@ -42,26 +24,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { FormSection } from '@/components/ui/form-section'
 import { Switch } from '@/components/ui/switch'
-import { Plus, Trash2, ChevronUp, ChevronDown, Globe } from 'lucide-react'
+import { Globe } from 'lucide-react'
 import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
-import { ActivityPlanLinks, type Offering } from '@/components/offer/ActivityPlanLinks'
-import { useActivities } from '@/hooks/useActivities'
-import { useCourses } from '@/plugins/online-courses/hooks'
-import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
-import { cn } from '@/lib/utils'
 
 /**
  * THE SUBSCRIPTION-TYPE EDITOR, as a component rather than a fixture of the
@@ -79,15 +49,6 @@ import { cn } from '@/lib/utils'
  * mount the same component, so there is one plan form in the product.
  */
 
-const RECURRENCES = [
-  'per_class',
-  'one_time',
-  'weekly',
-  'biweekly',
-  'monthly',
-  'quarterly',
-  'annual',
-] as const
 
 // Empty-string-tolerant numeric fields. An `<input type="number">` left blank
 // yields `''`, and `z.coerce.number()` turns that into 0 — which `.positive()`
@@ -100,36 +61,11 @@ const RECURRENCES = [
 // zero and blank mean the identical thing ("none" / "no limit"). A stored 0 from
 // a seed or an older document would otherwise reproduce the very bug above on a
 // form the studio never typed a zero into.
-const optionalPositiveInt = z.preprocess(
-  (v) => (v === '' || v === undefined || v === null || Number(v) === 0 ? undefined : v),
-  z.coerce.number().int().positive().optional()
-)
 const optionalNonNegativeAmount = z.preprocess(
   (v) => (v === '' || v === undefined || v === null ? undefined : v),
   z.coerce.number().min(0).optional()
 )
 
-const priceSchema = z.object({
-  id: z.string(),
-  amount: z.coerce.number().positive(),
-  recurrence: z.enum(RECURRENCES),
-  // Months of access granted by a one_time price ("2 months included"). On a
-  // credit price, this is the pack's validity window instead.
-  included_months: optionalPositiveInt,
-  // Credit pack (one_time only): the purchase grants this many lesson credits.
-  // BLANK MEANS UNLIMITED, which is why it must tolerate an empty string.
-  credits: optionalPositiveInt,
-  // How many times one contact may buy this price. Blank = unlimited.
-  maxPurchasesPerContact: optionalPositiveInt,
-  // This price's own intro offer ("first 3 months at 29, then the full price").
-  // Per PRICE, not per plan: a plan's monthly and annual price are different
-  // offers and a studio prices openers on both.
-  introEnabled: z.boolean().optional(),
-  introPeriods: optionalPositiveInt,
-  introAmount: optionalNonNegativeAmount,
-  label: z.string().max(40).optional(),
-  active: z.boolean().optional(),
-})
 
 const subTypeSchema = z.object({
   name: z.string().min(1).max(80),
@@ -138,11 +74,6 @@ const subTypeSchema = z.object({
   active: z.boolean().optional(),
   public: z.boolean().optional(),
   checkout_contact_mode: z.enum(['off', 'minimal', 'full']).optional(),
-  prices: z.array(priceSchema).optional(),
-  // Usage limit ("up to N classes per period") — v1 single entry.
-  limitEnabled: z.boolean().optional(),
-  limitCount: optionalPositiveInt,
-  limitPer: z.enum(['day', 'week', 'month']).optional(),
   // Aggregator-only: what the partner pays per attended visit.
   payoutPerVisit: optionalNonNegativeAmount,
 })
@@ -172,15 +103,12 @@ function duplicateDefaults(source: SubscriptionType, copyName: string): SubTypeD
     ...base,
     name: copyName,
     public: false,
-    prices: (base.prices ?? []).map((p) => ({ ...p, id: crypto.randomUUID() })),
   }
 }
 
 function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
-  const limit = resolveUsageLimit(editing ?? {})
   // Whichever shape the stored plan uses — the per-price list or the legacy
   // single offer — read through the one normaliser, keyed by price id.
-  const introByPrice = new Map(introOffersOf(editing ?? {}).map((o) => [o.priceId, o]))
   return {
     name: editing?.name ?? '',
     description: editing?.description ?? '',
@@ -190,26 +118,7 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
     // existing ones keep whatever was saved.
     public: editing ? (editing.public ?? false) : true,
     checkout_contact_mode: editing?.checkout_contact_mode ?? 'minimal',
-    limitEnabled: !!limit,
-    limitCount: limit?.count,
-    limitPer: limit?.per ?? 'week',
     payoutPerVisit: editing?.payoutPerVisit,
-    prices: (editing?.prices ?? []).map((p) => {
-      const intro = introByPrice.get(p.id)
-      return {
-        id: p.id,
-        amount: p.amount,
-        recurrence: p.recurrence,
-        included_months: p.included_months,
-        credits: p.credits,
-        maxPurchasesPerContact: p.maxPurchasesPerContact,
-        introEnabled: !!intro,
-        introPeriods: intro?.periods,
-        introAmount: intro?.amount,
-        label: p.label ?? '',
-        active: p.active ?? true,
-      }
-    }),
   }
 }
 
@@ -230,21 +139,6 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
  * themselves. `aria-label` still carries the full name for screen readers, since
  * the suffix is an abbreviation.
  */
-const SuffixInput = forwardRef<
-  HTMLInputElement,
-  React.ComponentProps<typeof Input> & { suffix: string }
->(function SuffixInput({ suffix, className, ...props }, ref) {
-  return (
-    <div className={cn('relative', className)}>
-      {/* The right padding must clear the suffix, which is why the suffix is
-          measured in the same place it is drawn rather than guessed at. */}
-      <Input ref={ref} {...props} className="pr-[4.5rem] w-full" />
-      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-        {suffix}
-      </span>
-    </div>
-  )
-})
 
 /**
  * One price's intro offer ("first 3 months at 29, then the full price").
@@ -253,94 +147,6 @@ const SuffixInput = forwardRef<
  * per-class charge has no "then the full price" to return to, so there is
  * nothing to offer rather than a control to disable.
  */
-function IntroOfferRow({
-  index,
-  state,
-  currency,
-  showError,
-  register,
-  setValue,
-}: {
-  index: number
-  state: {
-    eligible: boolean
-    support: IntroOfferSupport
-    enabled: boolean
-    problem: IntroOfferProblem | null
-  }
-  currency: string
-  showError: boolean
-  register: UseFormRegister<SubTypeData>
-  setValue: UseFormSetValue<SubTypeData>
-}) {
-  const t = useTranslations('TeamSettings')
-  if (!state.eligible) return null
-
-  return (
-    <div className="border-t pt-2">
-      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-        <input
-          type="checkbox"
-          className="accent-primary"
-          checked={state.enabled}
-          onChange={(e) => setValue(`prices.${index}.introEnabled`, e.target.checked)}
-        />
-        {t('subTypeIntro')}
-      </label>
-      {state.enabled && (
-        <div className="mt-2 space-y-1.5 pl-5">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">{t('subTypeIntroAmount')}</Label>
-              <div className="relative w-[140px]">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...register(`prices.${index}.introAmount`)}
-                  className="h-8 pr-12 text-sm"
-                  placeholder="0.00"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                  {currency}
-                </span>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('subTypeIntroPeriods')}</Label>
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                max={INTRO_OFFER_MAX_PERIODS}
-                // Locked to 1 on a weekly/fortnightly price — the note below
-                // says why, rather than leaving a disabled control unexplained.
-                disabled={state.support === 'first_only'}
-                {...register(`prices.${index}.introPeriods`)}
-                className="h-8 w-[110px] text-sm"
-                placeholder="3"
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{t('subTypeIntroFreeHint')}</p>
-          {state.support === 'first_only' && (
-            <p className="text-xs text-amber-600">{t('subTypeIntroWeeklyLimit')}</p>
-          )}
-          {showError && state.problem && (
-            <p className="text-xs text-destructive">
-              {/* `max` is passed for every reason, not just the one that uses
-                  it — next-intl throws on a MISSING placeholder and ignores a
-                  spare one, so the safe direction is to always supply it. */}
-              {t(`subTypeIntroErr_${state.problem}` as Parameters<typeof t>[0], {
-                max: INTRO_OFFER_MAX_PERIODS,
-              })}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export function SubTypeDialog({
   open,
@@ -365,44 +171,7 @@ export function SubTypeDialog({
   onSaved: () => void
 }) {
   const t = useTranslations('TeamSettings')
-  const tc = useTranslations('Contacts')
-  const tCat = useTranslations('OfferCatalogue')
   const tCommon = useTranslations('Common')
-  const tActivities = useTranslations('Activities')
-
-  // The rows the edge editor offers. Built exactly as the catalogue builds them
-  // — same shape, same collections — because it IS the same component reading
-  // them. Courses are in for the same reason they are in the catalogue: a plan
-  // can open one.
-  const { data: activities = [] } = useActivities(teamId)
-  const { data: courses = [] } = useCourses(teamId)
-  // EVERY plan, not just the one being edited. The rate rule is ONE rule per
-  // offering shared by all the plans on it, and the amber warning that says so
-  // resolves its names from this list — passing `[editing]` filtered every other
-  // plan to undefined, so the one surface where a studio edits a plan's own
-  // links was the one surface where "this also changes Basic and Gold" never
-  // appeared.
-  const { data: allPlans = [] } = useSubscriptionTypes(teamId)
-  const offerings: Offering[] = useMemo(
-    () => [
-      ...activities.map((a) => ({
-        id: a.id,
-        name: a.name,
-        collection: ACTIVITIES_COLLECTION,
-        color: a.color ?? '',
-        badge: isAppointmentActivity(a) ? tCat('appointmentBadge') : undefined,
-        target: { kind: 'activity' as const, doc: a },
-      })),
-      ...courses.map((c) => ({
-        id: c.id,
-        name: c.title,
-        collection: COURSES_COLLECTION,
-        badge: tCat('courseBadge'),
-        target: { kind: 'course' as const, doc: c },
-      })),
-    ],
-    [activities, courses, tCat]
-  )
 
   const initialValues = () =>
     duplicating
@@ -415,113 +184,27 @@ export function SubTypeDialog({
     reset,
     watch,
     setValue,
-    control,
     formState: { isSubmitting },
   } = useForm<SubTypeData>({
     resolver: zodResolver(subTypeSchema),
     defaultValues: initialValues(),
   })
 
-  const { fields, append, remove, move } = useFieldArray({ control, name: 'prices' })
-
   useEffect(() => {
     if (open) {
       reset(initialValues())
-      setShowIntroError(false)
     }
+  // `initialValues` is a fresh closure each render; listing it as a dependency
+  // would reset the form continuously.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, duplicating, reset])
-
-  // ── Intro offers, ONE PER PRICE ────────────────────────────────────────────
-  // The editor never invents a rule: it offers exactly what
-  // `introOfferSupport` / `introOfferProblem` (@linyup/shared) allow, and the
-  // checkout applies exactly what they allow. A weekly plan therefore shows a
-  // locked "first period only" instead of a periods field that Stripe cannot
-  // honour — `duration: 'repeating'` is measured in MONTHS and nothing else, so
-  // "the first 3 weeks" is not expressible and must not be offered.
-  //
-  // The offer now lives ON its price row, which removed the price CHOOSER this
-  // section used to need, the auto-pick effect behind it, and the whole class of
-  // question "which of my prices did I put the offer on?".
-  const watchedPrices = watch('prices') ?? []
-
-  /** The offer typed into one price row, resolved against that row's own price:
-   *  what Stripe can express for it, the draft, and the shared verdict. */
-  const introRowState = (i: number) => {
-    const p = watchedPrices[i]
-    const recurrence = p?.recurrence
-    const eligible = !!p && p.active !== false && isRecurringRecurrence(recurrence)
-    const support = eligible ? introOfferSupport(recurrence) : 'none'
-    const enabled = eligible && (p?.introEnabled ?? false)
-    // ── NUMBERS, not the strings the form holds ──────────────────────────────
-    // `watch()` returns RAW form state: an `<input type="number">` registered
-    // without `valueAsNumber` yields a STRING, and zod's coercion only runs at
-    // validation. Checking the raw value would call a perfectly good "79"
-    // not-a-number and refuse every save.
-    const periods = support === 'first_only' ? 1 : Number(p?.introPeriods ?? 1) || 1
-    const amountRaw = p?.introAmount as unknown
-    // A BLANK field is not zero. `Number('')` is 0, which would quietly turn "I
-    // haven't typed the price yet" into "the first months are free".
-    const amount =
-      amountRaw === '' || amountRaw === undefined || amountRaw === null ? NaN : Number(amountRaw)
-    const draft: SubscriptionIntroOffer | null = enabled
-      ? { priceId: p!.id, periods, amount }
-      : null
-    const problem = draft
-      ? introOfferProblem(draft, { amount: Number(p!.amount), recurrence: p!.recurrence })
-      : null
-    return { eligible, support, enabled, draft, problem }
-  }
-
-  // Every sound offer currently typed, and whether ANY row is unsound. The save
-  // is refused on the latter — an unsellable offer is worse than none, because
-  // `resolveIntroOffer` returns null for it and the public card would advertise
-  // nothing while the studio believed it had launched a promotion.
-  const introDrafts = watchedPrices
-    .map((_, i) => introRowState(i))
-    .filter((s) => s.draft && !s.problem)
-    .map((s) => s.draft!)
-  const hasIntroProblem = watchedPrices.some((_, i) => introRowState(i).problem)
-  const [showIntroError, setShowIntroError] = useState(false)
-  // The linked-plans editor holds ticks this form's Save does not write — see
-  // the note on its mount below.
-  const [planLinksDirty, setPlanLinksDirty] = useState(false)
 
   const source = watch('source')
   const active = watch('active') ?? true
   const isPublic = watch('public') ?? false
   const contactMode = watch('checkout_contact_mode') ?? 'minimal'
-  const limitEnabled = watch('limitEnabled') ?? false
-  const limitPer = watch('limitPer') ?? 'week'
 
   async function onSubmit(data: SubTypeData) {
-    // Refuse the save and name the rule on the row that broke it.
-    if (hasIntroProblem) {
-      setShowIntroError(true)
-      return
-    }
-    const prices = (data.prices ?? []).map((p) => {
-      const entry: SubscriptionPrice = {
-        id: p.id,
-        amount: p.amount,
-        recurrence: p.recurrence,
-        active: p.active ?? true,
-      }
-      if (p.label?.trim()) entry.label = p.label.trim()
-      if (p.recurrence === 'one_time' && p.included_months) {
-        entry.included_months = p.included_months
-      }
-      // Credit packs are one_time only; omit credits: 0/undefined (don't write it).
-      if (p.recurrence === 'one_time' && p.credits) {
-        entry.credits = p.credits
-      }
-      // A purchase cap governs one-time prices only — `resolvePlanPurchaseCap`
-      // ignores it anywhere else, so writing it there would be inert data.
-      if (p.recurrence === 'one_time' && p.maxPurchasesPerContact) {
-        entry.maxPurchasesPerContact = p.maxPurchasesPerContact
-      }
-      return entry
-    })
     const payload = {
       name: data.name,
       description: data.description || null,
@@ -529,31 +212,17 @@ export function SubTypeDialog({
       active: data.active ?? true,
       public: data.public ?? false,
       checkout_contact_mode: data.checkout_contact_mode ?? 'minimal',
-      prices,
-      // Usage limit: write when enabled with a valid count/period, clear when
-      // disabled (only meaningful on an update — a new doc simply omits it).
-      ...(data.limitEnabled && data.limitCount && data.limitPer
-        ? { limits: [{ count: data.limitCount, per: data.limitPer }] }
-        : editing?.limits?.length
-          ? { limits: deleteField() }
-          : {}),
+      // ── THE MONEY IS NOT THIS FORM'S ──────────────────────────────────
+      // `prices`, `introOffers` and `limits` belong to PlanPricingForm in the
+      // catalogue. This payload must not NAME them: it holds an older copy of
+      // every one, and writing that copy back is exactly how the course
+      // settings form un-linked plans for a week.
       // Payout per visit: aggregator types only.
       ...(data.source === 'aggregator' && typeof data.payoutPerVisit === 'number'
         ? { payoutPerVisit: data.payoutPerVisit }
         : editing?.payoutPerVisit !== undefined
           ? { payoutPerVisit: deleteField() }
           : {}),
-      // Intro offers: the sound ones, one per price (the guard above has already
-      // refused the save if any row is unsound); the key is cleared when none
-      // remain. The LEGACY single-offer field is deleted in the same update —
-      // this write is where a document migrates forward, so the two shapes can
-      // never both stand and `introOffersOf` never has to arbitrate on real data.
-      ...(introDrafts.length > 0
-        ? { introOffers: introDrafts }
-        : editing?.introOffers?.length
-          ? { introOffers: deleteField() }
-          : {}),
-      ...(editing?.introOffer ? { introOffer: deleteField() } : {}),
     }
     if (editing) {
       await updateDoc(
@@ -710,271 +379,14 @@ export function SubTypeDialog({
           )}
 
           {/* Pricing (optional) — kept secondary so the simple flow stays one-field */}
-          <FormSection
-            title={t('subTypePricing')}
-            description={t('subTypePricingDesc')}
-            action={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  append({
-                    id: crypto.randomUUID(),
-                    amount: 0,
-                    recurrence: 'monthly',
-                    label: '',
-                    active: true,
-                  })
-                }
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                {t('subTypeAddPrice')}
-              </Button>
-            }
-          >
-            {fields.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {fields.map((field, i) => (
-                  <div key={field.id} className="rounded-md border bg-card p-2.5 space-y-2">
-                    {/* WRAPS, and the amount field may SHRINK. This row is an
-                        amount, a recurrence select (130px) and sometimes a
-                        second 130px input — a min-content width the dialog
-                        cannot always give it. `DialogBody` is `overflow-y-auto`,
-                        and CSS promotes overflow-x to `auto` alongside it, so a
-                        child one pixel too wide put a horizontal scrollbar under
-                        the whole form. Fixed by letting the row wrap and the
-                        flexible child shrink — never by clipping the body,
-                        which would hide a control instead of moving it. */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative min-w-[8rem] flex-1">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          {...register(`prices.${i}.amount`)}
-                          className="pr-12"
-                          placeholder="0.00"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                          {currency}
-                        </span>
-                      </div>
-                      <Select
-                        value={watch(`prices.${i}.recurrence`)}
-                        onValueChange={(v) =>
-                          setValue(
-                            `prices.${i}.recurrence`,
-                            v as (typeof RECURRENCES)[number]
-                          )
-                        }
-                      >
-                        <SelectTrigger className="w-[130px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {RECURRENCES.map((r) => (
-                            <SelectItem key={r} value={r}>
-                              {tc(`recurrence_${r}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {/* THE UNIT STAYS ON SCREEN once a value is typed. These
-                          used to carry their meaning in the PLACEHOLDER, which
-                          vanishes at the first keystroke and leaves a bare
-                          number nobody can read back — is "2" two months, two
-                          credits, or two of something else? Same suffix
-                          treatment as the currency on the amount field beside
-                          it, so the row reads as a sentence either way. */}
-                      {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                        <SuffixInput
-                          suffix={t('subTypeIncludedMonthsSuffix')}
-                          type="number"
-                          step="1"
-                          min="1"
-                          className="w-[150px]"
-                          aria-label={t('subTypeIncludedMonths')}
-                          {...register(`prices.${i}.included_months`)}
-                        />
-                      )}
-                    </div>
-                    {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                        <div className="space-y-1">
-                          <SuffixInput
-                            suffix={t('subTypeCreditsSuffix')}
-                            type="number"
-                            step="1"
-                            min="1"
-                            className="w-[170px] h-8 text-sm"
-                            aria-label={t('subTypeCreditsPlaceholder')}
-                            {...register(`prices.${i}.credits`)}
-                          />
-                          <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
-                        </div>
-                        {/* How many times ONE person may buy this — the "our
-                            2-month intro is once per customer" rule. Blank =
-                            unlimited, which is why it is a plain optional
-                            field and not a switch with a number behind it. */}
-                        <div className="space-y-1">
-                          <SuffixInput
-                            suffix={t('subTypeMaxPurchasesSuffix')}
-                            type="number"
-                            step="1"
-                            min="1"
-                            className="w-[170px] h-8 text-sm"
-                            placeholder={t('subTypeMaxPurchasesUnlimited')}
-                            aria-label={t('subTypeMaxPurchases')}
-                            {...register(`prices.${i}.maxPurchasesPerContact`)}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {t('subTypeMaxPurchasesHelp')}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {/* This price's own intro offer. It sits INSIDE the row
-                        because it is a fact about this price — a plan may open
-                        its monthly and its annual price differently, and when
-                        the offer lived at plan level only one of them could
-                        have one. */}
-                    <IntroOfferRow
-                      index={i}
-                      state={introRowState(i)}
-                      currency={currency}
-                      showError={showIntroError}
-                      register={register}
-                      setValue={setValue}
-                    />
-                    <div className="flex items-center gap-2">
-                      <Input
-                        {...register(`prices.${i}.label`)}
-                        placeholder={t('subTypePriceLabelPlaceholder')}
-                        className="flex-1 h-8 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => move(i, i - 1)}
-                        disabled={i === 0}
-                        className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
-                        aria-label={t('subTypePriceMoveUp')}
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => move(i, i + 1)}
-                        disabled={i === fields.length - 1}
-                        className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
-                        aria-label={t('subTypePriceMoveDown')}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
-                      <Switch
-                        checked={watch(`prices.${i}.active`) ?? true}
-                        onCheckedChange={(v) => setValue(`prices.${i}.active`, v)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => remove(i)}
-                        className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-destructive"
-                        aria-label={t('subTypePriceRemove')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </FormSection>
 
-          {/* Usage limit — caps CLASS bookings covered by this subscription
-              per calendar day/week/month. Once spent, the drop-in price still
-              applies (member rate); credits and appointments are unaffected. */}
-          <FormSection
-            title={t('subTypeUsageLimit')}
-            description={t('subTypeUsageLimitDesc')}
-            action={
-              <Switch
-                checked={limitEnabled}
-                onCheckedChange={(v) => setValue('limitEnabled', v)}
-              />
-            }
-          >
-            {limitEnabled && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  type="number"
-                  step="1"
-                  min="1"
-                  {...register('limitCount')}
-                  className="w-24"
-                  placeholder="3"
-                />
-                <Select
-                  value={limitPer}
-                  onValueChange={(v) => setValue('limitPer', v as 'day' | 'week' | 'month')}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day">{t('subTypeLimitPeriodDay')}</SelectItem>
-                    <SelectItem value="week">{t('subTypeLimitPeriodWeek')}</SelectItem>
-                    <SelectItem value="month">{t('subTypeLimitPeriodMonth')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </FormSection>
 
-          {/* ── WHAT THIS PLAN OPENS, EDITED HERE ─────────────────────────
-              For one release this was a LINK to the catalogue, and the link was
-              the wrong lesson drawn from a real bug. The bug (UX-69) was TWO
-              WRITERS: this dialog had its own copy of where the activity↔plan
-              edge is stored, it read only `accessRule`, so every appointment
-              benefit looked unlinked and an unlinked-looking tick was wiped on
-              the next save. Removing the second writer was right. Removing the
-              CONTROL was not — it sent a studio away from a half-filled form to
-              another page to answer the most obvious question a plan raises.
-
-              So the control is back and there is still exactly one writer: this
-              mounts `ActivityPlanLinks`, the same component the catalogue
-              mounts, in its `from-plan` direction. Same rows, same validation,
-              same `offeringPlanEdgeUpdate` transaction, same shared-rate
-              warning. There is nothing here for the two to disagree about
-              because there is no second implementation to disagree with. */}
-          {editing ? (
-            <FormSection>
-              <ActivityPlanLinks
-                direction="from-plan"
-                plan={editing}
-                offerings={offerings}
-                plans={allPlans}
-                currency={currency}
-                canEdit
-                // This editor sits INSIDE a form that holds unsaved input, and
-                // it writes the SAME document that form's Save writes. Both
-                // consequences were unhandled here: the empty state linked away
-                // from a half-filled dialog (discarding it), and unsaved ticks
-                // were silently dropped by a Save that writes the STORED links.
-                hostedInForm
-                onDirtyChange={setPlanLinksDirty}
-              />
-            </FormSection>
-          ) : (
-            /* A plan that does not exist yet has no id to hang an edge on. Say
-               that, rather than rendering an inert list of activities whose
-               ticks would be discarded on save. An EMPTY STATE keeps its box —
-               it is an aside, not the next setting. */
-            <FormSection title={t('subTypeActivitiesLabel')}>
-              <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-                {t('subTypeActivitiesAfterSave')}
-              </p>
-            </FormSection>
-          )}
+          {/* WHAT THIS PLAN OPENS is edited in the catalogue, beside the
+              prices that make it worth opening — see
+              components/subscriptions/PlanPricingForm.tsx. The control lived
+              here for two releases; it moved out with the pricing rather than
+              being deleted, so there is still exactly ONE writer of the edge
+              and it is still `ActivityPlanLinks`. */}
 
           {/* Automations referencing this subscription + a quick create shortcut */}
           {editing && (
@@ -984,14 +396,7 @@ export function SubTypeDialog({
           )}
           </DialogBody>
 
-          <DialogFooter className={planLinksDirty ? 'sm:justify-between' : undefined}>
-            {/* Says what this Save will DISCARD, beside the button that would
-                do it — the same warning the activity dialog carries, for the
-                same reason: this form writes the STORED links, so a tick left
-                unsaved in the box above is lost without a word. */}
-            {planLinksDirty && (
-              <p className="text-xs text-amber-600">{tActivities('planLinksUnsaved')}</p>
-            )}
+          <DialogFooter>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel

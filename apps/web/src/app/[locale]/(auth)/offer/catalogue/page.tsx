@@ -118,6 +118,7 @@ import { formatCurrency } from '@/lib/format'
 import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
 import { ActivityDialog } from '@/components/activities/ActivityDialog'
 import { ActivityPricingForm } from '@/components/activities/ActivityPricingForm'
+import { PlanPricingForm } from '@/components/subscriptions/PlanPricingForm'
 import { SubTypeDialog } from '@/components/subscriptions/SubscriptionTypeDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
@@ -991,14 +992,28 @@ export default function CataloguePage() {
               }}
               actions={paneActionsFor('plan', selectedPlan.id)}
             >
-              <ActivityPlanLinks
-                direction="from-plan"
-                plan={selectedPlan}
-                offerings={allOfferings}
-                plans={plans}
-                currency={currency}
-                canEdit={canEdit}
-              />
+              {/* PRICES FIRST, then what they open. A plan is a price and a
+                  promise, and the promise means nothing until the price is
+                  real — so the money reads top-down into the matcher rather
+                  than sitting behind it. */}
+              {currentTeamId && (
+                <PlanPricingForm
+                  plan={selectedPlan}
+                  teamId={currentTeamId}
+                  currency={currency}
+                  canEdit={canEdit}
+                />
+              )}
+              <div className="border-t pt-4">
+                <ActivityPlanLinks
+                  direction="from-plan"
+                  plan={selectedPlan}
+                  offerings={allOfferings}
+                  plans={plans}
+                  currency={currency}
+                  canEdit={canEdit}
+                />
+              </div>
             </PaneBody>
           )}
 
