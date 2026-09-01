@@ -7393,7 +7393,6 @@
   "OfferCatalogue": {
     "title": "Catalogo",
     "toPricing": "Vedi i prezzi",
-    "toActivities": "Tutte le attività",
     "tabActivities": "Attività",
     "tabProducts": "Prodotti",
     "noProducts": "Ancora nessun prodotto.",
@@ -7467,7 +7466,15 @@
     "archiveAction": "Archivia",
     "deleteAction": "Elimina",
     "archiveConfirm": "Archiviare «{name}»? Verrà nascosto dal catalogo e tutto ciò che vi è già collegato mantiene il riferimento.",
-    "deleteConfirm": "Eliminare «{name}»? L'operazione non può essere annullata."
+    "deleteConfirm": "Eliminare «{name}»? L'operazione non può essere annullata.",
+    "toSchedule": "Calendario",
+    "toGiftCards": "Carte regalo",
+    "hintActivities": "Cosa offri — le tue lezioni e i tuoi appuntamenti. Mettili in calendario dalla sezione Calendario.",
+    "hintPlans": "Come incassi — ricorrente o una tantum, e cosa apre ogni piano. Anche le app partner stanno qui.",
+    "hintCourses": "Quanto costano i tuoi corsi online e quali piani li aprono. Modifica i contenuti nella pagina Corsi online.",
+    "hintProducts": "Cosa vendi oltre alla tua offerta. Modifica l'intero catalogo nella pagina Prodotti.",
+    "summaryClassOpen": "Aperto a tutti — non serve alcun piano per prenotare.",
+    "openNoPlanEdge": "Chiunque può prenotare gratuitamente, quindi non c'è nulla che un piano possa aprire o scontare. Cambia chi può prenotare nell'attività stessa."
   },
   "VerifyEmail": {
     "title": "Conferma {email}",

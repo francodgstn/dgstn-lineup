@@ -7393,7 +7393,6 @@
   "OfferCatalogue": {
     "title": "Katalog",
     "toPricing": "Preise ansehen",
-    "toActivities": "Alle Aktivitäten",
     "tabActivities": "Aktivitäten",
     "tabProducts": "Produkte",
     "noProducts": "Noch keine Produkte.",
@@ -7467,7 +7466,15 @@
     "archiveAction": "Archivieren",
     "deleteAction": "Löschen",
     "archiveConfirm": "„{name}“ archivieren? Es wird aus Ihrem Katalog ausgeblendet; bereits erfasste Daten behalten ihren Bezug.",
-    "deleteConfirm": "„{name}“ löschen? Dies kann nicht rückgängig gemacht werden."
+    "deleteConfirm": "„{name}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+    "toSchedule": "Kalender",
+    "toGiftCards": "Geschenkkarten",
+    "hintActivities": "Was Sie anbieten — Ihre Kurse und Termine. Auf den Kalender setzen Sie sie im Bereich Kalender.",
+    "hintPlans": "Wie Sie abrechnen — wiederkehrend oder einmalig, und was jeder Plan freischaltet. Auch Partner-Apps stehen hier.",
+    "hintCourses": "Was Ihre Onlinekurse kosten und welche Pläne sie freischalten. Die Inhalte bearbeiten Sie unter Onlinekurse.",
+    "hintProducts": "Was Sie zusätzlich zu Ihrem Angebot verkaufen. Den ganzen Katalog bearbeiten Sie unter Produkte.",
+    "summaryClassOpen": "Für alle offen — für die Buchung ist kein Plan nötig.",
+    "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wer buchen darf, ändern Sie in der Aktivität selbst."
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

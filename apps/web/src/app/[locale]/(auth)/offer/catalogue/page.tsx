@@ -70,6 +70,7 @@ import {
 
 import {
   ACTIVITIES_COLLECTION,
+  activityPlanFacets,
   COURSES_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
   TEAMS_COLLECTION,
@@ -409,11 +410,11 @@ export default function CataloguePage() {
   }
 
   const planChips = (st: SubscriptionType): OfferChip[] => [
-    {
-      label: tSet(
-        st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal'
-      ),
-    },
+    // A CHIP MARKS THE EXCEPTION, NOT THE RULE. Almost every plan is the
+    // studio's own, so "Internal" was a label on nearly every row — carrying no
+    // information while costing a scan. Only a plan that comes from somewhere
+    // else (a partner fitness app) is worth naming (Franco, 2026-09-01).
+    ...(st.source === 'aggregator' ? [{ label: tSet('subTypeSourceAggregator') }] : []),
     // INACTIVE AND PRIVATE ARE WARNINGS, not neutral facts: a plan the studio
     // is reading the coverage of, that nobody can currently buy, is the single
     // most useful thing this pane can tell them.
@@ -624,8 +625,13 @@ export default function CataloguePage() {
     await qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
   }
 
+  /** An open class carries neither facet — see `activityPlanFacets`, which is
+   *  where that is decided, so this screen cannot drift from the write path. */
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
+  const openActivity =
+    !!selectedActivity && !activityPlanFacets(selectedActivity).access &&
+    !activityPlanFacets(selectedActivity).rate
   const selectedCourse =
     selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
@@ -658,11 +664,21 @@ export default function CataloguePage() {
         // NO SUBTITLE. "What you offer, and which plans open it" restated the
         // page title in a longer sentence, above a screen that demonstrates the
         // same thing in the first second of looking at it (Franco, 2026-08-31).
-        // The related links stay: those are the two questions this page cannot
-        // answer about itself.
+        // The related links are what this page CANNOT answer about itself:
+        // what everything costs, when it actually runs, and the one sellable
+        // thing that has no catalogue row at all.
+        //
+        // "All activities" was not one of those — the Activities tab is right
+        // there, so the link led out of the page to a subset of it. Gift cards
+        // take its place: a studio sells them, but there is nothing here to
+        // list, because a gift card is a CONFIG (`settings.giftCards` — enabled
+        // plus the denominations) and then a ledger of issued codes. Neither is
+        // a catalogue item, so it is a link rather than a tab (Franco,
+        // 2026-09-01).
         quickLinks={[
           { href: '/offer/pricing' as Route, label: t('toPricing') },
-          { href: '/offer/activities' as Route, label: t('toActivities') },
+          { href: '/schedule' as Route, label: t('toSchedule') },
+          { href: '/payments?tab=giftCards' as Route, label: t('toGiftCards') },
         ]}
       />
 
@@ -689,7 +705,17 @@ export default function CataloguePage() {
         </button>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,2fr)_3fr]">
+      {/* THE RAIL HOLDS ITS SIZE. Two `fr` tracks share free space, but an `fr`
+          still floors at its content's min-content width — so a wide pane (the
+          plan matcher is five columns and a set-all row) pushed the list of
+          items narrower the moment you selected something, and the list moved
+          under the cursor that had just clicked it.
+
+          A fixed track for the rail, and `minmax(0,1fr)` for the pane: the zero
+          minimum is what lets the pane shrink BELOW its content instead of
+          shoving, which is also what makes its own overflow scrolling work
+          (Franco, 2026-09-01). */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,300px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
         <div className="space-y-3 rounded-xl border bg-card p-2">
           {/* THE TAB STRIP. Wraps rather than scrolls: there are at most four,
@@ -731,6 +757,23 @@ export default function CataloguePage() {
               )
             })}
           </div>
+
+          {/* ONE LINE PER TAB, above its list. The page subtitle went because it
+              restated the title; this is the opposite — it says what a tab is
+              FOR, and where the fuller job is done, which is the thing four
+              icons cannot say. Written as four literal keys rather than
+              `t(`hint_${activeTab}`)`: `i18n:check` counts computed keys and
+              never fails them, so a typo in one would ship silently. */}
+          <p className="px-2 text-xs leading-snug text-muted-foreground">
+            {
+              {
+                activities: t('hintActivities'),
+                plans: t('hintPlans'),
+                courses: t('hintCourses'),
+                products: t('hintProducts'),
+              }[activeTab]
+            }
+          </p>
 
           {loading && (
             <div className="space-y-2 p-2">
@@ -890,27 +933,39 @@ export default function CataloguePage() {
                 isAppointmentActivity(selectedActivity) ? t('appointmentBadge') : t('classBadge')
               }
               summary={
-                isAppointmentActivity(selectedActivity)
-                  ? t('summaryAppointment', { plans: ratedPlanIds(selectedActivity).length })
-                  : t('summaryClass', {
-                      gated: gatedPlanIds(selectedActivity).length,
-                      rated: ratedPlanIds(selectedActivity).length,
-                    })
+                openActivity
+                  ? t('summaryClassOpen')
+                  : isAppointmentActivity(selectedActivity)
+                    ? t('summaryAppointment', { plans: ratedPlanIds(selectedActivity).length })
+                    : t('summaryClass', {
+                        gated: gatedPlanIds(selectedActivity).length,
+                        rated: ratedPlanIds(selectedActivity).length,
+                      })
               }
               facts={{
                 chips: activityChips(selectedActivity),
                 description: selectedActivity.description,
+                // SAME SHAPE AS A PRODUCT: where the edge editor would be, say
+                // why there is none. An open class is free to book for
+                // everybody, so there is nothing for a plan to open and no
+                // price for one to reduce — a fact about the class, not a gap
+                // in this screen.
+                ...(openActivity ? { note: t('openNoPlanEdge') } : {}),
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
             >
-              <ActivityPlanLinks
-                direction="from-offering"
-                offering={toActivityOffering(selectedActivity)}
-                offerings={allOfferings}
-                plans={plans}
-                currency={currency}
-                canEdit={canEdit}
-              />
+              {/* A grid of four dashes would say "broken" where the sentence
+                  above says "open". */}
+              {!openActivity && (
+                <ActivityPlanLinks
+                  direction="from-offering"
+                  offering={toActivityOffering(selectedActivity)}
+                  offerings={allOfferings}
+                  plans={plans}
+                  currency={currency}
+                  canEdit={canEdit}
+                />
+              )}
             </PaneBody>
           )}
 

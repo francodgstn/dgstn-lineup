@@ -159,16 +159,16 @@ export const SubscriptionTypesManager = forwardRef<
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium">{st.name}</p>
-                        <Badge
-                          variant={st.source === 'aggregator' ? 'secondary' : 'outline'}
-                          className="text-xs"
-                        >
-                          {t(
-                            st.source === 'aggregator'
-                              ? 'subTypeSourceAggregator'
-                              : 'subTypeSourceInternal'
-                          )}
-                        </Badge>
+                        {/* A CHIP MARKS THE EXCEPTION, NOT THE RULE. Almost every plan is the
+                studio's own, so "Internal" was a label on nearly every row —
+                carrying no information while costing a scan. Only a plan that
+                comes from somewhere else (a partner fitness app) is worth
+                naming (Franco, 2026-09-01). */}
+                        {st.source === 'aggregator' && (
+                          <Badge variant="secondary" className="text-xs">
+                            {t('subTypeSourceAggregator')}
+                          </Badge>
+                        )}
                         {st.active === false && (
                           <Badge variant="outline" className="text-xs">
                             {t('subTypeInactive')}

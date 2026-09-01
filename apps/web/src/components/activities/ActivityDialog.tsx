@@ -35,7 +35,6 @@ import { BookingQuestionsEditor } from '@/components/activities/BookingQuestions
 import { ActivityTagsEditor } from '@/components/activities/ActivityTagsEditor'
 import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
 import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
-import { MoreOptions } from '@/components/forms/MoreOptions'
 import { useBookingSettings } from '@/hooks/useBookingSettings'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -425,22 +424,6 @@ export function ActivityDialog({
   // Does the activity being EDITED already carry anything from the "More
   // options" tail? If so the disclosure opens showing it — a field the studio
   // filled in and then cannot find is worse than the long form this replaces.
-  // Colour is compared against the create-time default rather than merely
-  // tested for presence: every activity has one, so `!!editing.color` would
-  // open the panel every time and the disclosure would do nothing at all.
-  const hasStoredDetails =
-    !!seed &&
-    ((!!seed.color && seed.color !== DEFAULT_ACCENT) ||
-      (seed.tags?.length ?? 0) > 0 ||
-      !!seed.prerequisites ||
-      !!seed.confirmationInstructions ||
-      !!seed.meetingPoint ||
-      !!seed.whatsIncluded ||
-      !!seed.whatsNotIncluded ||
-      !!seed.faq ||
-      !!seed.cancellationPolicy ||
-      (seed.bookingQuestions?.length ?? 0) > 0 ||
-      (seed.contactFields?.length ?? 0) > 0)
 
   function toggleDuration(minutes: number) {
     setValue(
@@ -822,9 +805,9 @@ export function ActivityDialog({
 
           {/* ── The decisions ──────────────────────────────────────────────
               Access, price, the trial door and the queue: what someone is
-              charged and who can get in. Grouped and ordered here, NEVER moved
-              behind the disclosure below — see components/forms/MoreOptions.tsx
-              for why, and UX-11 for the public half of the same rule. */}
+              charged and who can get in. Grouped and ordered here, and never
+              hidden behind a disclosure — UX-11 is the public half of the same
+              rule. This form no longer has one at all. */}
           <FormSection
             title={t('sectionBookingTitle')}
             description={t('sectionBookingSubtitle')}
@@ -1183,154 +1166,159 @@ export function ActivityDialog({
               opens this ships a correct class. Opened up-front when the
               activity being edited already carries any of it — a field she
               filled in must never be the one she cannot find. */}
-          <MoreOptions
-            label={t('moreOptionsLabel')}
-            hint={t('moreOptionsHint')}
-            defaultOpen={hasStoredDetails}
-          >
-            <div className="divide-y rounded-lg border">
-              <div className="flex items-center justify-between gap-4 p-3">
-                <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
-                <Controller
-                  name="color"
-                  control={control}
-                  render={({ field }) => (
-                    <ColorPicker
-                      id="act-color"
-                      value={field.value}
-                      onChange={field.onChange}
-                      aria-label={t('fieldColor')}
-                    />
-                  )}
-                />
-              </div>
+          {/* PRESENTATION AND PUBLIC PROSE. Every field here is optional and
+              an empty one renders nothing, so a studio that fills in none of it
+              still ships a correct class.
 
-              {/* Display-only, like `prerequisites` below — which is why it sits
-                  behind the disclosure and not among the decisions above. */}
-              <div className="p-3">
-                <Controller
-                  name="tags"
-                  control={control}
-                  render={({ field }) => (
-                    <ActivityTagsEditor
-                      value={(field.value ?? []) as string[]}
-                      onChange={field.onChange}
-                    />
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Secondary prose — side by side when the dialog is wide */}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
-                <textarea
-                  id="act-prereq"
-                  {...register('prerequisites')}
-                  rows={3}
-                  placeholder={t('prerequisitesPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
-                />
-                <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
-                <textarea
-                  id="act-confirm-instructions"
-                  {...register('confirmationInstructions')}
-                  rows={3}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-                />
-                <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
-              </div>
-
-              {/* Rich detail shown on the public booking page before a visitor
-                  books — everything the item page in a mature booking tool
-                  answers up front so it never becomes a support email. */}
-              <div className="space-y-1.5">
-                <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
-                <Input
-                  id="act-meeting-point"
-                  {...register('meetingPoint')}
-                  placeholder={t('meetingPointPlaceholder')}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
-                <textarea
-                  id="act-whats-included"
-                  {...register('whatsIncluded')}
-                  rows={3}
-                  placeholder={t('whatsIncludedPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-                />
-                <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
-                <textarea
-                  id="act-whats-not-included"
-                  {...register('whatsNotIncluded')}
-                  rows={3}
-                  placeholder={t('whatsIncludedPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
-                <textarea
-                  id="act-faq"
-                  {...register('faq')}
-                  rows={4}
-                  placeholder={t('faqPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
-                <textarea
-                  id="act-cancellation-policy"
-                  {...register('cancellationPolicy')}
-                  rows={3}
-                  placeholder={t('cancellationPolicyPlaceholder')}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-                />
-                <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
-              </div>
-
+              It used to sit behind a "More options" disclosure, which earned
+              its keep when this form held every decision about an activity. One
+              closed section now hides real fields to save a few hundred pixels
+              — and a hidden field is one a studio does not know it has
+              (Franco, 2026-09-01). */}
+          <FormSection title={t('moreOptionsLabel')} description={t('moreOptionsHint')}>
+          <div className="divide-y rounded-lg border">
+            <div className="flex items-center justify-between gap-4 p-3">
+              <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
               <Controller
+                name="color"
                 control={control}
-                name="bookingQuestions"
                 render={({ field }) => (
-                  <BookingQuestionsEditor
-                    value={(field.value ?? []) as FormField[]}
+                  <ColorPicker
+                    id="act-color"
+                    value={field.value}
                     onChange={field.onChange}
-                  />
-                )}
-              />
-
-              <Controller
-                control={control}
-                name="contactFields"
-                render={({ field }) => (
-                  <BookingContactFieldsEditor
-                    value={(field.value ?? []) as BookingContactField[]}
-                    onChange={field.onChange}
-                    definitions={customFieldDefinitions}
-                    extendsTeamDefault
-                    inheritedKeys={teamContactFieldKeys}
-                    customFieldsInstalled={isInstalled('custom-fields')}
+                    aria-label={t('fieldColor')}
                   />
                 )}
               />
             </div>
-          </MoreOptions>
+
+            {/* Display-only, like `prerequisites` below — which is why it sits
+                behind the disclosure and not among the decisions above. */}
+            <div className="p-3">
+              <Controller
+                name="tags"
+                control={control}
+                render={({ field }) => (
+                  <ActivityTagsEditor
+                    value={(field.value ?? []) as string[]}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Secondary prose — side by side when the dialog is wide */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
+              <textarea
+                id="act-prereq"
+                {...register('prerequisites')}
+                rows={3}
+                placeholder={t('prerequisitesPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+              />
+              <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
+              <textarea
+                id="act-confirm-instructions"
+                {...register('confirmationInstructions')}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
+            </div>
+
+            {/* Rich detail shown on the public booking page before a visitor
+                books — everything the item page in a mature booking tool
+                answers up front so it never becomes a support email. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
+              <Input
+                id="act-meeting-point"
+                {...register('meetingPoint')}
+                placeholder={t('meetingPointPlaceholder')}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
+              <textarea
+                id="act-whats-included"
+                {...register('whatsIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
+              <textarea
+                id="act-whats-not-included"
+                {...register('whatsNotIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
+              <textarea
+                id="act-faq"
+                {...register('faq')}
+                rows={4}
+                placeholder={t('faqPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
+              <textarea
+                id="act-cancellation-policy"
+                {...register('cancellationPolicy')}
+                rows={3}
+                placeholder={t('cancellationPolicyPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
+            </div>
+
+            <Controller
+              control={control}
+              name="bookingQuestions"
+              render={({ field }) => (
+                <BookingQuestionsEditor
+                  value={(field.value ?? []) as FormField[]}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="contactFields"
+              render={({ field }) => (
+                <BookingContactFieldsEditor
+                  value={(field.value ?? []) as BookingContactField[]}
+                  onChange={field.onChange}
+                  definitions={customFieldDefinitions}
+                  extendsTeamDefault
+                  inheritedKeys={teamContactFieldKeys}
+                  customFieldsInstalled={isInstalled('custom-fields')}
+                />
+              )}
+            />
+          </div>
+          </FormSection>
           </DialogBody>
 
           <DialogFooter className={planLinksDirty ? 'sm:justify-between' : undefined}>
