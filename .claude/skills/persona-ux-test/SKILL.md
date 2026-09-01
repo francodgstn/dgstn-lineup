@@ -21,11 +21,13 @@ reports **friction, not fixes**. Then relay its findings verbatim-in-substance.
 
 ## Preflight (main session, before launching)
 
-1. `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000` → expect 200/307.
-   Not running (or a fresh container)? Launch the stack per
-   `.claude/skills/run-web/SKILL.md` first.
-2. Firestore emulator on :8080, and confirm the login account exists in the Auth
-   emulator (`studio@linyup.com` / `linyup123` unless the user names another).
+1. `node scripts/local-env.mjs status` — confirm a slot is RUNNING, serving THIS
+   checkout's build (no `! STALE`), with a non-empty functions registry. Not up?
+   Bring it up per `.claude/skills/local-env/SKILL.md` (or, on a fresh headless
+   container, `.claude/skills/run-web/SKILL.md`). Note the slot's web port — it
+   is 3000 only in the main checkout.
+2. Confirm the login account exists in that slot's Auth emulator
+   (`studio@linyup.com` / `linyup123` unless the user names another).
 3. Do NOT reseed — a reseed wipes lead tenants and collides with a running
    emulator. The persona creates everything it needs fresh.
 4. Leave the Browser pane alone while the agent runs (it is shared per session).

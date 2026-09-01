@@ -62,19 +62,50 @@
     },
     {
       "name": "emulators-worktree",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "node",
       "runtimeArgs": [
-        "exec",
-        "firebase",
-        "emulators:start",
+        "scripts/emulators-run.mjs",
         "--config",
-        "firebase.worktree.json",
+        "firebase.local.json",
         "--only",
         "auth,firestore,functions,storage",
         "--project",
         "demo-linyup"
       ],
-      "port": 14000
+      "port": 14000,
+      "autoPort": false
+    },
+    {
+      "name": "web-worktree",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@linyup/web",
+        "exec",
+        "next",
+        "dev",
+        "--turbopack",
+        "--port",
+        "13000"
+      ],
+      "port": 13000,
+      "autoPort": false
+    },
+    {
+      "name": "admin-worktree",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@linyup/admin",
+        "exec",
+        "next",
+        "dev",
+        "--turbopack",
+        "--port",
+        "13002"
+      ],
+      "port": 13002,
+      "autoPort": false
     },
     {
       "name": "web",
