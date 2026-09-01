@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import type { Route } from 'next'
+import { useRouter } from '@/i18n/navigation'
 import { Link } from '@/i18n/navigation'
 import { updateDoc, doc, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -22,7 +23,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ACTIVITIES_COLLECTION, resolveActivityAccessRule } from '@linyup/shared'
 import type { Activity, SubscriptionType } from '@linyup/shared'
 
-import { useCapabilities } from '@/hooks/useCapabilities'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { useActivities } from '@/hooks/useActivities'
 import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
@@ -218,7 +218,6 @@ export default function ActivitiesPage() {
   const { data: subscriptionTypes = [] } = useSubscriptionTypes(currentTeamId)
   // Same capability the catalogue gates the plan editor on, so the control does
   // not appear here for someone the write would be refused for.
-  const canEditPlanLinks = useCapabilities().can('team.settings')
   const currency = team?.default_currency ?? 'CHF'
   const qc = useQueryClient()
   // Archiving the last activity puts the "add an activity" step back.
@@ -241,6 +240,7 @@ export default function ActivitiesPage() {
   // inside the editor: that dialog is a long scroll with a rule about what may
   // sit above its disclosure, and this answers a question you ask BEFORE
   // deciding to change anything.
+  const router = useRouter()
   const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
   // The dialog gets the LIVE row, never this snapshot. It now hosts the plan
   // editor, which writes `accessRule` on the same activity and invalidates
@@ -430,8 +430,10 @@ export default function ActivitiesPage() {
           duplicating={duplicating}
           nextOrder={activities.length}
           currency={team?.default_currency ?? 'CHF'}
-          subscriptionTypes={subscriptionTypes}
-          canEditPlanLinks={canEditPlanLinks}
+          // A new activity has no tier, no price and no plans, and this form no
+          // longer asks — so finish the job where those controls are, rather
+          // than leaving a class on the list that nobody can book.
+          onCreated={(id) => router.push(`/offer/catalogue?sel=activity:${id}` as Route)}
         />
       )}
 

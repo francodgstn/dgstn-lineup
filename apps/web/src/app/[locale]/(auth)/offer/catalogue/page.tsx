@@ -117,6 +117,7 @@ import { SortableItem, SortableList, type SortableRenderProps } from '@/componen
 import { formatCurrency } from '@/lib/format'
 import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
 import { ActivityDialog } from '@/components/activities/ActivityDialog'
+import { ActivityPricingForm } from '@/components/activities/ActivityPricingForm'
 import { SubTypeDialog } from '@/components/subscriptions/SubscriptionTypeDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
@@ -957,10 +958,8 @@ export default function CataloguePage() {
               {/* A grid of four dashes would say "broken" where the sentence
                   above says "open". */}
               {!openActivity && (
-                <ActivityPlanLinks
-                  direction="from-offering"
-                  offering={toActivityOffering(selectedActivity)}
-                  offerings={allOfferings}
+                <ActivityPricingForm
+                  activity={selectedActivity}
                   plans={plans}
                   currency={currency}
                   canEdit={canEdit}
@@ -1086,14 +1085,13 @@ export default function CataloguePage() {
           key={`dup-${duplicatingActivity.id}`}
           open
           onClose={() => setDuplicatingActivity(null)}
+          onCreated={(id) => select({ kind: 'activity', id })}
           teamId={currentTeamId}
           userId={user.uid}
           editing={null}
           duplicating={duplicatingActivity}
           nextOrder={activities.length}
           currency={currency}
-          subscriptionTypes={plans}
-          canEditPlanLinks={canEdit}
         />
       )}
 
@@ -1170,8 +1168,6 @@ export default function CataloguePage() {
           duplicating={null}
           nextOrder={activities.length}
           currency={currency}
-          subscriptionTypes={plans}
-          canEditPlanLinks={canEdit}
         />
       )}
 
