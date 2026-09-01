@@ -1752,8 +1752,8 @@
     "waitlistEnabledHint": "Quando una sessione è al completo, i visitatori entrano in coda invece di trovare un vicolo cieco. Appena si libera un posto viene offerto automaticamente alla prima persona in lista.",
     "waitlistRequiresCapacity": "Ha effetto solo sulle sessioni con un limite di partecipanti — una sessione senza limite non è mai al completo.",
     "waitlistRequiresPlan": "Disponibile dal piano {plan}.",
-    "sectionBookingTitle": "Prenotazione e prezzi",
-    "sectionBookingSubtitle": "Chi può prenotare e quanto paga.",
+    "sectionBookingTitle": "Opzioni di prenotazione",
+    "sectionBookingSubtitle": "Come viene gestita una prenotazione una volta effettuata — e, per gli appuntamenti, le durate offerte. Prezzi e accesso stanno nel catalogo.",
     "moreOptionsLabel": "Altre opzioni",
     "moreOptionsHint": "Colore, livello e i dettagli mostrati sulla tua pagina pubblica",
     "viewSchedule": "Vedi la programmazione",
@@ -7435,7 +7435,7 @@
   },
   "OfferCatalogue": {
     "title": "Catalogo",
-    "toPricing": "Vedi i prezzi",
+    "toPricing": "Prezzi",
     "tabActivities": "Attività",
     "tabProducts": "Prodotti",
     "noProducts": "Ancora nessun prodotto.",
@@ -7517,7 +7517,8 @@
     "hintCourses": "Quanto costano i tuoi corsi online e quali piani li aprono. Modifica i contenuti nella pagina Corsi online.",
     "hintProducts": "Cosa vendi oltre alla tua offerta. Modifica l'intero catalogo nella pagina Prodotti.",
     "summaryClassOpen": "Aperto a tutti — non serve alcun piano per prenotare.",
-    "openNoPlanEdge": "Chiunque può prenotare gratuitamente, quindi non c'è nulla che un piano possa aprire o scontare. Cambia chi può prenotare nell'attività stessa."
+    "openNoPlanEdge": "Chiunque può prenotare gratuitamente, quindi non c'è nulla che un piano possa aprire o scontare. Scegli «Qualsiasi membro» o «Abbonamenti specifici» qui sopra per collegare i piani.",
+    "editDetails": "Modifica dettagli"
   },
   "VerifyEmail": {
     "title": "Conferma {email}",

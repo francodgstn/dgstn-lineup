@@ -103,7 +103,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -117,6 +117,8 @@ import { SortableItem, SortableList, type SortableRenderProps } from '@/componen
 import { formatCurrency } from '@/lib/format'
 import { OfferFacts, type OfferChip, type OfferFactsProps } from '@/components/offer/OfferFacts'
 import { ActivityDialog } from '@/components/activities/ActivityDialog'
+import { ActivityPricingForm } from '@/components/activities/ActivityPricingForm'
+import { PlanPricingForm } from '@/components/subscriptions/PlanPricingForm'
 import { SubTypeDialog } from '@/components/subscriptions/SubscriptionTypeDialog'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
@@ -629,9 +631,9 @@ export default function CataloguePage() {
    *  where that is decided, so this screen cannot drift from the write path. */
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
-  const openActivity =
-    !!selectedActivity && !activityPlanFacets(selectedActivity).access &&
-    !activityPlanFacets(selectedActivity).rate
+  /** An open class carries neither facet — see `activityPlanFacets`. Used for
+   *  the SUMMARY line only; what to render is the pricing form's decision. */
+  const openActivity = !!selectedActivity && !activityPlanFacets(selectedActivity).access
   const selectedCourse =
     selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
@@ -715,7 +717,7 @@ export default function CataloguePage() {
           minimum is what lets the pane shrink BELOW its content instead of
           shoving, which is also what makes its own overflow scrolling work
           (Franco, 2026-09-01). */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(260px,300px)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
         <div className="space-y-3 rounded-xl border bg-card p-2">
           {/* THE TAB STRIP. Wraps rather than scrolls: there are at most four,
@@ -945,27 +947,22 @@ export default function CataloguePage() {
               facts={{
                 chips: activityChips(selectedActivity),
                 description: selectedActivity.description,
-                // SAME SHAPE AS A PRODUCT: where the edge editor would be, say
-                // why there is none. An open class is free to book for
-                // everybody, so there is nothing for a plan to open and no
-                // price for one to reduce — a fact about the class, not a gap
-                // in this screen.
-                ...(openActivity ? { note: t('openNoPlanEdge') } : {}),
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
             >
-              {/* A grid of four dashes would say "broken" where the sentence
-                  above says "open". */}
-              {!openActivity && (
-                <ActivityPlanLinks
-                  direction="from-offering"
-                  offering={toActivityOffering(selectedActivity)}
-                  offerings={allOfferings}
-                  plans={plans}
-                  currency={currency}
-                  canEdit={canEdit}
-                />
-              )}
+              {/* ALWAYS MOUNTED, and the guard that used to sit here was a dead
+                  end. It hid this whole form for an OPEN class, which is the
+                  one kind that has no other route out: the tier switch lives
+                  inside it, so an open activity could not be made anything else
+                  from anywhere in the product (Franco, 2026-09-01). Only the
+                  MATCHER is conditional, and that decision belongs inside the
+                  form, next to the switch that changes it. */}
+              <ActivityPricingForm
+                activity={selectedActivity}
+                plans={plans}
+                currency={currency}
+                canEdit={canEdit}
+              />
             </PaneBody>
           )}
 
@@ -992,14 +989,28 @@ export default function CataloguePage() {
               }}
               actions={paneActionsFor('plan', selectedPlan.id)}
             >
-              <ActivityPlanLinks
-                direction="from-plan"
-                plan={selectedPlan}
-                offerings={allOfferings}
-                plans={plans}
-                currency={currency}
-                canEdit={canEdit}
-              />
+              {/* PRICES FIRST, then what they open. A plan is a price and a
+                  promise, and the promise means nothing until the price is
+                  real — so the money reads top-down into the matcher rather
+                  than sitting behind it. */}
+              {currentTeamId && (
+                <PlanPricingForm
+                  plan={selectedPlan}
+                  teamId={currentTeamId}
+                  currency={currency}
+                  canEdit={canEdit}
+                />
+              )}
+              <div className="border-t pt-4">
+                <ActivityPlanLinks
+                  direction="from-plan"
+                  plan={selectedPlan}
+                  offerings={allOfferings}
+                  plans={plans}
+                  currency={currency}
+                  canEdit={canEdit}
+                />
+              </div>
             </PaneBody>
           )}
 
@@ -1086,14 +1097,13 @@ export default function CataloguePage() {
           key={`dup-${duplicatingActivity.id}`}
           open
           onClose={() => setDuplicatingActivity(null)}
+          onCreated={(id) => select({ kind: 'activity', id })}
           teamId={currentTeamId}
           userId={user.uid}
           editing={null}
           duplicating={duplicatingActivity}
           nextOrder={activities.length}
           currency={currency}
-          subscriptionTypes={plans}
-          canEditPlanLinks={canEdit}
         />
       )}
 
@@ -1170,8 +1180,6 @@ export default function CataloguePage() {
           duplicating={null}
           nextOrder={activities.length}
           currency={currency}
-          subscriptionTypes={plans}
-          canEditPlanLinks={canEdit}
         />
       )}
 
@@ -1238,6 +1246,7 @@ function PaneBody({
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
 }) {
+  const t = useTranslations('OfferCatalogue')
 
   return (
     <div className="space-y-4">
@@ -1254,33 +1263,68 @@ function PaneBody({
           <p className="text-xs text-muted-foreground">{summary}</p>
         </div>
         {actions && actions.length > 0 && (
-          <div className="flex shrink-0 items-center gap-0.5">
-            {actions.map((a) => {
-              const Icon = a.icon
-              // Icon-only, with the name on hover and for a screen reader: four
-              // labelled buttons would be a second toolbar competing with the
-              // pane's own heading, and these are the same four verbs on every
-              // kind — position teaches them faster than repeated words.
-              const cls = `rounded p-1.5 text-muted-foreground transition-colors ${
-                a.danger ? 'hover:text-destructive' : 'hover:text-foreground'
-              } hover:bg-muted`
-              return 'href' in a ? (
-                <Link key={a.key} href={a.href} className={cls} title={a.label} aria-label={a.label}>
-                  <Icon className="h-4 w-4" />
-                </Link>
-              ) : (
-                <button
-                  key={a.key}
-                  type="button"
-                  onClick={a.run}
-                  className={cls}
-                  title={a.label}
-                  aria-label={a.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              )
-            })}
+          /* EDIT IS NOT AN ICON. The rest are: they name an operation on this
+             record, and the icon carries it. Edit is different — the pane now
+             shows so much (facts, prices, the plan table) that a small pencil
+             among three others read as "one more of those" rather than "there
+             is a whole other half of this thing", which is the name, the
+             description, the colour, the prose (Franco, 2026-09-01).
+
+             So it sits BELOW the icon row, labelled, in the same place on every
+             kind. The icons stay icon-only — three same-shaped verbs where
+             position teaches faster than repeated words. */
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-0.5">
+              {actions
+                .filter((a) => a.key !== 'edit')
+                .map((a) => {
+                  const Icon = a.icon
+                  const cls = `rounded p-1.5 text-muted-foreground transition-colors ${
+                    a.danger ? 'hover:text-destructive' : 'hover:text-foreground'
+                  } hover:bg-muted`
+                  return 'href' in a ? (
+                    <Link
+                      key={a.key}
+                      href={a.href}
+                      className={cls}
+                      title={a.label}
+                      aria-label={a.label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={a.run}
+                      className={cls}
+                      title={a.label}
+                      aria-label={a.label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  )
+                })}
+            </div>
+            {actions
+              .filter((a) => a.key === 'edit')
+              .map((a) =>
+                'href' in a ? (
+                  <Link
+                    key={a.key}
+                    href={a.href}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    {t('editDetails')}
+                  </Link>
+                ) : (
+                  <Button key={a.key} variant="outline" size="sm" onClick={a.run}>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    {t('editDetails')}
+                  </Button>
+                )
+              )}
           </div>
         )}
       </div>
