@@ -673,7 +673,7 @@ export function ActivityPlanLinks({
                           onChange={(e) =>
                             setDraft(key, { ...d, rate: { ...d.rate, percent: e.target.value } })
                           }
-                          placeholder="20"
+                          placeholder="0"
                           className="h-7 w-12 px-1 text-center text-xs"
                           aria-label={tb('percentLabel')}
                         />
@@ -796,7 +796,7 @@ export function ActivityPlanLinks({
                                   rate: { ...d.rate, percent: e.target.value },
                                 })
                               }
-                              placeholder="20"
+                              placeholder="0"
                               className="h-7 w-12 px-1 text-center text-xs"
                               aria-label={tb('percentLabel')}
                             />

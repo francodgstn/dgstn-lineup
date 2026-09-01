@@ -141,7 +141,11 @@ export default function ProductsPage() {
   const currency = team?.default_currency ?? 'CHF'
 
   const { data: products = [], isLoading } = useProducts(currentTeamId)
-  const editParam = useSearchParams().get('edit')
+  const searchParams = useSearchParams()
+  const editParam = searchParams.get('edit')
+  // The catalogue's pane links here to duplicate, because the copy has to land
+  // in THIS page's create dialog — under the same per-plan catalogue cap.
+  const duplicateParam = searchParams.get('duplicate')
   const limits = getProductLimits(team?.plan ?? null)
   const atCap = products.length >= limits.maxProductsPerTeam
 
@@ -261,6 +265,16 @@ export default function ProductsPage() {
     if (target) openEdit(target)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editParam, products])
+
+  // Same one-shot shape as `edit` above, for the same reason.
+  const consumedDuplicateParam = useRef(false)
+  useEffect(() => {
+    if (consumedDuplicateParam.current || !duplicateParam || products.length === 0) return
+    const target = products.find((p) => p.id === duplicateParam)
+    consumedDuplicateParam.current = true
+    if (target) openDuplicate(target)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duplicateParam, products])
 
   /**
    * Copy a product into the CREATE dialog (`editing` stays null), so it is saved

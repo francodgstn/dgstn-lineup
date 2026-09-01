@@ -51,7 +51,7 @@ import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   AlertTriangle,
   IdCard,
@@ -61,6 +61,11 @@ import {
   GripVertical,
   Package,
   Pencil,
+  Archive,
+  CalendarDays,
+  Copy,
+  Trash2,
+  type LucideIcon,
 } from 'lucide-react'
 
 import {
@@ -80,12 +85,24 @@ import {
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
+import { deleteProduct } from '@/plugins/products/hooks'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { ActivityScheduleSheet } from '@/components/activities/ActivityScheduleSheet'
 import { useAuth } from '@/contexts/AuthContext'
 import { useActivities } from '@/hooks/useActivities'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -118,9 +135,45 @@ type Selection = { kind: 'activity' | 'course' | 'plan' | 'product'; id: string 
 /**
  * HOW A THING IS EDITED FROM THIS PAGE: open a dialog here, or go to the page
  * that owns the form. One type for both, so a row and the pane it opens cannot
- * end up offering different things — see `editActionFor`.
+ * end up offering different things — see `paneActionsFor`.
  */
-type EditAction = { open: () => void } | { href: Route } | undefined
+type PaneActionRun = { run: () => void } | { href: Route }
+
+/**
+ * ONE ROW OF ICONS, and the last two are always the same two.
+ *
+ * The pane used to carry a single Edit button. The kinds it hosts do not offer
+ * the same things, though — an activity can show its upcoming sessions and be
+ * duplicated, a course can be neither — so a naive per-kind row would put Edit
+ * in a different place on every tab, which is the one thing a studio switching
+ * between them cannot afford (Franco, 2026-09-01).
+ *
+ * So the row is RIGHT-ALIGNED and ordered `[kind-specific…] [duplicate] [edit]
+ * [destructive]`. Whatever precedes them, EDIT IS ALWAYS SECOND FROM THE RIGHT
+ * AND THE DESTRUCTIVE ONE IS ALWAYS LAST — the same pixels on every kind.
+ *
+ * `danger` marks the destructive one, which is the only one that opens a
+ * confirmation. Which destruction it is follows the kind's OWN page rather than
+ * a rule invented here: an activity and a course ARCHIVE, a plan and a product
+ * DELETE. The catalogue is a second door onto those records, not a second
+ * policy about them.
+ */
+/** Archive or delete — whichever the kind's own page does. */
+type DestroyMode = 'archive' | 'delete'
+
+type Confirming = {
+  kind: NonNullable<Selection>['kind']
+  id: string
+  name: string
+  mode: DestroyMode
+} | null
+
+type PaneAction = PaneActionRun & {
+  key: string
+  icon: LucideIcon
+  label: string
+  danger?: boolean
+}
 
 /** The rail's tabs. `activities` holds classes AND appointments — see the header. */
 type TabKey = 'activities' | 'plans' | 'courses' | 'products'
@@ -168,6 +221,7 @@ export default function CataloguePage() {
   // three namespaces, because three pages own these words and a fourth set of
   // strings saying the same things is how they start saying different ones.
   const tAct = useTranslations('Activities')
+  const tCommon = useTranslations('Common')
   const tSet = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
   const { currentTeamId, team, user } = useAuth()
@@ -197,6 +251,12 @@ export default function CataloguePage() {
   // one that does not.
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [editingPlan, setEditingPlan] = useState<SubscriptionType | null>(null)
+  // A duplicate is a CREATE seeded from a record, which is why it is separate
+  // state and not a flag on the edit target — both dialogs already know it.
+  const [duplicatingActivity, setDuplicatingActivity] = useState<Activity | null>(null)
+  const [duplicatingPlan, setDuplicatingPlan] = useState<SubscriptionType | null>(null)
+  const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
+  const [confirming, setConfirming] = useState<Confirming>(null)
 
   const { data: activities = [], isLoading: loadingActivities } = useActivities(currentTeamId)
   const { data: plans = [], isLoading: loadingPlans } = useSubscriptionTypes(currentTeamId)
@@ -431,18 +491,98 @@ export default function CataloguePage() {
    * A reader who cannot edit gets neither: a shortcut into a form that refuses
    * them is worse than no shortcut.
    */
-  const editActionFor = (kind: NonNullable<Selection>['kind'], id: string): EditAction => {
-    if (!canEdit) return undefined
+  const paneActionsFor = (kind: NonNullable<Selection>['kind'], id: string): PaneAction[] => {
+    if (!canEdit) return []
+    const edit = (run: PaneActionRun): PaneAction => ({
+      key: 'edit',
+      icon: Pencil,
+      label: t('editAll'),
+      ...run,
+    })
+    const duplicate = (run: PaneActionRun): PaneAction => ({
+      key: 'duplicate',
+      icon: Copy,
+      label: tCommon('duplicate'),
+      ...run,
+    })
+    const destroy = (name: string, mode: DestroyMode): PaneAction => ({
+      key: 'destroy',
+      icon: mode === 'archive' ? Archive : Trash2,
+      label: mode === 'archive' ? t('archiveAction') : t('deleteAction'),
+      danger: true,
+      run: () => setConfirming({ kind, id, name, mode }),
+    })
+
     if (kind === 'activity') {
       const a = activities.find((x) => x.id === id)
-      return a ? { open: () => setEditingActivity(a) } : undefined
+      if (!a) return []
+      return [
+        // Viewing precedes changing, and "is this actually on the calendar?" is
+        // the question the pane cannot answer about itself.
+        {
+          key: 'schedule',
+          icon: CalendarDays,
+          label: tAct('viewSchedule'),
+          run: () => setSchedulePreview(a),
+        },
+        duplicate({ run: () => setDuplicatingActivity(a) }),
+        edit({ run: () => setEditingActivity(a) }),
+        destroy(a.name, 'archive'),
+      ]
     }
     if (kind === 'plan') {
       const pl = plans.find((x) => x.id === id)
-      return pl ? { open: () => setEditingPlan(pl) } : undefined
+      if (!pl) return []
+      return [
+        duplicate({ run: () => setDuplicatingPlan(pl) }),
+        edit({ run: () => setEditingPlan(pl) }),
+        destroy(pl.name, 'delete'),
+      ]
     }
-    if (kind === 'course') return { href: `/offer/online-courses/${id}` as Route }
-    return { href: `/offer/products?edit=${id}` as Route }
+    if (kind === 'course') {
+      const c = courses.find((x) => x.id === id)
+      if (!c) return []
+      // No duplicate: the course page does not offer one either, and a course
+      // copied without its modules and lessons would be an empty shell.
+      return [
+        edit({ href: `/offer/online-courses/${id}` as Route }),
+        destroy(c.title, 'archive'),
+      ]
+    }
+    const pr = products.find((x) => x.id === id)
+    if (!pr) return []
+    return [
+      duplicate({ href: `/offer/products?duplicate=${id}` as Route }),
+      edit({ href: `/offer/products?edit=${id}` as Route }),
+      destroy(pr.name, 'delete'),
+    ]
+  }
+
+  /** A ROW shows one pencil, not the bar — the bar belongs to the thing you have
+   *  opened. Taken from the same list so the two can never disagree. */
+  const editOf = (kind: NonNullable<Selection>['kind'], id: string): PaneAction | undefined =>
+    paneActionsFor(kind, id).find((a) => a.key === 'edit')
+
+  /** The destructive action, run against the same collection its own page uses. */
+  async function runDestroy() {
+    if (!confirming || !currentTeamId) return
+    const { kind, id } = confirming
+    if (kind === 'activity') {
+      await updateDoc(doc(db, ACTIVITIES_COLLECTION, id), { isActive: false })
+      await qc.invalidateQueries({ queryKey: ['activities'] })
+    } else if (kind === 'plan') {
+      await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, id))
+      await qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+    } else if (kind === 'course') {
+      await updateDoc(doc(db, COURSES_COLLECTION, id), { status: 'archived' })
+      await qc.invalidateQueries({ queryKey: ['courses', currentTeamId] })
+    } else {
+      await deleteProduct(currentTeamId, id)
+      await qc.invalidateQueries({ queryKey: ['products', currentTeamId] })
+    }
+    // The pane is now pointing at something that is gone or filed away.
+    setConfirming(null)
+    select(null)
   }
 
   // ── ORDERING ─────────────────────────────────────────────────────────────
@@ -626,7 +766,7 @@ export default function CataloguePage() {
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
-                        edit={editActionFor('activity', a.id)}
+                        edit={editOf('activity', a.id)}
                         editLabel={t('editAll')}
                       />
                     )}
@@ -652,7 +792,7 @@ export default function CataloguePage() {
                         onClick={() => toggle('activity', a.id)}
                         sortable={sortable}
                         reorderLabel={t('reorder')}
-                        edit={editActionFor('activity', a.id)}
+                        edit={editOf('activity', a.id)}
                         editLabel={t('editAll')}
                       />
                     )}
@@ -679,7 +819,7 @@ export default function CataloguePage() {
                       onClick={() => toggle('plan', pl.id)}
                       sortable={sortable}
                       reorderLabel={t('reorder')}
-                      edit={editActionFor('plan', pl.id)}
+                      edit={editOf('plan', pl.id)}
                       editLabel={t('editAll')}
                     />
                   )}
@@ -701,7 +841,7 @@ export default function CataloguePage() {
                     warn={deadEndIds.has(c.id)}
                     selected={selection?.kind === 'course' && selection.id === c.id}
                     onClick={() => toggle('course', c.id)}
-                    edit={editActionFor('course', c.id)}
+                    edit={editOf('course', c.id)}
                     editLabel={t('editAll')}
                   />
                 ))
@@ -724,7 +864,7 @@ export default function CataloguePage() {
                     detail={detailLine(productChips(p))}
                     selected={selection?.kind === 'product' && selection.id === p.id}
                     onClick={() => toggle('product', p.id)}
-                    edit={editActionFor('product', p.id)}
+                    edit={editOf('product', p.id)}
                     editLabel={t('editAll')}
                   />
                 ))
@@ -761,7 +901,7 @@ export default function CataloguePage() {
                 chips: activityChips(selectedActivity),
                 description: selectedActivity.description,
               }}
-              edit={editActionFor('activity', selectedActivity.id)}
+              actions={paneActionsFor('activity', selectedActivity.id)}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -795,7 +935,7 @@ export default function CataloguePage() {
                 chips: planChips(selectedPlan),
                 description: selectedPlan.description,
               }}
-              edit={editActionFor('plan', selectedPlan.id)}
+              actions={paneActionsFor('plan', selectedPlan.id)}
             >
               <ActivityPlanLinks
                 direction="from-plan"
@@ -830,7 +970,7 @@ export default function CataloguePage() {
                 // `summary`, not `description`: a course's blurb is its summary.
                 description: selectedCourse.summary,
               }}
-              edit={editActionFor('course', selectedCourse.id)}
+              actions={paneActionsFor('course', selectedCourse.id)}
             >
               <ActivityPlanLinks
                 direction="from-offering"
@@ -860,7 +1000,7 @@ export default function CataloguePage() {
                 // the fact, and the fact is the part a studio needs.
                 note: t('productNoPlanEdge'),
               }}
-              edit={editActionFor('product', selectedProduct.id)}
+              actions={paneActionsFor('product', selectedProduct.id)}
             />
           )}
 
@@ -886,6 +1026,80 @@ export default function CataloguePage() {
           remounts the form rather than leaving the previous draft in it — the
           same key both list pages use. `currentTeamId` and `user` gate the
           activity form because it writes with both. */}
+      {currentTeamId && user && duplicatingActivity && (
+        <ActivityDialog
+          key={`dup-${duplicatingActivity.id}`}
+          open
+          onClose={() => setDuplicatingActivity(null)}
+          teamId={currentTeamId}
+          userId={user.uid}
+          editing={null}
+          duplicating={duplicatingActivity}
+          nextOrder={activities.length}
+          currency={currency}
+          subscriptionTypes={plans}
+          canEditPlanLinks={canEdit}
+        />
+      )}
+
+      {currentTeamId && duplicatingPlan && (
+        <SubTypeDialog
+          key={`dup-${duplicatingPlan.id}`}
+          open
+          onOpenChange={(v) => !v && setDuplicatingPlan(null)}
+          teamId={currentTeamId}
+          editing={null}
+          duplicating={duplicatingPlan}
+          currency={currency}
+          nextOrder={plans.length}
+          onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+            void qc.invalidateQueries({ queryKey: ['activities'] })
+          }}
+        />
+      )}
+
+      <ActivityScheduleSheet
+        activity={schedulePreview}
+        open={!!schedulePreview}
+        onOpenChange={(v) => {
+          if (!v) setSchedulePreview(null)
+        }}
+        teamId={currentTeamId ?? ''}
+      />
+
+      {/* NEVER STRAIGHT AWAY. One dialog for all four kinds, because the
+          question is the same one and only the verb and the noun change. */}
+      <AlertDialog open={!!confirming} onOpenChange={(v) => !v && setConfirming(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming?.mode === 'archive' ? t('archiveAction') : t('deleteAction')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming
+                ? t(confirming.mode === 'archive' ? 'archiveConfirm' : 'deleteConfirm', {
+                    name: confirming.name,
+                  })
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                confirming?.mode === 'delete'
+                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                  : undefined
+              }
+              onClick={() => void runDestroy()}
+            >
+              {confirming?.mode === 'archive' ? t('archiveAction') : t('deleteAction')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {currentTeamId && user && editingActivity && (
         <ActivityDialog
           key={editingActivity.id}
@@ -955,7 +1169,7 @@ function PaneBody({
   badge,
   summary,
   facts,
-  edit,
+  actions,
   children,
 }: {
   title: string
@@ -963,13 +1177,12 @@ function PaneBody({
   summary: string
   /** What the list page would show on this thing's row — see OfferFacts. */
   facts?: OfferFactsProps
-  /** Open the editor, or go to it. Absent for a reader who cannot edit. */
-  edit?: EditAction
+  /** The icon row. Empty for a reader who cannot edit — see PaneAction. */
+  actions?: PaneAction[]
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
 }) {
-  const t = useTranslations('OfferCatalogue')
 
   return (
     <div className="space-y-4">
@@ -985,18 +1198,36 @@ function PaneBody({
           </div>
           <p className="text-xs text-muted-foreground">{summary}</p>
         </div>
-        {edit &&
-          ('open' in edit ? (
-            <Button size="sm" onClick={edit.open}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-              {t('editAll')}
-            </Button>
-          ) : (
-            <Link href={edit.href} className={buttonVariants({ size: 'sm' })}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-              {t('editAll')}
-            </Link>
-          ))}
+        {actions && actions.length > 0 && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            {actions.map((a) => {
+              const Icon = a.icon
+              // Icon-only, with the name on hover and for a screen reader: four
+              // labelled buttons would be a second toolbar competing with the
+              // pane's own heading, and these are the same four verbs on every
+              // kind — position teaches them faster than repeated words.
+              const cls = `rounded p-1.5 text-muted-foreground transition-colors ${
+                a.danger ? 'hover:text-destructive' : 'hover:text-foreground'
+              } hover:bg-muted`
+              return 'href' in a ? (
+                <Link key={a.key} href={a.href} className={cls} title={a.label} aria-label={a.label}>
+                  <Icon className="h-4 w-4" />
+                </Link>
+              ) : (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={a.run}
+                  className={cls}
+                  title={a.label}
+                  aria-label={a.label}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* THE FACTS, above the hairline: they belong to the header — what this
@@ -1079,7 +1310,7 @@ function RailRow({
   reorderLabel?: string
   /** What the pencil does — open a dialog, or go somewhere. Absent for a reader
    *  who cannot edit. */
-  edit?: EditAction
+  edit?: PaneAction
   editLabel?: string
 }) {
   return (
@@ -1183,10 +1414,10 @@ function OrderableRows<T extends { id: string }>({
 /** The row's pencil. A BUTTON or a LINK depending on what editing this thing
  *  means — the two must look identical, because to the reader they are the same
  *  affordance and the difference is ours, not theirs. */
-function EditPencil({ edit, label }: { edit: NonNullable<EditAction>; label?: string }) {
+function EditPencil({ edit, label }: { edit: PaneAction; label?: string }) {
   const className =
     'mr-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100'
-  if ('open' in edit) {
+  if ('run' in edit) {
     return (
       <button
         type="button"
@@ -1194,7 +1425,7 @@ function EditPencil({ edit, label }: { edit: NonNullable<EditAction>; label?: st
         title={label}
         onClick={(e) => {
           e.stopPropagation()
-          edit.open()
+          edit.run()
         }}
         className={className}
       >
