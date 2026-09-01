@@ -7436,7 +7436,11 @@
     "noPriceDropIn": "This class sells no drop-in, so there is no price to reduce yet. Add a drop-in price to make this apply.",
     "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply.",
     "noPriceCourse": "This course is not on sale, so there is no price to reduce yet. Tick “Sell it without a plan” in the course settings to price it.",
-    "naCourseOpen": "This course is already open without a plan, so there is nothing for a plan to open or discount."
+    "naCourseOpen": "This course is already open without a plan, so there is nothing for a plan to open or discount.",
+    "archiveAction": "Archive",
+    "deleteAction": "Delete",
+    "archiveConfirm": "Archive “{name}”? It is hidden from your catalogue, and anything already recorded against it keeps its reference.",
+    "deleteConfirm": "Delete “{name}”? This cannot be undone."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

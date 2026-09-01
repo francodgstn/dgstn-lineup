@@ -7436,7 +7436,11 @@
     "noPriceDropIn": "Diese Klasse verkauft keine Drop-ins, es gibt also noch keinen Preis zu reduzieren. Fügen Sie einen Drop-in-Preis hinzu, damit dies greift.",
     "noPriceAppointment": "Dieser Termin hat keinen Preis, es gibt also nichts zu reduzieren. Versehen Sie eine Dauer mit einem Preis, damit dies greift.",
     "noPriceCourse": "Dieser Kurs ist nicht im Verkauf, es gibt also noch keinen Preis zu reduzieren. Aktivieren Sie „Ohne Plan verkaufen“ in den Kurseinstellungen.",
-    "naCourseOpen": "Dieser Kurs ist bereits ohne Plan zugänglich, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte."
+    "naCourseOpen": "Dieser Kurs ist bereits ohne Plan zugänglich, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte.",
+    "archiveAction": "Archivieren",
+    "deleteAction": "Löschen",
+    "archiveConfirm": "„{name}“ archivieren? Es wird aus Ihrem Katalog ausgeblendet; bereits erfasste Daten behalten ihren Bezug.",
+    "deleteConfirm": "„{name}“ löschen? Dies kann nicht rückgängig gemacht werden."
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

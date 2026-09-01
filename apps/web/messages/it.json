@@ -7436,7 +7436,11 @@
     "noPriceDropIn": "Questa lezione non vende drop-in, quindi non c'è ancora un prezzo da ridurre. Aggiungi un prezzo drop-in perché abbia effetto.",
     "noPriceAppointment": "Questo appuntamento non ha prezzo, quindi non c'è nulla da ridurre. Assegna un prezzo a una durata perché abbia effetto.",
     "noPriceCourse": "Questo corso non è in vendita, quindi non c'è ancora un prezzo da ridurre. Spunta «Vendilo senza piano» nelle impostazioni del corso.",
-    "naCourseOpen": "Questo corso è già accessibile senza piano, quindi non c'è nulla che un piano possa aprire o scontare."
+    "naCourseOpen": "Questo corso è già accessibile senza piano, quindi non c'è nulla che un piano possa aprire o scontare.",
+    "archiveAction": "Archivia",
+    "deleteAction": "Elimina",
+    "archiveConfirm": "Archiviare «{name}»? Verrà nascosto dal catalogo e tutto ciò che vi è già collegato mantiene il riferimento.",
+    "deleteConfirm": "Eliminare «{name}»? L'operazione non può essere annullata."
   },
   "VerifyEmail": {
     "title": "Conferma {email}",
