@@ -103,7 +103,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -1246,6 +1246,7 @@ function PaneBody({
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
 }) {
+  const t = useTranslations('OfferCatalogue')
 
   return (
     <div className="space-y-4">
@@ -1262,33 +1263,68 @@ function PaneBody({
           <p className="text-xs text-muted-foreground">{summary}</p>
         </div>
         {actions && actions.length > 0 && (
-          <div className="flex shrink-0 items-center gap-0.5">
-            {actions.map((a) => {
-              const Icon = a.icon
-              // Icon-only, with the name on hover and for a screen reader: four
-              // labelled buttons would be a second toolbar competing with the
-              // pane's own heading, and these are the same four verbs on every
-              // kind — position teaches them faster than repeated words.
-              const cls = `rounded p-1.5 text-muted-foreground transition-colors ${
-                a.danger ? 'hover:text-destructive' : 'hover:text-foreground'
-              } hover:bg-muted`
-              return 'href' in a ? (
-                <Link key={a.key} href={a.href} className={cls} title={a.label} aria-label={a.label}>
-                  <Icon className="h-4 w-4" />
-                </Link>
-              ) : (
-                <button
-                  key={a.key}
-                  type="button"
-                  onClick={a.run}
-                  className={cls}
-                  title={a.label}
-                  aria-label={a.label}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              )
-            })}
+          /* EDIT IS NOT AN ICON. The rest are: they name an operation on this
+             record, and the icon carries it. Edit is different — the pane now
+             shows so much (facts, prices, the plan table) that a small pencil
+             among three others read as "one more of those" rather than "there
+             is a whole other half of this thing", which is the name, the
+             description, the colour, the prose (Franco, 2026-09-01).
+
+             So it sits BELOW the icon row, labelled, in the same place on every
+             kind. The icons stay icon-only — three same-shaped verbs where
+             position teaches faster than repeated words. */
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-0.5">
+              {actions
+                .filter((a) => a.key !== 'edit')
+                .map((a) => {
+                  const Icon = a.icon
+                  const cls = `rounded p-1.5 text-muted-foreground transition-colors ${
+                    a.danger ? 'hover:text-destructive' : 'hover:text-foreground'
+                  } hover:bg-muted`
+                  return 'href' in a ? (
+                    <Link
+                      key={a.key}
+                      href={a.href}
+                      className={cls}
+                      title={a.label}
+                      aria-label={a.label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={a.run}
+                      className={cls}
+                      title={a.label}
+                      aria-label={a.label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  )
+                })}
+            </div>
+            {actions
+              .filter((a) => a.key === 'edit')
+              .map((a) =>
+                'href' in a ? (
+                  <Link
+                    key={a.key}
+                    href={a.href}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    {t('editDetails')}
+                  </Link>
+                ) : (
+                  <Button key={a.key} variant="outline" size="sm" onClick={a.run}>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    {t('editDetails')}
+                  </Button>
+                )
+              )}
           </div>
         )}
       </div>
