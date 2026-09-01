@@ -52,6 +52,7 @@ export const DEFAULT_TEAM_PLUGINS: readonly string[] = ['custom-fields']
  */
 export const CLIENT_INSTALLABLE_FROM: Readonly<Record<string, SaasPlan>> = {
   'gift-cards': 'free',
+  'asset-register': 'coach',
   'contact-groups': 'coach',
   'custom-fields': 'coach',
 }

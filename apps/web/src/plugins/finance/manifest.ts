@@ -21,8 +21,5 @@ export const financeManifest: PluginManifest = {
   iconName: 'Calculator',
   navContributions: [
     { href: '/plugins/finance', labelKey: 'financeNavLabel', icon: 'Calculator', section: 'operations' },
-    // The asset register is a finance-plugin FEATURE with its own front door —
-    // presentation is free, ownership stays here (docs/finance-accrual.md §4).
-    { href: '/plugins/finance/assets', labelKey: 'financeAssetsNavLabel', icon: 'Dumbbell', section: 'operations' },
   ],
 }

@@ -98,6 +98,7 @@ import {
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
 import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import type {
@@ -2993,6 +2994,8 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   // simply missing from finance.
   await seedTeamSales({ teamId, currency: profile.currency })
   await seedTeamFinance({ teamId, uid })
+  // The asset register is its own Coach+ plugin — seeded beside finance, not by it.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE

@@ -11,9 +11,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { ArrowLeft, Download, Dumbbell, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
-import { Link } from '@/i18n/navigation'
-import type { Route } from 'next'
+import { Boxes, Download, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import {
@@ -53,11 +51,9 @@ import {
   deleteAsset,
   disposeAsset,
   saveAsset,
-  useAccountingSettings,
   useAssets,
   type AssetDraft,
-} from '@/plugins/finance/hooks'
-import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
+} from '@/plugins/asset-register/hooks'
 
 /** '12.50' → 1250 minor units; invalid/negative → null. */
 function parseMajor(v: string): number | null {
@@ -109,8 +105,8 @@ const emptyDraft = (): DraftState => ({
 })
 
 export default function AssetRegisterPage() {
-  const t = useTranslations('Finance')
-  const { currentTeamId, teamRole, user } = useAuth()
+  const t = useTranslations('AssetRegister')
+  const { currentTeamId, teamRole, user, team } = useAuth()
   const teamId = currentTeamId ?? null
   // Managers maintain the register alongside owners — the head coach knows what
   // kit exists. Matches the asset_register write rule; the rules are the gate,
@@ -119,7 +115,6 @@ export default function AssetRegisterPage() {
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
 
   const { data: assets = [], isLoading } = useAssets(teamId)
-  const { data: settings } = useAccountingSettings(teamId)
   const qc = useQueryClient()
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['asset-register', teamId] })
 
@@ -154,11 +149,11 @@ export default function AssetRegisterPage() {
   )
 
   if (pluginsLoading) return <Skeleton className="m-6 h-40" />
-  if (!teamId || !isInstalled('finance')) {
+  if (!teamId || !isInstalled('asset-register')) {
     return <p className="p-6 text-sm text-muted-foreground">{t('notInstalled')}</p>
   }
 
-  const currency = settings?.base_currency ?? 'CHF'
+  const currency = team?.default_currency ?? 'CHF'
   const active = assets.filter((a) => a.status !== 'disposed')
   const totalCost = active.reduce((s, a) => s + a.cost_minor, 0)
   const totalBook = active.reduce((s, a) => s + (valuations.get(a.id)?.book_value_minor ?? 0), 0)
@@ -307,18 +302,10 @@ export default function AssetRegisterPage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <Link
-        href={'/plugins/finance' as Route}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        {t('backToOverview')}
-      </Link>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Dumbbell className="h-5 w-5 text-muted-foreground" />
+          <Boxes className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('assetsTitle')}</h1>
-          <FinanceBetaChip />
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={downloadStatement} disabled={assets.length === 0}>

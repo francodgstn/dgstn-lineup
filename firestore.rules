@@ -103,7 +103,7 @@ service cloud.firestore {
     // honest (a test that reads the manifests, that file and this one).
     function clientInstallableRank(pluginId) {
       return pluginId in ['gift-cards'] ? 0
-           : pluginId in ['contact-groups', 'custom-fields'] ? 1
+           : pluginId in ['asset-register', 'contact-groups', 'custom-fields'] ? 1
            : 2;
     }
 

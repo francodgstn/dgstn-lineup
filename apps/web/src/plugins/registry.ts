@@ -22,6 +22,7 @@ import { customFormsManifest } from './custom-forms/manifest'
 // button that means nothing — and, on Free and Coach, one that the rules refuse.
 import { kioskManifest } from './kiosk/manifest'
 import { financeManifest } from './finance/manifest'
+import { assetRegisterManifest } from './asset-register/manifest'
 import { giftCardsManifest } from './gift-cards/manifest'
 import { promoCodesManifest } from './promo-codes/manifest'
 
@@ -41,6 +42,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   customFormsManifest,
   kioskManifest,
   financeManifest,
+  assetRegisterManifest,
   giftCardsManifest,
   promoCodesManifest,
 ]
@@ -85,4 +87,17 @@ export function memberManifestsOf(containerId: PluginId): PluginManifest[] {
   return bundleMembers(containerId)
     .map((id) => PLUGIN_REGISTRY.find((m) => m.id === id))
     .filter((m): m is PluginManifest => m !== undefined)
+}
+
+/**
+ * One manifest by id, for surfaces that hold an id and need its display name —
+ * a remove dialog naming the plugin that requires the one being removed, say.
+ *
+ * A helper rather than a `PLUGIN_REGISTRY.find(...)` at the call site because
+ * `bundles.test.ts` forbids the catalogue pages from reaching into the registry
+ * directly, and because this deliberately searches ALL manifests, not
+ * `installableManifests()`: a bundle member can be the answer here.
+ */
+export function manifestById(id: PluginId): PluginManifest | undefined {
+  return PLUGIN_REGISTRY.find((m) => m.id === id)
 }
