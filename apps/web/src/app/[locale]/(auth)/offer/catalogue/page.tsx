@@ -206,15 +206,18 @@ function Tip({
   children: React.ReactElement
   side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
+  // NO PROVIDER HERE — one wraps the page. A provider per tooltip works, but
+  // the rail renders a pencil per row, and thirty providers is thirty copies of
+  // a shared delay timer whose whole purpose is to be shared: hovering a second
+  // control after a first should show instantly, which only happens when both
+  // read the same provider.
   return (
-    <TooltipProvider delay={300}>
-      <Tooltip>
-        <TooltipTrigger render={children} />
-        <TooltipContent side={side} className="max-w-64">
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side={side} className="max-w-64">
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -696,6 +699,10 @@ export default function CataloguePage() {
   const backToPlans = selection?.kind === 'plan'
 
   return (
+    /* ONE PROVIDER for the whole page — see `Tip`. Delay 300ms so a
+       pointer crossing the rail does not trail popups behind it, but
+       instant on the second control once the first has opened. */
+    <TooltipProvider delay={300}>
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
@@ -1254,6 +1261,7 @@ export default function CataloguePage() {
         />
       )}
     </div>
+    </TooltipProvider>
   )
 }
 
@@ -1570,32 +1578,31 @@ function OrderableRows<T extends { id: string }>({
 function EditPencil({ edit, label }: { edit: PaneAction; label?: string }) {
   const className =
     'mr-1 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100'
-  if ('run' in edit) {
-    return (
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        onClick={(e) => {
-          e.stopPropagation()
-          edit.run()
-        }}
-        className={className}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
-    )
-  }
   return (
-    <Link
-      href={edit.href}
-      aria-label={label}
-      title={label}
-      onClick={(e) => e.stopPropagation()}
-      className={className}
-    >
-      <Pencil className="h-3.5 w-3.5" />
-    </Link>
+    <Tip label={label ?? ''}>
+      {'run' in edit ? (
+        <button
+          type="button"
+          aria-label={label}
+          onClick={(e) => {
+            e.stopPropagation()
+            edit.run()
+          }}
+          className={className}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <Link
+          href={edit.href}
+          aria-label={label}
+          onClick={(e) => e.stopPropagation()}
+          className={className}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Link>
+      )}
+    </Tip>
   )
 }
 
