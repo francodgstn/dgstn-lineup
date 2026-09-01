@@ -2148,12 +2148,12 @@ async function seedTeam(opts: {
   }
 
   // ── the asset register (Coach+, its OWN plugin) ─────────────────────────────
-  // Deliberately outside the studio-only branch above: the register is included
-  // from Coach and stands alone, so a coach tenant must show one too — that
-  // tenant is the whole reason it stopped being a finance feature.
-  if (plan !== 'free') {
-    await seedTeamAssetRegister({ teamId, uid })
-  }
+  // Deliberately outside the studio-only branch above and UNCONDITIONAL: the
+  // register is included from Coach and stands alone, so a coach tenant must
+  // show one too — that tenant is the whole reason it stopped being a finance
+  // feature. Every team this function seeds is Coach or above by its own `plan`
+  // type, so there is no tier left to guard against.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
