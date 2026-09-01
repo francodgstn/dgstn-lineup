@@ -38,7 +38,7 @@ import {
 import type { Course, Lesson, LessonType, MediaSource, CourseStatus, LessonAttachment } from '@linyup/shared'
 import {
   useCourse, useModules, useLessons,
-  updateCourse, deleteCourse,
+  updateCourse, updateCourseAccess, deleteCourse,
   createModule, updateModule, deleteModule,
   createLesson, updateLesson, deleteLesson,
   type LessonInput,
@@ -586,8 +586,6 @@ function SettingsTab({
     accessType === 'subscription' || accessType === 'purchase' ? 'plans' : accessType
   )
   const [localSold, setLocalSold] = useState(accessType === 'purchase')
-  /** The stored plan list, carried through untouched. The matcher owns it. */
-  const keepGate = initialSubIds?.length ? { subscriptionTypeIds: initialSubIds } : {}
   /** What the two controls above mean in the stored vocabulary. */
   const localAccess: typeof accessType =
     localTier === 'plans' ? (localSold ? 'purchase' : 'subscription') : localTier
@@ -616,6 +614,35 @@ function SettingsTab({
 
   const localPriceNum = parseFloat(localPriceText.replace(',', '.'))
   // Stripe's minimum charge is ~0.50 in the team's currency.
+  /** The tier decision as it stands in the form, saved or not. */
+  const draftAccess = {
+    type: localAccess,
+    ...(localAccess === 'purchase' && Number.isFinite(localPriceNum)
+      ? { priceAmount: localPriceNum }
+      : {}),
+  }
+  /**
+   * THE MATCHER READS THE DRAFT, not the saved course.
+   *
+   * It used to be handed the stored document, so ticking "Sell it without a
+   * plan" left its "% off" and "Fixed price" columns dimmed until the form had
+   * been saved — the table was a beat behind the switch that governs it
+   * (Franco, 2026-09-01). The plan list still comes from the STORED course,
+   * because the matcher owns that and this form does not.
+   *
+   * Safe only because a course carries the SAME facets on both plan-bearing
+   * tiers: the matcher's write is identical whichever of the two is stored, and
+   * only the dimming differs. Before that unification this would have offered
+   * controls the stored tier could not honour.
+   */
+  const draftCourse: Course = {
+    ...course,
+    accessRule: {
+      ...draftAccess,
+      ...(initialSubIds?.length ? { subscriptionTypeIds: initialSubIds } : {}),
+    },
+  }
+
   const purchasePriceInvalid =
     localAccess === 'purchase' && !(Number.isFinite(localPriceNum) && localPriceNum >= 0.5)
   // The matcher only has an edge to draw once the TIER gives it one: a free or
@@ -635,7 +662,9 @@ function SettingsTab({
     mutationFn: () => {
       /**
        * THE SWITCH MOVES NOTHING. It sets the tier and the price, and that is
-       * the whole of it.
+       * the whole of it — through `updateCourseAccess`, which writes those two
+       * FIELDS rather than the whole `accessRule` map, so the plan list is not
+       * merely left alone but unreachable from here.
        *
        * It used to migrate the studio's plan list between two homes — a gate
        * when unsold, an `included` benefit when sold — because the two tiers
@@ -645,23 +674,13 @@ function SettingsTab({
        * flicked. Roughly forty lines of carry-over, and the warning that had to
        * accompany it, are gone with the asymmetry that needed them.
        *
-       * THIS FORM STILL NEVER WRITES THE PLAN LIST. `accessRule.subscriptionTypeIds`
-       * is passed straight back through: the matcher below is its one writer,
-       * and saving a title must not put a stale copy over what it just wrote.
+       * IT USED TO PASS THE PLAN LIST STRAIGHT BACK THROUGH, which was a write
+       * of a stale copy dressed up as a no-op — and it silently un-linked plans
+       * the matcher had just linked. See `updateCourseAccess`.
        */
-      const accessRule: Course['accessRule'] =
-        localAccess === 'purchase'
-          ? { type: 'purchase', priceAmount: localPriceNum, ...keepGate }
-          : localAccess === 'subscription'
-            ? { type: 'subscription', ...keepGate }
-            : // free / registered: no plan bears on this course any more, so the
-              // gate is dropped rather than left as data no reader consults.
-              { type: localAccess }
-
-      return updateCourse(courseId, {
+      return updateCourseAccess(courseId, draftAccess, {
         title: localTitle.trim(),
         summary: localSummary.trim(),
-        accessRule,
         hideFromShop: !localShowInShop,
       })
     },
@@ -850,13 +869,27 @@ function SettingsTab({
                 name: localTitle || title,
                 collection: COURSES_COLLECTION,
                 badge: tCat('courseBadge'),
-                target: { kind: 'course', doc: course },
+                target: { kind: 'course', doc: draftCourse },
               }}
               offerings={[]}
               plans={subscriptionTypes}
               currency={currency}
               canEdit
               hostedInForm
+              // The matcher's transaction reads the STORED course, so an
+              // unsaved tier has to land first or the ticks are computed
+              // against the old one. Only the tier — a half-typed title is not
+              // this button's business.
+              onBeforeSave={async () => {
+                if (localAccess === accessType && localPriceText === initialPriceText) return
+                await updateCourseAccess(courseId, draftAccess)
+                invalidate()
+              }}
+              // The one state the flush cannot express: "on sale" with no valid
+              // price. Saying so beats writing a course nobody can buy.
+              saveBlocked={
+                localAccess !== accessType && purchasePriceInvalid ? t('priceMin') : null
+              }
             />
           </div>
         </div>

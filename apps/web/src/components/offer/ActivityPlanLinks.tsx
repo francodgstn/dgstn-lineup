@@ -230,6 +230,8 @@ export function ActivityPlanLinks({
   currency,
   canEdit,
   hostedInForm,
+  onBeforeSave,
+  saveBlocked,
   onDirtyChange,
 }: {
   direction: EdgeDirection
@@ -249,6 +251,20 @@ export function ActivityPlanLinks({
    * remove), and the host is told when this editor holds ticks of its own.
    */
   hostedInForm?: boolean
+  /**
+   * Flush host state this editor's write DEPENDS ON, before the transaction.
+   *
+   * The transaction re-reads each document inside itself, which is what makes
+   * concurrent edits merge — and also means it sees the STORED offering, not
+   * the half-edited form wrapped around it. A course page whose tier is still
+   * a draft would therefore have its ticks computed against the old tier. The
+   * host persists that decision here; this editor then reads it like any other
+   * stored fact. Awaited, so a failure aborts the save.
+   */
+  onBeforeSave?: () => Promise<void>
+  /** Why the host cannot accept a save right now — shown, and the button is
+   *  disabled. Null/absent when it can. */
+  saveBlocked?: string | null
   /** Called whenever this editor gains or loses unsaved ticks, so a host with
    *  its own Save can say that pressing it will not write them. Pass a STABLE
    *  function (a setState updater) — it is an effect dependency. */
@@ -320,12 +336,16 @@ export function ActivityPlanLinks({
     .filter(Boolean)
 
   async function save() {
-    if (errors.length) {
+    if (errors.length || saveBlocked) {
       setShowErrors(true)
       return
     }
     setSaving(true)
     try {
+      // BEFORE the transaction, never inside it: this writes the host's own
+      // document, and a write from within would be read back by the same
+      // transaction as a conflict.
+      await onBeforeSave?.()
       // One transaction over every touched document, whatever kind it is. Each
       // is re-read INSIDE the transaction and its id lists recomputed from that
       // read, so a second studio ticking a different plan on the same offering
@@ -353,6 +373,10 @@ export function ActivityPlanLinks({
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['activities'] }),
         qc.invalidateQueries({ queryKey: ['courses'] }),
+        // AND the single-course query, which is a DIFFERENT key: 'course' does
+        // not prefix-match 'courses'. The course settings page reads that one,
+        // so without this it never saw the gate this editor had just written.
+        qc.invalidateQueries({ queryKey: ['course'] }),
       ])
     } finally {
       setSaving(false)
@@ -861,8 +885,12 @@ export function ActivityPlanLinks({
 
       {canEdit && (
         <div className="flex items-center justify-end gap-3 border-t pt-3">
-          {dirty && <span className="text-xs text-muted-foreground">{t('unsaved')}</span>}
-          <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>
+          {saveBlocked ? (
+            <span className="text-xs text-destructive">{saveBlocked}</span>
+          ) : (
+            dirty && <span className="text-xs text-muted-foreground">{t('unsaved')}</span>
+          )}
+          <Button size="sm" disabled={!dirty || saving || !!saveBlocked} onClick={() => void save()}>
             {saving ? t('saving') : t('save')}
           </Button>
         </div>
