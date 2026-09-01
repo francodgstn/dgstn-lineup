@@ -81,7 +81,7 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Accrual finance + asset register** — planned, not started: `docs/finance-accrual.md` is the recorded design (recognition policies, basis setting, assets-in-finance, the inventory-extension re-scope). Shipped from it so far: `MemberSubscription.current_period_start` persistence and the opening-balances wizard (`/plugins/finance/opening`).
+- **Accrual finance** — planned, not started: `docs/finance-accrual.md` is the recorded design (recognition policies, basis setting, assets-in-finance, the inventory-extension re-scope). Shipped from it so far: `MemberSubscription.current_period_start` persistence, the opening-balances wizard (`/plugins/finance/opening`), and the **asset register / statement of assets** register-only slice (`/plugins/finance/assets` — indicative values, no postings until accrual mode).
 - **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, priced durations + one `memberBenefit` rule (no access gate — the price is the gate), .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile app integration (browse/book is gated pending a rebuild on `listAvailability`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
 
 ---

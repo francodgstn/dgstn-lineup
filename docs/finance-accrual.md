@@ -1,11 +1,13 @@
 # Finance v2 — Accrual & Assets (plan)
 
-**Status: PLAN.** Phases 1–3 below are not implemented. What IS shipped from this
-plan: Phase 0 (`MemberSubscription.current_period_start` is persisted) and
-Phase 0.5 (the opening-balances wizard) — see "Phasing". Everything else is the
-recorded design for future implementation, written down so the decisions and
-their reasoning survive until then. Decisions dated 2026-08-31 were made by
-Franco in the planning session.
+**Status: PLAN.** Phases 1 and 3 below are not implemented. What IS shipped from
+this plan: Phase 0 (`MemberSubscription.current_period_start` is persisted),
+Phase 0.5 (the opening-balances wizard), and Phase 2's **register-only slice**
+(the asset register + statement of assets, pulled ahead of Phase 1 on Franco's
+call, 2026-09-01 — depreciation POSTINGS still wait for accrual mode) — see
+"Phasing". Everything else is the recorded design for future implementation,
+written down so the decisions and their reasoning survive until then. Decisions
+dated 2026-08-31 were made by Franco in the planning session.
 
 **One-line pitch:** give the accrual accounts the chart templates already seed
 their automatic writers, computed from operational data Linyup already holds —
@@ -167,6 +169,17 @@ date, cost, optional photo (insurance documentation is a free side-benefit),
 location for multi-club orgs. Straight-line to zero; no residual values, no
 component accounting, no revaluation.
 
+**SHIPPED (2026-09-01, register-only slice):** `/plugins/finance/assets` with
+its own "Equipment" nav contribution; `Asset` type (`shared/types/asset.ts`,
+minor-unit cost, `acquired_at` drives the schedule), pure `assetBookValue`
+(`shared/accounting/assets.ts`, whole-month UTC, floor-rounding that lands
+exactly on cost — unit-tested); statement-of-assets export with an
+active-assets totals row; dispose (sold/scrapped + proceeds, RECORDED ONLY);
+data at `teams/{id}/asset_register`, owner client-writes / manager reads per
+rules (the accrual phase routes writes through callables before postings depend
+on these fields). The register is the statement's data source — one feature,
+two views.
+
 **Policy:** immediate-expense threshold, default CHF 1'000, owner-adjustable
 (Sofortabschreibung is common and tax-accepted Swiss practice — many small
 entities rightly expense everything). Below the threshold: expensed at
@@ -314,7 +327,7 @@ DE/IT, not after either (GoBD gap).
 | **0 — SHIPPED 2026-08-31** | `MemberSubscription.current_period_start` persisted by the Connect webhook, backfillable via `backfill:subscription-lifecycle` (S) — service-period data accumulates from now on | — |
 | **0.5 — SHIPPED 2026-08-31** | Opening-balances wizard: guided interview over `createManualEntry` (S/M). File import discarded | — (independent of accrual) |
 | **1 — Accrual revenue core** | Basis setting + activation flow reusing the wizard, with the computed opening obligation (M) · recognition engine: annual/quarterly/`included_months` spreading (M), pack per-credit release + expiry breakage (M), gift-card liability repoint (S) · monthly usage-facts capture for packs (M) · Earned-vs-Cash report + obligation card (M) · rebuild extended to replay recognition — the correctness heart (M) | usage-facts capture; optional manual-row period fields (degradable) |
-| **2 — Assets & statement of assets** | Register + register-only cash mode (M) · threshold/capitalization + monthly depreciation postings + disposal (M) · opening-asset import (S) · statement-of-assets report (S) · chart additions via seeded re-run (S) | Register is independent of Phase 1; *postings* need Phase 1's accrual mode |
+| **2 — Assets & statement of assets** | **Register-only slice SHIPPED 2026-09-01** (pulled ahead of Phase 1): register UI + "Equipment" nav (`/plugins/finance/assets`, data `teams/{id}/asset_register`), indicative valuations (`assetBookValue`), statement-of-assets export, dispose recorded-only + photo + location. **Remaining:** threshold/capitalization + monthly depreciation postings + disposal gain/loss entries (M) · opening-asset import into the activation flow (S) · fixed-asset/accumulated-depreciation chart additions via seeded re-run (S) | *Postings* need Phase 1's accrual mode; writes may then route through callables |
 | **3 — Expense polish & close hygiene** | Prepaid spreading on templates (S) · month soft-close (S) · FY-close assistant incl. the guided auto-reversing accrued-expense step (M) · accounting-entries CSV (S) | — |
 
 ## Timing vs launch
