@@ -774,10 +774,18 @@ function resolveTarget(
       if (snapshot.ownsCourse) {
         return { options: [{ type: 'covered', via: { reason: 'owned' } }], denial: null }
       }
-      const benefit = normalizeBenefit(target.benefit)
-      if (!benefit && included) {
-        // Legacy free-inclusion list (accessRule.subscriptionTypeIds) — only
-        // consulted when no explicit benefit is configured; benefit wins.
+      // THE GATE AND THE BENEFIT ARE ADDITIVE, and FREE WINS.
+      //
+      // `accessRule.subscriptionTypeIds` names the plans that get this course
+      // free; `benefit` prices it for the plans that merely get it cheaper. A
+      // course is the same two-facet shape as a class, and reading only one of
+      // them was a bug rather than a design: `firestore.rules` has always ORed
+      // these two (`canReadPublishedCourse`), so the guard that used to stand
+      // here — `if (!benefit && included)`, i.e. a benefit HIDES the gate list —
+      // could let a holder READ a course this function then quoted them full
+      // price for. Nothing wrote both lists at once only because the editor
+      // refused to offer both controls (Franco, 2026-09-01).
+      if (included) {
         return {
           options: [
             { type: 'covered', via: { reason: 'subscription', subscriptionTypeId: included } },
@@ -785,6 +793,11 @@ function resolveTarget(
           denial: null,
         }
       }
+      // A `benefit` whose effect is `included` is the LEGACY spelling of that
+      // same list. It still resolves to covered, one line further down, through
+      // `applyModifiers` + COURSE_EFFECTS — which is why nothing needs a
+      // backfill; the editor absorbs it into the gate on first touch.
+      const benefit = normalizeBenefit(target.benefit)
       if (typeof rule.priceAmount === 'number') {
         return applyModifiers(
           snapshot,

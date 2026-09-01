@@ -539,7 +539,7 @@ function ContentTab({ courseId, teamId }: { courseId: string; teamId: string }) 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({
-  course, courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, benefit, status, hideFromShop,
+  course, courseId, teamId, title, summary, coverImageUrl, accessType, subscriptionTypeIds: initialSubIds, priceAmount, status, hideFromShop,
 }: {
   /** The whole document — the matcher reads the edge off it, and reading the
    *  scalars below from the same object keeps the two in step. */
@@ -552,7 +552,6 @@ function SettingsTab({
   accessType: 'free' | 'registered' | 'subscription' | 'purchase'
   subscriptionTypeIds?: string[]
   priceAmount?: number
-  benefit?: Course['benefit']
   status: CourseStatus
   hideFromShop?: boolean
 }) {
@@ -577,16 +576,18 @@ function SettingsTab({
    * ticked, anyone else can buy it at the price, and the same table gains the
    * "% off" and "Fixed price" columns because now there is a price to reduce.
    *
-   * NOTHING MOVED IN STORAGE. The stored tiers are still `subscription` (a gate,
-   * no price) and `purchase` (a price plus a `benefit`), which is exactly what
-   * the switch is off and on — so the rules, the resolver and the public
-   * surfaces are untouched, and there is no migration. The pair is derived here
-   * and collapsed back on save.
+   * NOTHING MOVED IN STORAGE. The stored tiers are still `subscription` and
+   * `purchase`, which is exactly what the switch is off and on, and both carry
+   * the same gate + rate pair — so the plan list this form never touches sits
+   * still while the switch moves. The pair is derived here and collapsed back
+   * on save.
    */
   const [localTier, setLocalTier] = useState<'free' | 'registered' | 'plans'>(
     accessType === 'subscription' || accessType === 'purchase' ? 'plans' : accessType
   )
   const [localSold, setLocalSold] = useState(accessType === 'purchase')
+  /** The stored plan list, carried through untouched. The matcher owns it. */
+  const keepGate = initialSubIds?.length ? { subscriptionTypeIds: initialSubIds } : {}
   /** What the two controls above mean in the stored vocabulary. */
   const localAccess: typeof accessType =
     localTier === 'plans' ? (localSold ? 'purchase' : 'subscription') : localTier
@@ -633,83 +634,34 @@ function SettingsTab({
   const saveMutation = useMutation({
     mutationFn: () => {
       /**
-       * THE PLAN LIST SURVIVES THE PRICE SWITCH.
+       * THE SWITCH MOVES NOTHING. It sets the tier and the price, and that is
+       * the whole of it.
        *
-       * The switch moves the course between two stored homes for the same
-       * answer — a gate (`accessRule.subscriptionTypeIds`, no price) and a
-       * benefit (`benefit`, alongside a price) — so flicking it must carry the
-       * studio's selection across rather than silently emptying the table it
-       * just filled in.
+       * It used to migrate the studio's plan list between two homes — a gate
+       * when unsold, an `included` benefit when sold — because the two tiers
+       * honoured different fields. They no longer do: a course carries a gate
+       * AND a rate on both plan-bearing tiers, exactly as a class does, so the
+       * list stays where the matcher put it whichever way this switch is
+       * flicked. Roughly forty lines of carry-over, and the warning that had to
+       * accompany it, are gone with the asymmetry that needed them.
        *
-       * WHAT CARRIES, AND WHAT CANNOT:
-       *  • gate → sold: every gated plan keeps the course FREE, as an
-       *    `included` benefit. Same members, same access, now with a price for
-       *    everyone else.
-       *  • sold → gate: the plans marked "Included" keep access (plus any ids
-       *    left in the legacy "included free" list, which meant the same
-       *    thing). A plan that merely had a REDUCED price cannot carry: its
-       *    whole route in was the sale, and the sale is what is being removed.
-       *    Promoting it to free would hand out more than the studio ever
-       *    granted, so it is dropped — and the form says so before the save
-       *    rather than after (`sellOffWarning`).
-       *
-       * THIS FORM NEVER REWRITES A LIST IT DID NOT CHANGE. When the tier is
-       * unchanged, the stored ids are passed straight back through: the matcher
-       * is their writer, and saving a title must not put a stale copy over what
-       * the matcher just wrote.
+       * THIS FORM STILL NEVER WRITES THE PLAN LIST. `accessRule.subscriptionTypeIds`
+       * is passed straight back through: the matcher below is its one writer,
+       * and saving a title must not put a stale copy over what it just wrote.
        */
-      const wasGate = accessType === 'subscription'
-      const wasSold = accessType === 'purchase'
-      const storedGateIds = wasGate ? (initialSubIds ?? []) : []
-      // On the sold tier `accessRule.subscriptionTypeIds` is the LEGACY
-      // "included free" list, which means exactly what an `included` benefit
-      // means; both rule files honour either.
-      const legacyIncluded = wasSold ? (initialSubIds ?? []) : []
-      const benefitIncluded =
-        benefit && benefit.effect === 'included' ? (benefit.subscriptionTypeIds ?? []) : []
-      const unique = (ids: string[]) => [...new Set(ids)]
-
-      let accessRule: Course['accessRule']
-      let nextBenefit: Course['benefit'] | undefined
-
-      if (localAccess === 'subscription') {
-        accessRule = {
-          type: 'subscription',
-          subscriptionTypeIds: wasGate
-            ? storedGateIds
-            : unique([...benefitIncluded, ...legacyIncluded]),
-        }
-        // No price ⇒ nothing for a rate rule to reduce.
-        nextBenefit = null
-      } else if (localAccess === 'purchase') {
-        accessRule = { type: 'purchase', priceAmount: localPriceNum }
-        if (wasGate) {
-          // Arriving from the gate: those plans keep it free.
-          nextBenefit = storedGateIds.length
-            ? { effect: 'included', subscriptionTypeIds: storedGateIds }
-            : (benefit ?? null)
-        } else if (legacyIncluded.length > 0 && !benefit) {
-          // The legacy list, retired into the one expression the matcher edits.
-          nextBenefit = { effect: 'included', subscriptionTypeIds: legacyIncluded }
-        } else {
-          // The matcher owns it; carry it through untouched. A legacy list that
-          // coexists with a benefit stays put — the benefit is the studio's more
-          // recent answer and merging would silently widen it.
-          if (legacyIncluded.length > 0) {
-            accessRule = { ...accessRule, subscriptionTypeIds: legacyIncluded }
-          }
-          nextBenefit = undefined
-        }
-      } else {
-        accessRule = { type: localAccess }
-        nextBenefit = null
-      }
+      const accessRule: Course['accessRule'] =
+        localAccess === 'purchase'
+          ? { type: 'purchase', priceAmount: localPriceNum, ...keepGate }
+          : localAccess === 'subscription'
+            ? { type: 'subscription', ...keepGate }
+            : // free / registered: no plan bears on this course any more, so the
+              // gate is dropped rather than left as data no reader consults.
+              { type: localAccess }
 
       return updateCourse(courseId, {
         title: localTitle.trim(),
         summary: localSummary.trim(),
         accessRule,
-        ...(nextBenefit === undefined ? {} : { benefit: nextBenefit }),
         hideFromShop: !localShowInShop,
       })
     },
@@ -867,14 +819,6 @@ function SettingsTab({
                     </div>
                   )}
 
-                  {/* SAID BEFORE THE SAVE, not discovered after it. Switching the
-                      sale off takes the course off sale for everyone, and only
-                      the plans marked "Included" in the table keep it — a plan
-                      that merely had a reduced price had no other way in, so it
-                      loses access with the price it was reducing. */}
-                  {!localSold && accessType === 'purchase' && (
-                    <p className="pl-7 text-xs text-amber-600">{t('sellOffWarning')}</p>
-                  )}
                 </div>
               )}
             </div>
@@ -1073,7 +1017,6 @@ export default function CourseBuilderPage() {
             accessType={course.accessRule?.type ?? 'registered'}
             subscriptionTypeIds={course.accessRule?.subscriptionTypeIds}
             priceAmount={course.accessRule?.priceAmount}
-            benefit={course.benefit}
             status={course.status}
             hideFromShop={course.hideFromShop}
           />

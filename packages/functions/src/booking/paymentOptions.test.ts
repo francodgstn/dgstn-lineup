@@ -593,12 +593,32 @@ describe('resolvePaymentOptions — generalized Benefit (Phase C)', () => {
       expected: covered({ reason: 'benefit_included', subscriptionTypeId: 'gold' }),
     },
     {
-      name: 'course: an explicit benefit WINS over the legacy free-inclusion list',
+      // THE GATE AND THE BENEFIT ARE ADDITIVE, AND FREE WINS. A plan on both
+      // lists is a contradiction the editor cannot produce, and of the two
+      // readings this is the one `firestore.rules` has always taken (it ORs
+      // them) — so the resolver quoting a price to somebody the rules let read
+      // the course for free is the state that cannot happen.
+      //
+      // Inverted on 2026-09-01. It used to be `benefit` that won, via a
+      // `if (!benefit && included)` guard that made the gate list invisible.
+      name: 'course: the gate BEATS a discount benefit — free wins over cheaper',
       snapshot: contact({ heldUnmeteredTypeIds: ['gold'] }),
       target: {
         kind: 'course',
         accessRule: { type: 'purchase', priceAmount: 120, subscriptionTypeIds: ['gold'] },
         benefit: { subscriptionTypeIds: ['gold'], effect: 'percent_off', percent: 50 },
+      },
+      expected: covered({ reason: 'subscription', subscriptionTypeId: 'gold' }),
+    },
+    {
+      // The per-plan rates the additive read exists for: one plan free, another
+      // discounted, on the SAME sold course. Inexpressible before.
+      name: 'course: a gated plan is free while a rated plan pays the discount',
+      snapshot: contact({ heldUnmeteredTypeIds: ['elite'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120, subscriptionTypeIds: ['premium'] },
+        benefit: { subscriptionTypeIds: ['elite'], effect: 'percent_off', percent: 50 },
       },
       expected: {
         options: [
@@ -606,9 +626,32 @@ describe('resolvePaymentOptions — generalized Benefit (Phase C)', () => {
             type: 'pay',
             amount: 60,
             source: 'course_price',
-            appliedBenefit: { subscriptionTypeId: 'gold', effect: 'percent_off', baseAmount: 120 },
+            appliedBenefit: { subscriptionTypeId: 'elite', effect: 'percent_off', baseAmount: 120 },
           },
         ],
+        denial: null,
+      },
+    },
+    {
+      name: 'course: …and the gated plan on that same course pays nothing',
+      snapshot: contact({ heldUnmeteredTypeIds: ['premium'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120, subscriptionTypeIds: ['premium'] },
+        benefit: { subscriptionTypeIds: ['elite'], effect: 'percent_off', percent: 50 },
+      },
+      expected: covered({ reason: 'subscription', subscriptionTypeId: 'premium' }),
+    },
+    {
+      name: 'course: a plan on neither list pays the full price',
+      snapshot: contact({ heldUnmeteredTypeIds: ['sportpass'] }),
+      target: {
+        kind: 'course',
+        accessRule: { type: 'purchase', priceAmount: 120, subscriptionTypeIds: ['premium'] },
+        benefit: { subscriptionTypeIds: ['elite'], effect: 'percent_off', percent: 50 },
+      },
+      expected: {
+        options: [{ type: 'pay', amount: 120, source: 'course_price' }],
         denial: null,
       },
     },

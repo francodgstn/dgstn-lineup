@@ -271,35 +271,53 @@ describe('the course ↔ plan edge', () => {
       })
     })
 
-    it('subscription honours ACCESS only', () => {
-      // The resolver returns from the subscription branch before it ever reads
-      // `benefit`, so a rate stored here would be inert.
-      assert.deepEqual(coursePlanFacets(course({ type: 'subscription' })), {
-        access: true,
-        rate: false,
-      })
+    it('both plan-bearing tiers honour BOTH — the same pair a class carries', () => {
+      // Until 2026-09-01 these were exclusive per tier, which is what made
+      // "Premium free, Elite 20% off" inexpressible on a course while being
+      // ordinary on a class.
+      for (const doc of [
+        course({ type: 'subscription' }),
+        course({ type: 'purchase', priceAmount: 49 }),
+      ]) {
+        assert.deepEqual(coursePlanFacets(doc), { access: true, rate: true })
+      }
     })
 
-    it('purchase honours RATE only', () => {
-      // `benefit` wins over the legacy free-inclusion list, so that list is
-      // never written and "included free" is a benefit with effect 'included'.
-      assert.deepEqual(coursePlanFacets(course({ type: 'purchase', priceAmount: 49 })), {
-        access: false,
-        rate: true,
-      })
+    it('a subscription-tier rate is honoured but INERT until there is a price', () => {
+      // Offered, so a studio can set it up before pricing the course — and
+      // dimmed, because the resolver's subscription branch returns before it
+      // reads `benefit`. Exactly a class that sells no drop-in yet.
+      assert.equal(coursePlanFacets(course({ type: 'subscription' })).rate, true)
+      assert.equal(
+        rateHasAPriceToApplyTo({ kind: 'course', doc: course({ type: 'subscription' }) as never }),
+        false
+      )
     })
   })
 
   describe('writes', () => {
-    it('gates a subscription-tier course and never touches benefit', () => {
+    it('writes BOTH facets when both are asked for', () => {
+      const update = coursePlanEdgeUpdate(
+        course({ type: 'purchase', priceAmount: 49 }),
+        'premium',
+        { access: true, rate: true },
+        { effect: 'percent_off', percent: 30 }
+      )
+      assert.deepEqual(update, {
+        benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 30 },
+        accessRule: { type: 'purchase', priceAmount: 49, subscriptionTypeIds: ['premium'] },
+      })
+    })
+
+    it('gates without rating when only access is asked for', () => {
       const update = coursePlanEdgeUpdate(course({ type: 'subscription' }), 'premium', {
         access: true,
-        rate: true,
+        rate: false,
       })
       assert.deepEqual(update, {
         accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
       })
-      assert.ok(update && !('benefit' in update), 'the tier does not honour a rate')
+      assert.ok(update && !('benefit' in update), 'no rate was asked for')
     })
 
     it('keeps the tier when the last plan comes off the gate', () => {
@@ -311,17 +329,41 @@ describe('the course ↔ plan edge', () => {
       })
     })
 
-    it('rates a purchase-tier course and never touches accessRule', () => {
+    it('rates a purchase-tier course without gating it', () => {
       const update = coursePlanEdgeUpdate(
         course({ type: 'purchase', priceAmount: 49 }),
         'premium',
-        { access: true, rate: true },
+        { access: false, rate: true },
         { effect: 'percent_off', percent: 30 }
       )
       assert.deepEqual(update, {
         benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 30 },
       })
-      assert.ok(update && !('accessRule' in update), 'the tier does not honour a gate')
+      assert.ok(update && !('accessRule' in update), 'no gate was asked for')
+    })
+
+    it('ABSORBS a legacy `included` benefit into the gate on first touch', () => {
+      // The old spelling of "these plans get it free". Read as part of the gate,
+      // then moved there and cleared — the whole migration, done lazily, with no
+      // backfill to deploy.
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['premium', 'elite'],
+        effect: 'included',
+      })
+      const update = coursePlanEdgeUpdate(
+        fresh,
+        'sportpass',
+        { access: false, rate: true },
+        { effect: 'percent_off', percent: 20 }
+      )
+      assert.deepEqual(update, {
+        benefit: { subscriptionTypeIds: ['sportpass'], effect: 'percent_off', percent: 20 },
+        accessRule: {
+          type: 'purchase',
+          priceAmount: 49,
+          subscriptionTypeIds: ['premium', 'elite'],
+        },
+      })
     })
 
     it('writes nothing at all on a free or registered course', () => {
@@ -331,11 +373,23 @@ describe('the course ↔ plan edge', () => {
       assert.equal(coursePlanEdgeUpdate(course({ type: 'registered' }), 'premium', asked), null)
     })
 
-    it('clears a purchase course rule when its last plan comes off', () => {
+    it('clears a purchase course RATE when its last plan comes off', () => {
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['premium'],
+        effect: 'percent_off',
+        percent: 20,
+      })
+      assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), { benefit: null })
+    })
+
+    it('takes the last plan off a legacy `included` list as a GATE removal', () => {
       const fresh = course({ type: 'purchase', priceAmount: 49 }, {
         subscriptionTypeIds: ['premium'],
         effect: 'included',
       })
+      // Only the benefit is written: the plan leaves the gate the legacy list
+      // was standing in for, and the STORED gate — which was empty — ends up
+      // empty either way, so there is nothing to write there.
       assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), { benefit: null })
     })
 
@@ -466,10 +520,12 @@ describe('rateHasAPriceToApplyTo', () => {
     )
   })
 
-  it('a course always has one — that is what its purchase tier means', () => {
-    assert.equal(
-      rateHasAPriceToApplyTo({ kind: 'course', doc: { accessRule: { type: 'purchase' } } as never }),
-      true
-    )
+  it("a course's price IS its sale, so an unsold one has nothing to reduce", () => {
+    const has = (accessRule: unknown) =>
+      rateHasAPriceToApplyTo({ kind: 'course', doc: { accessRule } as never })
+    assert.equal(has({ type: 'purchase', priceAmount: 49 }), true)
+    assert.equal(has({ type: 'purchase' }), false, 'on sale but unpriced')
+    assert.equal(has({ type: 'purchase', priceAmount: 0 }), false)
+    assert.equal(has({ type: 'subscription', subscriptionTypeIds: ['premium'] }), false)
   })
 })

@@ -70,7 +70,6 @@ import {
   TEAMS_COLLECTION,
   courseGatedPlanIds,
   courseRatedPlanIds,
-  coursePlanFacets,
   gatedPlanIds,
   isAppointmentActivity,
   ratedPlanIds,
@@ -815,10 +814,10 @@ export default function CataloguePage() {
               title={selectedCourse.title}
               badge={t('courseBadge')}
               summary={t(
-                coursePlanFacets(selectedCourse).access
-                  ? 'summaryCourseGated'
-                  : coursePlanFacets(selectedCourse).rate
-                    ? 'summaryCoursePriced'
+                selectedCourse.accessRule?.type === 'purchase'
+                  ? 'summaryCoursePriced'
+                  : selectedCourse.accessRule?.type === 'subscription'
+                    ? 'summaryCourseGated'
                     : 'summaryCourseOpen',
                 {
                   plans:
