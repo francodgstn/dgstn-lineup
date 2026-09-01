@@ -137,6 +137,30 @@ i[data-lucide] { display: inline-flex; }
 .btn-lg { height: 48px; padding: 0 24px; font-size: 15px; }
 .btn-block { justify-content: center; }
 
+/* ── Product screenshots follow the theme ───────────────────────────────────
+   Every product shot ships twice (foo.webp / foo-dark.webp) and the pair sits
+   in the DOM together; these rules show one. Same three-state shape as the
+   token blocks above, and for the same reason: BaseLayout's inline script
+   resolves data-theme before paint, so the attribute is the answer whenever
+   JS ran, and the media query is what a no-JS system-dark visit falls back to.
+
+   These rules are the SOLE owner of `display` for a shot: the components that
+   frame them (.shot-frame img, .frame-img, .pay-shot img) deliberately do not
+   set it. Astro scopes a component's selectors with a [data-astro-cid-*]
+   attribute, which lifts even `.shot-frame img` to (0,3,1) — so a component
+   rule saying `display: block` outranks anything sane written here and both
+   images render. Setting it in one place is cheaper than out-specifying that.
+   The hidden one is display:none, so it is out of the a11y tree too — which is
+   why both images carry the same alt text rather than one being aria-hidden. */
+img.shot-light { display: block; }
+img.shot-dark { display: none; }
+:root[data-theme="dark"] img.shot-light { display: none; }
+:root[data-theme="dark"] img.shot-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) img.shot-light { display: none; }
+  :root:not([data-theme="light"]) img.shot-dark { display: block; }
+}
+
 /* Eyebrow pill */
 .eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple-700); background: var(--purple-50); border: 1px solid var(--purple-200); padding: 5px 12px; border-radius: var(--radius-pill); }
 .eyebrow svg { width: 13px; height: 13px; }

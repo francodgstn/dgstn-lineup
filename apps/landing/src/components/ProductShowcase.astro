@@ -2,9 +2,13 @@
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
 import schedule from '../assets/product/schedule.webp';
+import scheduleDark from '../assets/product/schedule-dark.webp';
 import contact from '../assets/product/contact.webp';
+import contactDark from '../assets/product/contact-dark.webp';
 import courses from '../assets/product/courses.webp';
+import coursesDark from '../assets/product/courses-dark.webp';
 import biolink from '../assets/product/biolink.webp';
+import biolinkDark from '../assets/product/biolink-dark.webp';
 
 interface Props {
   lang: Language;
@@ -14,12 +18,14 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 
 // Real screens from the martial-arts demo studio. Copy lives in
-// showcase.shots.<key>.{title,detail}; icons are Lucide names.
+// showcase.shots.<key>.{title,detail}; icons are Lucide names. Each shot ships
+// in both themes — the pair renders together and the theme rules in global.css
+// (`img.shot-light` / `img.shot-dark`) show one.
 const shots = [
-  { key: 'schedule', img: schedule, icon: 'calendar-days' },
-  { key: 'contact', img: contact, icon: 'user-round' },
-  { key: 'courses', img: courses, icon: 'graduation-cap' },
-  { key: 'biolink', img: biolink, icon: 'link' },
+  { key: 'schedule', img: schedule, imgDark: scheduleDark, icon: 'calendar-days' },
+  { key: 'contact', img: contact, imgDark: contactDark, icon: 'user-round' },
+  { key: 'courses', img: courses, imgDark: coursesDark, icon: 'graduation-cap' },
+  { key: 'biolink', img: biolink, imgDark: biolinkDark, icon: 'link' },
 ] as const;
 ---
 
@@ -33,18 +39,27 @@ const shots = [
 
     <div class="showcase-grid">
       {
-        shots.map(({ key, img, icon }) => (
+        shots.map(({ key, img, imgDark, icon }) => (
           <figure class="shot">
             <button
               class="shot-frame"
               type="button"
-              data-full={img.src}
               aria-label={`${t(`showcase.shots.${key}.title`)} — enlarge`}
             >
               <img
+                class="shot-light"
                 src={img.src}
                 width={img.width}
                 height={img.height}
+                alt={t(`showcase.shots.${key}.title`)}
+                loading="lazy"
+                decoding="async"
+              />
+              <img
+                class="shot-dark"
+                src={imgDark.src}
+                width={imgDark.width}
+                height={imgDark.height}
                 alt={t(`showcase.shots.${key}.title`)}
                 loading="lazy"
                 decoding="async"
@@ -91,8 +106,14 @@ const shots = [
       lbImg.removeAttribute('src');
       document.body.style.overflow = '';
     };
-    document.querySelectorAll<HTMLElement>('.shot-frame[data-full]').forEach((b) => {
-      b.addEventListener('click', () => open(b.dataset.full || '', b.querySelector('img')?.getAttribute('alt') || ''));
+    document.querySelectorAll<HTMLElement>('.shot-frame').forEach((b) => {
+      b.addEventListener('click', () => {
+        // Both themes' images are in the DOM; the hidden one has no layout box,
+        // so offsetParent picks the one actually on screen without this script
+        // needing to know how the theme was resolved.
+        const shown = [...b.querySelectorAll<HTMLImageElement>('img')].find((i) => i.offsetParent !== null);
+        if (shown) open(shown.currentSrc || shown.src, shown.alt);
+      });
     });
     lb.querySelector('.lightbox-close')?.addEventListener('click', close);
     lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
@@ -148,7 +169,9 @@ const shots = [
   }
   .shot-frame:hover { transform: translateY(-3px); box-shadow: var(--ring-card), var(--shadow-lg); }
   .shot-frame:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-  .shot-frame img { display: block; width: 100%; height: auto; }
+  /* `display` is deliberately absent: global.css owns it for the shot-light /
+     shot-dark pair, and an Astro-scoped rule here would outrank it. */
+  .shot-frame img { width: 100%; height: auto; }
 
   .shot-zoom {
     position: absolute;

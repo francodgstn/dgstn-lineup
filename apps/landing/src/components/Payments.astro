@@ -1,7 +1,8 @@
 ---
 import type { Language } from '~/i18n';
 import { useTranslations } from '~/i18n';
-import shop from '../assets/product/shop.png';
+import shop from '../assets/product/shop.webp';
+import shopDark from '../assets/product/shop-dark.webp';
 
 interface Props {
   lang: Language;
@@ -48,10 +49,21 @@ const t = useTranslations(lang);
       </div>
 
       <figure class="pay-shot">
+        {/* Both themes ship; global.css shows one (img.shot-light / img.shot-dark). */}
         <img
+          class="shot-light"
           src={shop.src}
           width={shop.width}
           height={shop.height}
+          alt={t('payments.title')}
+          loading="lazy"
+          decoding="async"
+        />
+        <img
+          class="shot-dark"
+          src={shopDark.src}
+          width={shopDark.width}
+          height={shopDark.height}
           alt={t('payments.title')}
           loading="lazy"
           decoding="async"
@@ -126,12 +138,16 @@ const t = useTranslations(lang);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     overflow: hidden;
-    background: #fff;
+    /* Token, not #fff: the frame sits directly around the screenshot, and a
+       white mat around the dark shot was the one place the section still read
+       as light mode. */
+    background: var(--card);
     box-shadow: var(--ring-card), var(--shadow-lg);
     padding: 12px;
   }
   .pay-shot img {
-    display: block;
+    /* `display` is deliberately absent: global.css owns it for the shot-light /
+       shot-dark pair, and an Astro-scoped rule here would outrank it. */
     width: 100%;
     height: auto;
     border-radius: var(--radius-lg);
