@@ -64,7 +64,6 @@ import {
   Archive,
   CalendarDays,
   Copy,
-  Info,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -805,17 +804,25 @@ export default function CataloguePage() {
                 </button>
               )
             })}
+          </div>
 
-            {/* ONE LINE PER TAB, now behind an info icon rather than three
-                printed lines above the list. It says what a tab is FOR and
-                where the fuller job is done — worth having, not worth a
-                permanent third of the rail's height (Franco, 2026-09-01).
+          {/* ONE LINE PER TAB, behind a mark rather than three printed lines
+              above the list. It says what a tab is FOR and where the fuller job
+              is done — worth having, not worth a permanent third of the rail's
+              height (Franco, 2026-09-01).
 
-                At the END of the strip and OUTSIDE the four `flex-1` tabs, so
-                the tabs stay four equal targets and this costs no height at
-                all. Written as four literal keys rather than
-                `t(`hint_${activeTab}`)`: `i18n:check` counts computed keys and
-                never fails them, so a typo in one would ship silently. */}
+              UNDER the strip rather than inside it. In the row it was a fifth
+              element among four equal tiles, and the tab tiles' own top-right
+              corner is taken: the dead-end count rides there. A thin line of
+              its own collides with neither.
+
+              A plain "i", not a circled icon — the circle drew as much weight
+              as the four tab icons above it for something that is an aside.
+
+              Written as four literal keys rather than `t(`hint_${activeTab}`)`:
+              `i18n:check` counts computed keys and never fails them, so a typo
+              in one would ship silently. */}
+          <div className="flex justify-end px-1">
             <Tip
               side="bottom"
               label={
@@ -830,9 +837,9 @@ export default function CataloguePage() {
               <button
                 type="button"
                 aria-label={t('whatIsThisTab')}
-                className="shrink-0 rounded-lg px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-5 w-5 items-center justify-center rounded font-serif text-[13px] italic leading-none text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
               >
-                <Info className="h-4 w-4" />
+                i
               </button>
             </Tip>
           </div>
