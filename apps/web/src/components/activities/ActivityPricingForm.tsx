@@ -120,6 +120,30 @@ export function ActivityPricingForm({
   }, [activity.id, JSON.stringify(draftOf(activity))])
 
   const isAppointment = isAppointmentActivity(activity)
+  // Read off the DRAFT tier, not the stored one: picking "Any member" should
+  // reveal the plan table there and then, the same way the course's sell
+  // switch reveals its rate columns.
+  const noPlanEdge = !isAppointment && draft.accessTier === 'open'
+  /**
+   * THE MATCHER READS THE DRAFT TIER, not the stored one.
+   *
+   * Its facets come from the document it is handed, so on a class still stored
+   * as `open` every column was a dash until this form had been saved — picking
+   * "Any member" revealed an empty grid rather than a usable one. The PLAN IDS
+   * still come from the stored activity: the matcher owns those and this form
+   * does not.
+   */
+  const draftActivity: Activity = isAppointment
+    ? activity
+    : {
+        ...activity,
+        accessRule: {
+          type: draft.accessTier,
+          ...(resolveActivityAccessRule(activity).subscriptionTypeIds?.length
+            ? { subscriptionTypeIds: resolveActivityAccessRule(activity).subscriptionTypeIds }
+            : {}),
+        },
+      }
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
   const dropInPriceInvalid =
@@ -304,6 +328,15 @@ export function ActivityPricingForm({
         </>
       )}
 
+      {/* WHERE THE MATCHER WOULD BE, on a class no plan can bear on. An open
+          class is free to book for everybody: nothing for a plan to open, and
+          no price for one to reduce. The switch that changes that is directly
+          above, which is why this sentence sits here and not on the pane. */}
+      {noPlanEdge ? (
+        <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+          {tCat('openNoPlanEdge')}
+        </p>
+      ) : (
       <div className={isAppointment ? '' : 'border-t pt-4'}>
         <ActivityPlanLinks
           direction="from-offering"
@@ -312,7 +345,7 @@ export function ActivityPricingForm({
             name: activity.name,
             collection: ACTIVITIES_COLLECTION,
             color: activity.color ?? '',
-            target: { kind: 'activity', doc: activity },
+            target: { kind: 'activity', doc: draftActivity },
           }}
           offerings={[]}
           plans={plans}
@@ -332,6 +365,7 @@ export function ActivityPricingForm({
           }}
         />
       </div>
+      )}
     </div>
   )
 }
