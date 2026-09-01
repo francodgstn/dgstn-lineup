@@ -2355,9 +2355,12 @@ function BulkSetSubscriptionDialog({
             >
               <div className="flex items-center gap-2">
                 <p className="font-medium flex-1">{st.name}</p>
-                <Badge variant={st.source === 'aggregator' ? 'secondary' : 'outline'} className="text-xs shrink-0">
-                  {tSettings(st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal')}
-                </Badge>
+                {/* The exception, not the rule — see SubscriptionTypesManager. */}
+                {st.source === 'aggregator' && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {tSettings('subTypeSourceAggregator')}
+                  </Badge>
+                )}
               </div>
               {st.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{st.description}</p>}
             </button>

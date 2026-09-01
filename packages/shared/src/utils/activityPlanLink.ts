@@ -255,9 +255,27 @@ export interface OfferingFacets {
   rate: boolean
 }
 
-export function activityPlanFacets(a: Pick<Activity, 'type'>): OfferingFacets {
+export function activityPlanFacets(
+  a: Pick<Activity, 'type'> & Partial<Pick<Activity, 'accessRule' | 'isFreeTrial'>>
+): OfferingFacets {
   // An appointment has no gate — the price is the gate.
-  return { access: !isAppointmentActivity(a), rate: true }
+  if (isAppointmentActivity(a)) return { access: false, rate: true }
+
+  // AN OPEN CLASS HAS NEITHER, and this is the one place it can be said once.
+  //
+  // Read off `resolvePaymentOptions`, not assumed: its drop_in arm calls
+  // `resolveClassCoverage` FIRST and an open class comes back covered, so the
+  // arm returns before `applyModifiers` is ever reached. Nobody pays for an
+  // open class, which makes a member rate on it a discount on nothing.
+  //
+  // The gate is worse than dead — it is a trap. Ticking "Included" on an open
+  // class writes `{type:'subscription', subscriptionTypeIds:[…]}`, silently
+  // NARROWING a class from everyone to one plan. Widening is a decision for the
+  // activity's own "Who can book", not a side effect of linking a plan
+  // (Franco, 2026-09-01).
+  return resolveActivityAccessRule(a).type === 'open'
+    ? { access: false, rate: false }
+    : { access: true, rate: true }
 }
 
 export function coursePlanFacets(c: { accessRule?: CourseAccessRule | null }): OfferingFacets {

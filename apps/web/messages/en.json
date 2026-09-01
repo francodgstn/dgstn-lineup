@@ -7393,7 +7393,6 @@
   "OfferCatalogue": {
     "title": "Catalogue",
     "toPricing": "See prices",
-    "toActivities": "All activities",
     "tabActivities": "Activities",
     "tabProducts": "Products",
     "noProducts": "No products yet.",
@@ -7467,7 +7466,15 @@
     "archiveAction": "Archive",
     "deleteAction": "Delete",
     "archiveConfirm": "Archive “{name}”? It is hidden from your catalogue, and anything already recorded against it keeps its reference.",
-    "deleteConfirm": "Delete “{name}”? This cannot be undone."
+    "deleteConfirm": "Delete “{name}”? This cannot be undone.",
+    "toSchedule": "Schedule",
+    "toGiftCards": "Gift cards",
+    "hintActivities": "What you do — the classes and appointments you offer. Put them on the calendar from Schedule.",
+    "hintPlans": "How you charge — recurring or one-off, and what each plan opens. Partner apps live here too.",
+    "hintCourses": "What your online courses cost, and which plans open them. Edit their content on the Online courses page.",
+    "hintProducts": "What you sell alongside your offer. Edit the full catalogue on the Products page.",
+    "summaryClassOpen": "Open to everyone — no plan needed to book it.",
+    "openNoPlanEdge": "Anyone can book this free of charge, so there is nothing for a plan to open or discount. Change who can book it in the activity itself."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

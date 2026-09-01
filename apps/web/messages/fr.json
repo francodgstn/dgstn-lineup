@@ -7393,7 +7393,6 @@
   "OfferCatalogue": {
     "title": "Catalogue",
     "toPricing": "Voir les prix",
-    "toActivities": "Toutes les activités",
     "tabActivities": "Activités",
     "tabProducts": "Produits",
     "noProducts": "Aucun produit pour l'instant.",
@@ -7467,7 +7466,15 @@
     "archiveAction": "Archiver",
     "deleteAction": "Supprimer",
     "archiveConfirm": "Archiver « {name} » ? L'élément est masqué de votre catalogue, et tout ce qui y est déjà rattaché conserve sa référence.",
-    "deleteConfirm": "Supprimer « {name} » ? Cette action est irréversible."
+    "deleteConfirm": "Supprimer « {name} » ? Cette action est irréversible.",
+    "toSchedule": "Planning",
+    "toGiftCards": "Cartes cadeaux",
+    "hintActivities": "Ce que vous proposez — vos cours et rendez-vous. Placez-les au planning depuis Planning.",
+    "hintPlans": "Comment vous facturez — récurrent ou ponctuel, et ce que chaque formule ouvre. Les applis partenaires sont ici aussi.",
+    "hintCourses": "Ce que coûtent vos cours en ligne et quelles formules les ouvrent. Modifiez leur contenu sur la page Cours en ligne.",
+    "hintProducts": "Ce que vous vendez en plus de votre offre. Modifiez tout le catalogue sur la page Produits.",
+    "summaryClassOpen": "Ouvert à tous — aucune formule n'est nécessaire pour réserver.",
+    "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Changez qui peut réserver dans l'activité elle-même."
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",

@@ -8,6 +8,7 @@ import {
   ratedPlanIds,
   coursePlanEdge,
   coursePlanEdgeUpdate,
+  activityPlanFacets,
   coursePlanFacets,
   courseGatedPlanIds,
   offeringRateEffects,
@@ -261,6 +262,43 @@ describe('the course ↔ plan edge', () => {
   // nothing a member sees — which is the failure these tests exist to stop.
   const course = (accessRule: Record<string, unknown>, benefit?: unknown) =>
     ({ accessRule, benefit } as unknown as CourseEdgeFields)
+
+  describe('an OPEN class carries neither facet', () => {
+    it('has no gate to write and no price to reduce', () => {
+      // Read off resolvePaymentOptions: its drop_in arm calls
+      // resolveClassCoverage FIRST, and an open class comes back covered — so
+      // it returns before applyModifiers and nobody ever pays.
+      assert.deepEqual(activityPlanFacets({ type: 'class', accessRule: { type: 'open' } }), {
+        access: false,
+        rate: false,
+      })
+    })
+
+    it('still carries both when someone has to qualify', () => {
+      for (const rule of [
+        { type: 'members' as const },
+        { type: 'subscription' as const, subscriptionTypeIds: ['premium'] },
+      ]) {
+        assert.deepEqual(activityPlanFacets({ type: 'class', accessRule: rule }), {
+          access: true,
+          rate: true,
+        })
+      }
+    })
+
+    it('a legacy class with no accessRule falls back through resolveActivityAccessRule', () => {
+      // `isFreeTrial !== false` means open, which is the pre-accessRule default.
+      assert.equal(activityPlanFacets({ type: 'class' }).access, false)
+      assert.equal(activityPlanFacets({ type: 'class', isFreeTrial: false }).access, true)
+    })
+
+    it('an appointment is unaffected — its price is its gate', () => {
+      assert.deepEqual(activityPlanFacets({ type: 'appointment' }), {
+        access: false,
+        rate: true,
+      })
+    })
+  })
 
   describe('which facets each tier honours', () => {
     it('free and registered honour neither', () => {
