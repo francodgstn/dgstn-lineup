@@ -76,6 +76,7 @@ export async function seedTeamFinance(opts: {
   // which is why this takes no locale of its own.
   await ensureAccountingSeeded(teamId)
 
+
   const payments = await db
     .collection(TEAMS_COLLECTION)
     .doc(teamId)

@@ -143,13 +143,28 @@ change, and the deferred balance of a pack is NOT a refund entitlement.
 The word splits in two, and the halves land in different places (decided
 2026-08-31):
 
-1. **Equipment/asset register → a finance-plugin FEATURE** (this plan, Phase 2).
-   Depreciation must post into this ledger, which has one writer; and Art. 957
-   makes the asset statement an accounting concern of the smallest customers,
-   not an add-on for the biggest. No competitor has it. The register can still
-   feel like its own area via a second nav contribution from the finance
-   manifest (e.g. "Equipment") — presentation is free, ownership stays in
-   finance.
+1. **Asset register → its OWN plugin (`asset-register`); the STATEMENT of
+   assets and the depreciation postings stay in finance** (revised 2026-09-01,
+   Franco).
+
+   *Superseded reasoning, kept because it explains the shape:* the register was
+   originally scoped as a finance-plugin FEATURE, on the grounds that
+   depreciation must post into a ledger with one writer and that Art. 957 makes
+   the asset statement an accounting concern of the smallest customers.
+
+   Both of those argue for finance owning the **posting** and the **statement**
+   — not the register. The register answers an OPERATIONAL question (what do we
+   own, how many, where, in what condition), which is the boundary this document
+   already states one paragraph below: *operational plugins own operational
+   truth; the finance plugin owns every ledger posting.* Equipment was the one
+   exception to that rule and no longer is; finance READS the register exactly
+   as it reads subscriptions, credit packs and gift cards.
+
+   The dependency therefore runs **finance → asset-register**
+   (`PLUGIN_REQUIREMENTS`), which keeps the statement always reachable for an
+   accounting user while leaving the register installable on its own. The
+   register is included from **Coach** with no add-on: it costs nothing to
+   serve, posts nothing, and a solo coach owns kit too.
 2. **Retail stock / COGS → a separate future track on the products plugin**
    (the Glofox-style stock counter). It shares nothing with the register except
    the word. Not part of this initiative.
@@ -169,14 +184,15 @@ date, cost, optional photo (insurance documentation is a free side-benefit),
 location for multi-club orgs. Straight-line to zero; no residual values, no
 component accounting, no revaluation.
 
-**SHIPPED (2026-09-01, register-only slice):** `/plugins/finance/assets` with
-its own "Equipment" nav contribution; `Asset` type (`shared/types/asset.ts`,
+**SHIPPED (2026-09-01, register-only slice):** `/plugins/asset-register`, its
+own Coach+ plugin with an "Assets" nav row (it shipped for one day at
+`/plugins/finance/assets` as a finance feature — see the revision above); `Asset` type (`shared/types/asset.ts`,
 minor-unit cost, `acquired_at` drives the schedule), pure `assetBookValue`
 (`shared/accounting/assets.ts`, whole-month UTC, floor-rounding that lands
 exactly on cost — unit-tested); statement-of-assets export with an
 active-assets totals row; dispose (sold/scrapped + proceeds, RECORDED ONLY);
-data at `teams/{id}/asset_register`, owner client-writes / manager reads per
-rules (the accrual phase routes writes through callables before postings depend
+data at `teams/{id}/asset_register`, owner+manager client-writes / manager
+reads per rules (the accrual phase routes writes through callables before postings depend
 on these fields). The register is the statement's data source — one feature,
 two views.
 
@@ -373,6 +389,7 @@ immediate-expense threshold, owner-adjustable.
 |---|---|
 | 2026-08-31 | Accrual = Studio/Org-tier capability inside the `finance` plugin; no separate SKU. Coach add-on keeps cash + asset register (Franco) |
 | 2026-08-31 | Asset register + depreciation live in the finance plugin; retail stock/COGS is a separate future products-plugin track — the evaluated "inventory extension" is re-scoped accordingly (Franco) |
+| 2026-09-01 | **Revised:** the REGISTER becomes its own Coach+ plugin (`asset-register`); only the statement of assets and the depreciation postings are finance artifacts. Finance REQUIRES the register (`PLUGIN_REQUIREMENTS`) — a new relation, not a bundle. Named "asset register", not "equipment", which reads as one kind of asset (Franco) |
 | 2026-08-31 | Posture: CH-first management accounting; advisor review bundles recognition policies + breakage + chart additions; ch_kmu accrual GA first (Franco) |
 | 2026-08-31 | Sequencing: revenue recognition first, assets second; Phase 0 persistence shipped immediately (Franco) |
 | 2026-08-31 | Opening-balances wizard ships now, guided interview only — the file-import path is discarded (Franco) |

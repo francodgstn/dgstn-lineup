@@ -127,6 +127,7 @@ import {
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
 import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { partnerAppNames } from './lib/partnerApps'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
@@ -2145,6 +2146,14 @@ async function seedTeam(opts: {
     await seedTeamSales({ teamId })
     await seedTeamFinance({ teamId, uid })
   }
+
+  // ── the asset register (Coach+, its OWN plugin) ─────────────────────────────
+  // Deliberately outside the studio-only branch above and UNCONDITIONAL: the
+  // register is included from Coach and stands alone, so a coach tenant must
+  // show one too — that tenant is the whole reason it stopped being a finance
+  // feature. Every team this function seeds is Coach or above by its own `plan`
+  // type, so there is no tier left to guard against.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)

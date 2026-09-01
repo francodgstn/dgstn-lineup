@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { toast } from 'sonner'
-import { BookOpenText, Calculator, Dumbbell, ListOrdered, Loader2, RefreshCw, Scale, Table2 } from 'lucide-react'
+import { BookOpenText, Calculator, Boxes, ListOrdered, Loader2, RefreshCw, Scale, Table2 } from 'lucide-react'
 import { formatMinorUnits, monthKey } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -173,7 +173,7 @@ export default function FinanceOverviewPage() {
             ['/plugins/finance/entries', ListOrdered, t('entries'), t('entriesDescription')],
             ['/plugins/finance/reports', Table2, t('reports'), t('reportsDescription')],
             ['/plugins/finance/opening', Scale, t('openingTitle'), t('openingCardDescription')],
-            ['/plugins/finance/assets', Dumbbell, t('assetsTitle'), t('assetsCardDescription')],
+            ['/plugins/asset-register', Boxes, t('assetsTitle'), t('assetsCardDescription')],
           ] as Array<[string, typeof BookOpenText, string, string]>
         ).map(([href, Icon, label, description]) => (
           <Link key={href} href={href as Route}>

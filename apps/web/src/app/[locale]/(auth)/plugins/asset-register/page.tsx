@@ -11,9 +11,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { ArrowLeft, Download, Dumbbell, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
-import { Link } from '@/i18n/navigation'
-import type { Route } from 'next'
+import { Boxes, Download, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import {
@@ -21,6 +19,8 @@ import {
   ASSET_REGISTER_SUBCOLLECTION,
   DEFAULT_USEFUL_LIFE_MONTHS,
   assetBookValue,
+  assetQuantity,
+  assetUnitCostMinor,
   formatMinorUnits,
   type Asset,
   type AssetCategory,
@@ -51,11 +51,9 @@ import {
   deleteAsset,
   disposeAsset,
   saveAsset,
-  useAccountingSettings,
   useAssets,
   type AssetDraft,
-} from '@/plugins/finance/hooks'
-import { FinanceBetaChip } from '@/components/finance/FinanceBetaChip'
+} from '@/plugins/asset-register/hooks'
 
 /** '12.50' → 1250 minor units; invalid/negative → null. */
 function parseMajor(v: string): number | null {
@@ -83,6 +81,7 @@ interface DraftState {
   category: AssetCategory
   acquiredDate: string // 'YYYY-MM-DD'
   costText: string
+  quantityText: string
   lifeText: string
   lifeTouched: boolean
   location: string
@@ -96,6 +95,7 @@ const emptyDraft = (): DraftState => ({
   category: 'equipment',
   acquiredDate: new Date().toISOString().slice(0, 10),
   costText: '',
+  quantityText: '1',
   lifeText: String(DEFAULT_USEFUL_LIFE_MONTHS.equipment),
   lifeTouched: false,
   location: '',
@@ -105,14 +105,16 @@ const emptyDraft = (): DraftState => ({
 })
 
 export default function AssetRegisterPage() {
-  const t = useTranslations('Finance')
-  const { currentTeamId, teamRole, user } = useAuth()
+  const t = useTranslations('AssetRegister')
+  const { currentTeamId, teamRole, user, team } = useAuth()
   const teamId = currentTeamId ?? null
-  const isOwner = teamRole === 'owner'
+  // Managers maintain the register alongside owners — the head coach knows what
+  // kit exists. Matches the asset_register write rule; the rules are the gate,
+  // this is only what the UI offers.
+  const canEdit = teamRole === 'owner' || teamRole === 'manager'
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
 
   const { data: assets = [], isLoading } = useAssets(teamId)
-  const { data: settings } = useAccountingSettings(teamId)
   const qc = useQueryClient()
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['asset-register', teamId] })
 
@@ -147,24 +149,30 @@ export default function AssetRegisterPage() {
   )
 
   if (pluginsLoading) return <Skeleton className="m-6 h-40" />
-  if (!teamId || !isInstalled('finance')) {
+  if (!teamId || !isInstalled('asset-register')) {
     return <p className="p-6 text-sm text-muted-foreground">{t('notInstalled')}</p>
   }
 
-  const currency = settings?.base_currency ?? 'CHF'
+  const currency = team?.default_currency ?? 'CHF'
   const active = assets.filter((a) => a.status !== 'disposed')
   const totalCost = active.reduce((s, a) => s + a.cost_minor, 0)
   const totalBook = active.reduce((s, a) => s + (valuations.get(a.id)?.book_value_minor ?? 0), 0)
+  // Units vs rows: a batch row is one asset on the schedule but many things in
+  // the room, and "how many do we own" is the question the register is asked.
+  const totalUnits = active.reduce((s, a) => s + assetQuantity(a), 0)
 
   const costMinor = parseMajor(draft.costText)
   const lifeMonths = /^\d+$/.test(draft.lifeText.trim()) ? parseInt(draft.lifeText, 10) : null
+  const quantity = /^\d+$/.test(draft.quantityText.trim()) ? parseInt(draft.quantityText, 10) : null
   const draftValid =
     draft.name.trim().length > 0 &&
     !!draft.acquiredDate &&
     costMinor !== null &&
     costMinor > 0 &&
     lifeMonths !== null &&
-    lifeMonths >= 1
+    lifeMonths >= 1 &&
+    quantity !== null &&
+    quantity >= 1
 
   const openCreate = () => {
     setEditingId(null)
@@ -178,6 +186,7 @@ export default function AssetRegisterPage() {
       category: a.category,
       acquiredDate: a.acquired_at?.toDate?.().toISOString?.().slice(0, 10) ?? '',
       costText: formatMinorUnits(a.cost_minor),
+      quantityText: String(assetQuantity(a)),
       lifeText: String(a.useful_life_months),
       lifeTouched: true,
       location: a.location ?? '',
@@ -197,6 +206,7 @@ export default function AssetRegisterPage() {
         category: draft.category,
         acquired_at_ms: new Date(`${draft.acquiredDate}T12:00:00`).getTime(),
         cost_minor: costMinor!,
+        quantity: quantity!,
         useful_life_months: lifeMonths!,
         location: draft.location.trim() || null,
         note: draft.note.trim() || null,
@@ -254,8 +264,8 @@ export default function AssetRegisterPage() {
 
   const downloadStatement = () => {
     const header = [
-      'name', 'category', 'location', 'acquired_at', 'cost', 'useful_life_months',
-      'months_elapsed', 'accumulated_depreciation', 'book_value', 'status',
+      'name', 'category', 'location', 'acquired_at', 'quantity', 'cost', 'unit_cost',
+      'useful_life_months', 'months_elapsed', 'accumulated_depreciation', 'book_value', 'status',
     ]
     const lines = [header.join(',')]
     for (const a of assets) {
@@ -266,7 +276,9 @@ export default function AssetRegisterPage() {
           a.category,
           `"${(a.location ?? '').replace(/"/g, '""')}"`,
           a.acquired_at?.toDate?.().toISOString?.().slice(0, 10) ?? '',
+          assetQuantity(a),
           formatMinorUnits(a.cost_minor),
+          formatMinorUnits(assetUnitCostMinor(a)),
           a.useful_life_months,
           v.months_elapsed,
           formatMinorUnits(v.accumulated_minor),
@@ -276,7 +288,7 @@ export default function AssetRegisterPage() {
       )
     }
     lines.push(
-      ['"TOTAL (active)"', '', '', '', formatMinorUnits(totalCost), '', '',
+      ['"TOTAL (active)"', '', '', '', totalUnits, formatMinorUnits(totalCost), '', '', '',
         formatMinorUnits(totalCost - totalBook), formatMinorUnits(totalBook), ''].join(',')
     )
     const blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' })
@@ -290,25 +302,17 @@ export default function AssetRegisterPage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <Link
-        href={'/plugins/finance' as Route}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        {t('backToOverview')}
-      </Link>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Dumbbell className="h-5 w-5 text-muted-foreground" />
+          <Boxes className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t('assetsTitle')}</h1>
-          <FinanceBetaChip />
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={downloadStatement} disabled={assets.length === 0}>
             <Download className="mr-1 h-4 w-4" />
             {t('statementCsv')}
           </Button>
-          {isOwner && (
+          {canEdit && (
             <Button size="sm" onClick={openCreate}>
               <Plus className="mr-1 h-4 w-4" />
               {t('addAsset')}
@@ -320,7 +324,12 @@ export default function AssetRegisterPage() {
       <div className="grid grid-cols-3 gap-3 sm:max-w-md">
         {(
           [
-            [t('assetsActiveCount'), String(active.length)],
+            [
+              t('assetsActiveCount'),
+              totalUnits > active.length
+                ? `${active.length} · ${t('assetsUnits', { count: totalUnits })}`
+                : String(active.length),
+            ],
             [t('assetsTotalCost'), `${formatMinorUnits(totalCost)} ${currency}`],
             [t('assetsTotalBookValue'), `${formatMinorUnits(totalBook)} ${currency}`],
           ] as Array<[string, string]>
@@ -357,7 +366,14 @@ export default function AssetRegisterPage() {
                 return (
                   <TableRow key={a.id} className={disposed ? 'opacity-60' : ''}>
                     <TableCell>
-                      <div className="text-sm font-medium">{a.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium">{a.name}</span>
+                        {assetQuantity(a) > 1 && (
+                          <Badge variant="outline" className="tabular-nums">
+                            {`×${assetQuantity(a)}`}
+                          </Badge>
+                        )}
+                      </div>
                       {a.location && (
                         <div className="text-xs text-muted-foreground">{a.location}</div>
                       )}
@@ -368,6 +384,13 @@ export default function AssetRegisterPage() {
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
                       {formatMinorUnits(a.cost_minor)}
+                      {assetQuantity(a) > 1 && (
+                        <div className="text-xs text-muted-foreground">
+                          {t('assetUnitCost', {
+                            amount: formatMinorUnits(assetUnitCostMinor(a)),
+                          })}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
                       {formatMinorUnits(v.book_value_minor)}
@@ -376,7 +399,7 @@ export default function AssetRegisterPage() {
                       {disposed ? (
                         <Badge variant="secondary">{t(`assetDisposal_${a.disposal_kind ?? 'scrapped'}`)}</Badge>
                       ) : (
-                        isOwner && (
+                        canEdit && (
                           <div className="flex justify-end gap-1">
                             <Button size="icon" variant="ghost" onClick={() => openEdit(a)}>
                               <Pencil className="h-4 w-4" />
@@ -454,18 +477,38 @@ export default function AssetRegisterPage() {
                   value={draft.costText}
                   onChange={(e) => setDraft((d) => ({ ...d, costText: e.target.value }))}
                 />
+                <p className="text-xs text-muted-foreground">{t('assetCostHint')}</p>
               </div>
               <div className="space-y-1">
-                <Label>{t('usefulLifeMonths')}</Label>
+                <Label>{t('assetQuantity')}</Label>
                 <Input
                   inputMode="numeric"
-                  value={draft.lifeText}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, lifeText: e.target.value, lifeTouched: true }))
-                  }
+                  value={draft.quantityText}
+                  onChange={(e) => setDraft((d) => ({ ...d, quantityText: e.target.value }))}
                 />
-                <p className="text-xs text-muted-foreground">{t('usefulLifeHint')}</p>
+                {/* The derived unit cost, shown only when it says something a
+                    single-item row does not already say. */}
+                {costMinor !== null && quantity !== null && quantity > 1 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('assetUnitCost', {
+                      amount: `${formatMinorUnits(
+                        assetUnitCostMinor({ cost_minor: costMinor, quantity })
+                      )} ${currency}`,
+                    })}
+                  </p>
+                ) : null}
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>{t('usefulLifeMonths')}</Label>
+              <Input
+                inputMode="numeric"
+                value={draft.lifeText}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, lifeText: e.target.value, lifeTouched: true }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">{t('usefulLifeHint')}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
