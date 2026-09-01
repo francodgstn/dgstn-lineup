@@ -7514,8 +7514,7 @@
     "hintProducts": "What you sell alongside your offer. Edit the full catalogue on the Products page.",
     "summaryClassOpen": "Open to everyone — no plan needed to book it.",
     "openNoPlanEdge": "Anyone can book this free of charge, so there is nothing for a plan to open or discount. Pick “Any member” or “Specific subscriptions” above to link plans.",
-    "editDetails": "Edit details",
-    "whatIsThisTab": "What is this tab for?"
+    "editDetails": "Edit details"
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

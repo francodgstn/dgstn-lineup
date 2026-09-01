@@ -7514,8 +7514,7 @@
     "hintProducts": "Cosa vendi oltre alla tua offerta. Modifica l'intero catalogo nella pagina Prodotti.",
     "summaryClassOpen": "Aperto a tutti — non serve alcun piano per prenotare.",
     "openNoPlanEdge": "Chiunque può prenotare gratuitamente, quindi non c'è nulla che un piano possa aprire o scontare. Scegli «Qualsiasi membro» o «Abbonamenti specifici» qui sopra per collegare i piani.",
-    "editDetails": "Modifica dettagli",
-    "whatIsThisTab": "A cosa serve questa scheda?"
+    "editDetails": "Modifica dettagli"
   },
   "VerifyEmail": {
     "title": "Conferma {email}",

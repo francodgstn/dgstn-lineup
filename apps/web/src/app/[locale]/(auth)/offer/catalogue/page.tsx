@@ -64,7 +64,6 @@ import {
   Archive,
   CalendarDays,
   Copy,
-  Info,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -805,37 +804,27 @@ export default function CataloguePage() {
                 </button>
               )
             })}
-
-            {/* ONE LINE PER TAB, now behind an info icon rather than three
-                printed lines above the list. It says what a tab is FOR and
-                where the fuller job is done — worth having, not worth a
-                permanent third of the rail's height (Franco, 2026-09-01).
-
-                At the END of the strip and OUTSIDE the four `flex-1` tabs, so
-                the tabs stay four equal targets and this costs no height at
-                all. Written as four literal keys rather than
-                `t(`hint_${activeTab}`)`: `i18n:check` counts computed keys and
-                never fails them, so a typo in one would ship silently. */}
-            <Tip
-              side="bottom"
-              label={
-                {
-                  activities: t('hintActivities'),
-                  plans: t('hintPlans'),
-                  courses: t('hintCourses'),
-                  products: t('hintProducts'),
-                }[activeTab]
-              }
-            >
-              <button
-                type="button"
-                aria-label={t('whatIsThisTab')}
-                className="shrink-0 rounded-lg px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Info className="h-4 w-4" />
-              </button>
-            </Tip>
           </div>
+
+          {/* ONE LINE PER TAB, printed. It briefly lived behind an info mark to
+              save the height; the mark cost more than the lines did — a studio
+              had to know there was something to hover before it could tell them
+              anything, which is the wrong trade for a sentence that orients
+              somebody who has just arrived (Franco, 2026-09-01).
+
+              Written as four literal keys rather than `t(`hint_${activeTab}`)`:
+              `i18n:check` counts computed keys and never fails them, so a typo
+              in one would ship silently. */}
+          <p className="px-2 text-xs leading-snug text-muted-foreground">
+            {
+              {
+                activities: t('hintActivities'),
+                plans: t('hintPlans'),
+                courses: t('hintCourses'),
+                products: t('hintProducts'),
+              }[activeTab]
+            }
+          </p>
 
 
           {loading && (
