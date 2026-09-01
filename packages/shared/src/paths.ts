@@ -373,3 +373,7 @@ export const ACCOUNTING_PERIOD_SUMMARIES_SUBCOLLECTION = 'accounting_period_summ
 // Entry templates: owner-managed presets for manual entries (+ optional
 // recurring auto-post — see accounting/templates.ts).
 export const ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION = 'accounting_entry_templates'
+// Asset register (finance plugin — see types/asset.ts): the equipment list
+// behind the statement of assets. Owner-written from the client; REGISTER-ONLY
+// in cash mode — no ledger writer reads it until accrual mode lands.
+export const ASSET_REGISTER_SUBCOLLECTION = 'asset_register'

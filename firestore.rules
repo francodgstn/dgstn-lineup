@@ -966,6 +966,16 @@ service cloud.firestore {
           && request.resource.data.system == resource.data.system;
         allow delete: if hasTeamRole(teamId, 'owner') && resource.data.system != true;
       }
+      // Asset register (finance plugin) — the equipment list behind the
+      // statement of assets. REGISTER-ONLY while the ledger is cash-basis:
+      // no posting reads these docs, so owner client-writes (incl. delete for
+      // typo rows — dispose is the normal end state) are safe. The accrual
+      // phase routes writes through callables before postings depend on them
+      // (docs/finance-accrual.md §4).
+      match /asset_register/{assetId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        allow write: if hasTeamRole(teamId, 'owner');
+      }
 
       // THE booking gate's authorization source: which waivers a booking here
       // requires, and at what version floor. Server-written by
