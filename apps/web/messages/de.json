@@ -6470,7 +6470,11 @@
     "assetDisposed": "Abgang erfasst.",
     "assetDeleted": "Anlage gelöscht.",
     "deleteAssetTitle": "Diese Anlage löschen?",
-    "deleteAssetBody": "Für Geräte, die du nicht mehr hast, nutze Abgang erfassen — Löschen ist für versehentlich angelegte Zeilen."
+    "deleteAssetBody": "Für Geräte, die du nicht mehr hast, nutze Abgang erfassen — Löschen ist für versehentlich angelegte Zeilen.",
+    "assetQuantity": "Anzahl",
+    "assetCostHint": "Gesamtbetrag für die ganze Zeile",
+    "assetUnitCost": "{amount} pro Stück",
+    "assetsUnits": "{count} Stück"
   },
   "HowTo": {
     "title": "How-to",

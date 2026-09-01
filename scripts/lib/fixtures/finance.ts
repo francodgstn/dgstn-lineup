@@ -36,6 +36,7 @@ import { recordFinanceTransaction } from '../../../packages/functions/src/financ
 
 const TEAMS_COLLECTION = 'teams'
 const MEMBER_PAYMENTS_SUBCOLLECTION = 'member_payments'
+const ASSET_REGISTER_SUBCOLLECTION = 'asset_register'
 
 /**
  * Install the finance plugin, seed the chart of accounts, and replay every
@@ -47,7 +48,7 @@ export async function seedTeamFinance(opts: {
   teamId: string
   uid: string
   installedDaysAgo?: number
-}): Promise<{ accountsSeeded: boolean; journalRows: number }> {
+}): Promise<{ accountsSeeded: boolean; journalRows: number; assets: number }> {
   const db = admin.firestore()
   const { teamId, uid } = opts
   const installedDaysAgo = opts.installedDaysAgo ?? 200
@@ -75,6 +76,8 @@ export async function seedTeamFinance(opts: {
   // account language off the TEAM document (country / language / currency),
   // which is why this takes no locale of its own.
   await ensureAccountingSeeded(teamId)
+
+  const assets = await seedTeamAssets(teamId, uid)
 
   const payments = await db
     .collection(TEAMS_COLLECTION)
@@ -130,5 +133,103 @@ export async function seedTeamFinance(opts: {
     }
   }
 
-  return { accountsSeeded: true, journalRows }
+  return { accountsSeeded: true, journalRows, assets }
+}
+
+/**
+ * The asset register — the equipment behind the statement of assets.
+ *
+ * WHY IT IS SEEDED AT ALL: `/plugins/finance/assets` opening empty is the same
+ * "empty shell" problem this module's header cites for the journal, and it is
+ * worse here, because the page's whole point is arithmetic — a prospect looking
+ * at an empty register learns nothing about what it does.
+ *
+ * ACQUISITION DATES ARE SPREAD ACROSS YEARS ON PURPOSE. Every row bought today
+ * would show book value == cost, which is exactly the screen that makes the
+ * depreciation look broken. These span "nearly new" to "fully written down", so
+ * the indicative column visibly does something, and one row is past its useful
+ * life so the floor-rounding lands on a real zero.
+ *
+ * Dates are relative to the run day (like the rest of the seeds) and ids are
+ * deterministic, so a re-seed overwrites rather than duplicating.
+ */
+async function seedTeamAssets(teamId: string, uid: string): Promise<number> {
+  const db = admin.firestore()
+  const now = new Date()
+  const monthsAgo = (months: number): Date => {
+    const d = new Date(now)
+    d.setMonth(d.getMonth() - months)
+    return d
+  }
+
+  // cost_minor is the ROW TOTAL; quantity is how many things that total bought.
+  const rows: Array<{
+    id: string
+    name: string
+    category: 'equipment' | 'leasehold' | 'vehicles' | 'it' | 'other'
+    monthsAgo: number
+    cost_minor: number
+    quantity: number
+    useful_life_months: number
+    location: string
+    disposed?: { monthsAgo: number; kind: 'sold' | 'scrapped'; proceeds_minor: number }
+  }> = [
+    // Big-ticket, half-way through its life — the row the statement is for.
+    { id: 'seed-asset-mats', name: 'Tatami mat flooring (120 m²)', category: 'leasehold',
+      monthsAgo: 54, cost_minor: 1_240_000, quantity: 1, useful_life_months: 120,
+      location: 'Main hall' },
+    // The batch case: one purchase, many things.
+    { id: 'seed-asset-gloves', name: 'Sparring gloves', category: 'equipment',
+      monthsAgo: 14, cost_minor: 156_000, quantity: 24, useful_life_months: 60,
+      location: 'Equipment store' },
+    { id: 'seed-asset-shields', name: 'Kick shields', category: 'equipment',
+      monthsAgo: 8, cost_minor: 78_000, quantity: 8, useful_life_months: 60,
+      location: 'Equipment store' },
+    // Past its useful life — book value must render as exactly 0.
+    { id: 'seed-asset-bags', name: 'Heavy bags', category: 'equipment',
+      monthsAgo: 78, cost_minor: 210_000, quantity: 6, useful_life_months: 60,
+      location: 'Main hall' },
+    // Short life, nearly new — the other end of the range.
+    { id: 'seed-asset-laptop', name: 'Reception laptop', category: 'it',
+      monthsAgo: 5, cost_minor: 129_000, quantity: 1, useful_life_months: 36,
+      location: 'Reception' },
+    { id: 'seed-asset-sound', name: 'PA system', category: 'equipment',
+      monthsAgo: 27, cost_minor: 89_000, quantity: 1, useful_life_months: 60,
+      location: 'Main hall' },
+    // One already gone, so the disposed branch and the active-only totals are
+    // both exercised by the seed rather than only by a human clicking.
+    { id: 'seed-asset-treadmill', name: 'Treadmill', category: 'equipment',
+      monthsAgo: 62, cost_minor: 320_000, quantity: 1, useful_life_months: 60,
+      location: 'Conditioning room',
+      disposed: { monthsAgo: 3, kind: 'sold', proceeds_minor: 40_000 } },
+  ]
+
+  const batch = db.batch()
+  const col = db.collection(TEAMS_COLLECTION).doc(teamId).collection(ASSET_REGISTER_SUBCOLLECTION)
+  for (const r of rows) {
+    batch.set(col.doc(r.id), {
+      id: r.id,
+      teamId,
+      name: r.name,
+      category: r.category,
+      acquired_at: admin.firestore.Timestamp.fromDate(monthsAgo(r.monthsAgo)),
+      cost_minor: r.cost_minor,
+      quantity: r.quantity,
+      useful_life_months: r.useful_life_months,
+      location: r.location,
+      note: null,
+      photoUrl: null,
+      status: r.disposed ? 'disposed' : 'active',
+      disposed_at: r.disposed
+        ? admin.firestore.Timestamp.fromDate(monthsAgo(r.disposed.monthsAgo))
+        : null,
+      disposal_kind: r.disposed ? r.disposed.kind : null,
+      disposal_proceeds_minor: r.disposed ? r.disposed.proceeds_minor : null,
+      created_at: admin.firestore.Timestamp.fromDate(monthsAgo(r.monthsAgo)),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      created_by: uid,
+    })
+  }
+  await batch.commit()
+  return rows.length
 }

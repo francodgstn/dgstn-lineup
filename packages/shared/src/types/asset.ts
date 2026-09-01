@@ -59,9 +59,26 @@ export interface Asset {
   category: AssetCategory
   /** Acquisition date — drives the depreciation schedule (see header). */
   acquired_at: Timestamp
-  /** Original cost, integer MINOR units (Rappen) — ledger-ready for the future
-   * capitalization postings; the UI converts from major-unit input. */
+  /** Original cost of the WHOLE ROW, integer MINOR units (Rappen) —
+   * ledger-ready for the future capitalization postings; the UI converts from
+   * major-unit input.
+   *
+   * ROW TOTAL, NOT UNIT PRICE — see `quantity`. */
   cost_minor: number
+  /**
+   * How many units this row covers (a batch bought together: 20 pairs of
+   * gloves, 8 kick shields). Absent or 1 = a single item.
+   *
+   * DESCRIPTIVE ONLY — `cost_minor` stays the row TOTAL and the depreciation
+   * schedule is unchanged, because a batch acquired on one date for one price
+   * IS one schedule. Making cost a unit price instead would multiply through
+   * `assetBookValue`, every total and the future capitalization postings, to
+   * answer a question ("how many do we have") that does not need arithmetic at
+   * all. Unit cost is derived for display (`cost_minor / quantity`), never
+   * stored — two fields that can disagree about one number is a defect waiting
+   * to happen.
+   */
+  quantity?: number
   /** Straight-line to zero over this many months (category default, editable).
    * No residual values, no component accounting — docs/finance-accrual.md §4. */
   useful_life_months: number
@@ -83,4 +100,20 @@ export interface Asset {
   created_at: Timestamp
   updated_at: Timestamp
   created_by?: string
+}
+
+/** Units this row covers — the stored `quantity`, defaulting to 1. */
+export function assetQuantity(asset: Pick<Asset, 'quantity'>): number {
+  const q = Math.floor(asset.quantity ?? 1)
+  return q >= 1 ? q : 1
+}
+
+/**
+ * Cost per unit, integer minor units — DERIVED, never stored (see `quantity`).
+ * Floor-divided, so a batch whose total does not divide evenly shows a unit
+ * cost that is at most one Rappen light rather than one that multiplies back
+ * up past the row total.
+ */
+export function assetUnitCostMinor(asset: Pick<Asset, 'cost_minor' | 'quantity'>): number {
+  return Math.floor(Math.max(0, asset.cost_minor) / assetQuantity(asset))
 }

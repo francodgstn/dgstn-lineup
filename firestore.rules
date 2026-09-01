@@ -974,7 +974,13 @@ service cloud.firestore {
       // (docs/finance-accrual.md §4).
       match /asset_register/{assetId} {
         allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
-        allow write: if hasTeamRole(teamId, 'owner');
+        // MANAGER-WRITABLE while the ledger is cash-basis: the person who knows
+        // what kit exists is the one who maintains the list, and no posting
+        // reads these docs yet (the rule above this one says why that is safe).
+        // Read stays manager+owner — equipment cost is not coach-visible.
+        // The accrual phase routes writes through callables before postings
+        // depend on these fields, which is where this widens back.
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
       }
 
       // THE booking gate's authorization source: which waivers a booking here

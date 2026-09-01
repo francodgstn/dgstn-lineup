@@ -362,7 +362,10 @@ export interface AssetDraft {
   name: string
   category: AssetCategory
   acquired_at_ms: number
+  /** Row TOTAL, minor units — never a unit price (see Asset.quantity). */
   cost_minor: number
+  /** Units this row covers; 1 for a single item. */
+  quantity: number
   useful_life_months: number
   location: string | null
   note: string | null
@@ -386,6 +389,7 @@ export async function saveAsset(
       category: draft.category,
       acquired_at: Timestamp.fromMillis(draft.acquired_at_ms),
       cost_minor: draft.cost_minor,
+      quantity: draft.quantity,
       useful_life_months: draft.useful_life_months,
       location: draft.location,
       note: draft.note,

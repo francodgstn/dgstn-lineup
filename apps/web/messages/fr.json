@@ -6470,7 +6470,11 @@
     "assetDisposed": "Sortie enregistrée.",
     "assetDeleted": "Actif supprimé.",
     "deleteAssetTitle": "Supprimer cet actif ?",
-    "deleteAssetBody": "Pour un équipement que vous n'avez plus, utilisez Sortir l'actif — la suppression sert aux lignes créées par erreur."
+    "deleteAssetBody": "Pour un équipement que vous n'avez plus, utilisez Sortir l'actif — la suppression sert aux lignes créées par erreur.",
+    "assetQuantity": "Quantité",
+    "assetCostHint": "Total pour toute la ligne",
+    "assetUnitCost": "{amount} l'unité",
+    "assetsUnits": "{count} unités"
   },
   "HowTo": {
     "title": "Guide",

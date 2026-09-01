@@ -6470,7 +6470,11 @@
     "assetDisposed": "Dismissione registrata.",
     "assetDeleted": "Cespite eliminato.",
     "deleteAssetTitle": "Eliminare questo cespite?",
-    "deleteAssetBody": "Per attrezzatura che non hai più usa Registra dismissione — l'eliminazione è per righe create per errore."
+    "deleteAssetBody": "Per attrezzatura che non hai più usa Registra dismissione — l'eliminazione è per righe create per errore.",
+    "assetQuantity": "Quantità",
+    "assetCostHint": "Totale per l'intera riga",
+    "assetUnitCost": "{amount} cadauno",
+    "assetsUnits": "{count} unità"
   },
   "HowTo": {
     "title": "Guida",

@@ -6470,7 +6470,11 @@
     "assetDisposed": "Asset disposed.",
     "assetDeleted": "Asset deleted.",
     "deleteAssetTitle": "Delete this asset?",
-    "deleteAssetBody": "For equipment you no longer have, use Dispose instead — delete is for rows added by mistake."
+    "deleteAssetBody": "For equipment you no longer have, use Dispose instead — delete is for rows added by mistake.",
+    "assetQuantity": "Quantity",
+    "assetCostHint": "Total for the whole row",
+    "assetUnitCost": "{amount} each",
+    "assetsUnits": "{count} units"
   },
   "HowTo": {
     "title": "How-to",
