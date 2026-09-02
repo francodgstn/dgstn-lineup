@@ -6437,7 +6437,15 @@
     "openingViewEntries": "Buchungen ansehen",
     "openingDescription": "Anfangsbestände per {date}",
     "assetsTitle": "Anlagenverzeichnis",
-    "assetsCardDescription": "Anlagenverzeichnis & Anlagenspiegel"
+    "assetsCardDescription": "Anlagenverzeichnis & Anlagenspiegel",
+    "statementTitle": "Finanzbericht",
+    "printStatement": "Drucken",
+    "downloadStatementHtml": "Als Seite speichern",
+    "generatedOn": "Erstellt",
+    "statementDisclaimer": "Betriebswirtschaftliche Auswertung — an Schweizer Praxis angelehnt. Vor der Einreichung mit deinem Treuhänder prüfen.",
+    "totalAssets": "Summe Aktiven",
+    "totalLiabilitiesEquity": "Summe Passiven",
+    "popupBlocked": "Dein Browser hat das Druckfenster blockiert. Erlaube Pop-ups für diese Seite oder nutze Als Seite speichern."
   },
   "AssetRegister": {
     "actionFailed": "Aktion fehlgeschlagen — bitte erneut versuchen.",

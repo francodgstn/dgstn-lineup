@@ -6437,7 +6437,15 @@
     "openingViewEntries": "Voir les écritures",
     "openingDescription": "Soldes d'ouverture au {date}",
     "assetsTitle": "Registre des actifs",
-    "assetsCardDescription": "Registre des actifs et état des actifs"
+    "assetsCardDescription": "Registre des actifs et état des actifs",
+    "statementTitle": "États financiers",
+    "printStatement": "Imprimer",
+    "downloadStatementHtml": "Enregistrer en page",
+    "generatedOn": "Généré le",
+    "statementDisclaimer": "Comptabilité de gestion — conçue pour s'aligner sur la pratique suisse. À vérifier avec votre fiduciaire avant tout dépôt.",
+    "totalAssets": "Total de l'actif",
+    "totalLiabilitiesEquity": "Total du passif",
+    "popupBlocked": "Votre navigateur a bloqué la fenêtre d'impression. Autorisez les pop-ups pour ce site, ou utilisez Enregistrer en page."
   },
   "AssetRegister": {
     "actionFailed": "Échec de l'action — veuillez réessayer.",

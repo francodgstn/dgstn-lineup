@@ -6437,7 +6437,15 @@
     "openingViewEntries": "Vedi le registrazioni",
     "openingDescription": "Saldi di apertura al {date}",
     "assetsTitle": "Registro dei beni",
-    "assetsCardDescription": "Registro dei beni e prospetto dei beni"
+    "assetsCardDescription": "Registro dei beni e prospetto dei beni",
+    "statementTitle": "Rendiconto finanziario",
+    "printStatement": "Stampa",
+    "downloadStatementHtml": "Salva come pagina",
+    "generatedOn": "Generato il",
+    "statementDisclaimer": "Contabilità gestionale — allineata alla prassi svizzera. Da verificare con il tuo fiduciario prima del deposito.",
+    "totalAssets": "Totale attivo",
+    "totalLiabilitiesEquity": "Totale passivo",
+    "popupBlocked": "Il browser ha bloccato la finestra di stampa. Consenti i pop-up per questo sito oppure usa Salva come pagina."
   },
   "AssetRegister": {
     "actionFailed": "Azione non riuscita — riprova.",

@@ -6437,7 +6437,15 @@
     "openingViewEntries": "View entries",
     "openingDescription": "Opening balances as of {date}",
     "assetsTitle": "Asset register",
-    "assetsCardDescription": "Asset register & statement of assets"
+    "assetsCardDescription": "Asset register & statement of assets",
+    "statementTitle": "Financial statement",
+    "printStatement": "Print",
+    "downloadStatementHtml": "Save as page",
+    "generatedOn": "Generated",
+    "statementDisclaimer": "Management accounting — designed to align with Swiss practice. Review with your fiduciary before filing.",
+    "totalAssets": "Total assets",
+    "totalLiabilitiesEquity": "Total liabilities & equity",
+    "popupBlocked": "Your browser blocked the print window. Allow pop-ups for this site, or use Save as page."
   },
   "AssetRegister": {
     "actionFailed": "Action failed — please try again.",
