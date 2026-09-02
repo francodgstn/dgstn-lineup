@@ -422,20 +422,30 @@ export default function CataloguePage() {
     onlyDeadEnds ? list.filter((a) => deadEndIds.has(a.id)) : list
   const visibleCourses = onlyDeadEnds ? courses.filter((c) => deadEndIds.has(c.id)) : courses
 
-  // ICON ABOVE THE LABEL, not beside it. Side by side, four labelled-and-iconed
-  // tabs do not fit the rail column once the pane opens next to it: the strip
-  // wrapped to two lines, which moves the tab a studio is aiming at at exactly
-  // the moment it selects something. Stacked, each tab is as narrow as its word
-  // and the icons cost no width at all — and the SAME icons name these things in
-  // the sidebar, so they are what the studio already recognises them by.
-  const tabs: { key: TabKey; label: string; icon: React.ElementType }[] = [
-    { key: 'activities', label: t('tabActivities'), icon: Zap },
-    { key: 'plans', label: t('railPlans'), icon: IdCard },
+  // The SAME icons name these things in the sidebar, so they are what a studio
+  // already recognises them by. The strip's layout lives with the strip.
+  const tabs: { key: TabKey; label: string; icon: React.ElementType; count: number }[] = [
+    { key: 'activities', label: t('tabActivities'), icon: Zap, count: activities.length },
+    { key: 'plans', label: t('railPlans'), icon: IdCard, count: plans.length },
     ...(coursesInstalled
-      ? [{ key: 'courses' as const, label: t('railCourses'), icon: GraduationCap }]
+      ? [
+          {
+            key: 'courses' as const,
+            label: t('railCourses'),
+            icon: GraduationCap,
+            count: courses.length,
+          },
+        ]
       : []),
     ...(productsInstalled
-      ? [{ key: 'products' as const, label: t('tabProducts'), icon: Package }]
+      ? [
+          {
+            key: 'products' as const,
+            label: t('tabProducts'),
+            icon: Package,
+            count: products.length,
+          },
+        ]
       : []),
   ]
   const fallbackTab: TabKey = selection ? TAB_FOR_KIND[selection.kind] : 'activities'
@@ -822,19 +832,31 @@ export default function CataloguePage() {
           minimum is what lets the pane shrink BELOW its content instead of
           shoving, which is also what makes its own overflow scrolling work
           (Franco, 2026-09-01). */}
-      {/* THE TAB STRIP LIVES ABOVE BOTH PANELS, not inside the rail.
+      {/* THE TAB STRIP LIVES ABOVE BOTH PANELS, and it is not a small control.
+
           It governs the whole screen — switching tabs changes the rail AND
           clears a selection belonging to another tab, so the pane changes with
-          it. A control that governs both halves reads as secondary while it
-          sits inside one of them, and it was spending the top of a 340px column
-          that filters will want later (Franco, 2026-09-02).
+          it. Inside the rail it read as secondary, and it was spending the top
+          of a 340px column that filters will want later.
 
-          LEFT-ALIGNED AT NATURAL WIDTH, deliberately: stretched across ~1000px
-          these four short words end up further apart than they are related, and
-          a segmented control that wide reads as one that lost its content. */}
-      <div className="mb-4 space-y-2">
+          SIZE IS THE POINT. This is where a studio spends its first weeks
+          setting the business up, and rendered as four small segmented-control
+          cells it looked like one more of the thousand tiny settings controls
+          an app like this accumulates. So: cards, room to breathe, the icon in
+          a tinted square above the word, and the COUNT — which turns a label
+          into a fact worth glancing at ("6 activities, 5 plans") and gives the
+          card something to say (Franco, 2026-09-02).
+
+          Icon ABOVE the label, not beside it: stacked, each card is as wide as
+          its word and the icons cost no width at all. Left-aligned at natural
+          width rather than stretched — across ~1000px these four short words
+          end up further apart than they are related. */}
+      <div className="mb-5 space-y-2.5">
+        {/* Two even columns on a phone, natural width from `sm` up. Wrapping
+            flex cards left a ragged right edge on mobile — four cards, two per
+            row, and the second of each row floating short of the screen. */}
         <div
-          className="inline-flex gap-0.5 rounded-lg bg-muted/50 p-0.5"
+          className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap"
           role="tablist"
           aria-label={t('title')}
         >
@@ -858,18 +880,37 @@ export default function CataloguePage() {
                   setPickedTab(tab.key)
                   if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
                 }}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`relative flex flex-col items-center gap-2 rounded-xl border px-5 py-4 transition-all sm:min-w-[7.5rem] ${
                   on
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'border-primary/40 bg-primary/5 shadow-sm'
+                    : 'border-transparent bg-muted/40 hover:border-border hover:bg-muted'
                 }`}
               >
-                <TabIcon className="h-4 w-4 shrink-0" />
-                <span>{tab.label}</span>
-                {/* Inline now that the tabs are no longer four equal targets —
-                    there is nothing left for a wider one to unbalance. */}
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+                    on
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground'
+                  }`}
+                >
+                  <TabIcon className="h-5 w-5" />
+                </span>
+                <span
+                  className={`text-sm font-semibold leading-none ${
+                    on ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  {tab.label}
+                </span>
+                {/* The count is the card's fact. Zero still prints — "0
+                    products" is exactly what a studio needs to see on the tab
+                    it has not filled in yet. */}
+                <span className="text-xs leading-none text-muted-foreground">{tab.count}</span>
+                {/* The dead-end count rides in the CORNER: inline it would sit
+                    where the item count already is and the two numbers would
+                    be read as one. */}
                 {dead > 0 && (
-                  <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] leading-tight text-amber-700">
+                  <span className="absolute right-2 top-2 rounded-full bg-amber-500/20 px-1.5 text-[10px] leading-tight text-amber-700">
                     {dead}
                   </span>
                 )}
