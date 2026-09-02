@@ -1274,20 +1274,16 @@ export default function CataloguePage() {
             starts and the page ends. */}
         {selection && (
         <div className="rounded-xl border bg-card p-4">
-          {/* KEYED ON THE SELECTION so the slide replays on EVERY change, not
-              only the first. `animate-in` fires on mount, and the pane element
-              itself never unmounts — it only gains and loses `hidden` — so
-              without a key the motion appeared just once per visit, when a tab
-              switch had cleared the selection and the pane came back (Franco,
-              2026-09-02).
+          {/* THE PANE DOES NOT SLIDE. Only the rail does.
 
-              A SHORT slide, and motion-safe: this is a focus change, not a
-              navigation, so it should read as the pane catching up rather than
-              as a screen arriving. */}
-          <div
-            key={`${selection.kind}:${selection.id}`}
-            className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-200"
-          >
+              Both moving made a tab change animate two halves of the screen for
+              one action, and even on a selection the pane arriving from the
+              right competed with the row lighting up on the left — two things
+              saying "look here" about the same click (Franco, 2026-09-02).
+
+              So the motion belongs to the LIST, which is the half that actually
+              changes wholesale; the pane just appears with whatever the list
+              now points at. */}
           {/* THE WAY BACK, on a phone only. On a desktop the list never left,
               so a back control there would undo something that never happened
               — and it would compete with clicking another row, which is how a
@@ -1522,7 +1518,6 @@ export default function CataloguePage() {
                 </Button>
               </div>
             )}
-          </div>
         </div>
         )}
       </div>
@@ -2059,6 +2054,14 @@ function RailRow({
  * the dead-end filter is on — which would reorder the whole collection from a
  * subset of it.
  */
+/**
+ * THE GAP LIVES IN BOTH BRANCHES, and it must match `RailGroup`'s.
+ *
+ * These divs sit INSIDE RailGroup's, so whatever they say wins. When the rail
+ * moved to one card per item, RailGroup was loosened and these two were not —
+ * which left every reorderable list tight while the plain ones breathed, and
+ * that is exactly what shipped (Franco, 2026-09-02).
+ */
 function OrderableRows<T extends { id: string }>({
   items,
   canReorder,
@@ -2072,7 +2075,7 @@ function OrderableRows<T extends { id: string }>({
 }) {
   if (!canReorder) {
     return (
-      <div className="space-y-0.5">
+      <div className="space-y-2.5">
         {items.map((item) => (
           <Fragment key={item.id}>{renderRow(item)}</Fragment>
         ))}
@@ -2081,7 +2084,7 @@ function OrderableRows<T extends { id: string }>({
   }
   return (
     <SortableList ids={items.map((item) => item.id)} onReorder={onReorder}>
-      <div className="space-y-0.5">
+      <div className="space-y-2.5">
         {items.map((item) => (
           <SortableItem key={item.id} id={item.id}>
             {(sortable) => <>{renderRow(item, sortable)}</>}
