@@ -985,8 +985,8 @@ export function ActivityDialog({
                   <Link
                     href={
                       (editing
-                        ? `/offer/catalogue?sel=activity:${editing.id}`
-                        : '/offer/catalogue') as Route
+                        ? `/manage/offer?sel=activity:${editing.id}`
+                        : '/manage/offer') as Route
                     }
                     className={buttonVariants({ variant: 'outline', size: 'sm' })}
                   >

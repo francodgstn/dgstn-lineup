@@ -300,9 +300,16 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // What the studio sells — pulled out of Settings into its own section. Courses
-    // and products only appear once their plugin is installed (requiresPlugin).
-    labelKey: 'sectionOffer',
+    // THE BACK OFFICE. What the studio sells and the terms it sells on, plus the
+    // records behind both — the catalogue, prices, places, documents,
+    // affiliations, the books and the asset register.
+    //
+    // It was "Offer" until 2026-09-02 and that name is now the CATALOGUE PAGE's,
+    // which is the thing a studio actually calls its offer. The section names
+    // the scope instead: Run is the working day, Manage is what you do monthly
+    // or when something changes, Grow reaches more people. Courses and products
+    // only appear once their plugin is installed (requiresPlugin).
+    labelKey: 'sectionManage',
     icon: Tag,
     items: [
       // THE MAP OF THE SECTION, first — the same shape as `publicPages` at the
@@ -318,7 +325,7 @@ const NAV_SECTIONS: NavSection[] = [
       // out what the section contains.
       // LEAD of Offer: it is the section's MAP, and a map that sorts into the
       // middle of the things it maps is just another row.
-      { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library, lead: true },
+      { id: 'catalogue', href: '/manage/offer', labelKey: 'catalogue', icon: Library, lead: true },
       // Places — the studio's locations and rooms. A SCHEDULING reference, not a
       // preference: it is read by the session/event forms' place picker and by
       // the website's places section, and it is edited when the schedule needs a
@@ -361,7 +368,7 @@ const NAV_SECTIONS: NavSection[] = [
       // Unified read-only pricing surface — persona price preview + "what you
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
-      { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
+      { id: 'pricing', href: '/manage/pricing', labelKey: 'pricing', icon: Calculator },
       // Promo codes — a plugin as of Wave 3.5, so the item appears only once
       // installed, exactly like Courses and Products above and below it. The
       // plan requirement lives in the manifest (`minPlan: 'studio'`) and the
@@ -372,21 +379,21 @@ const NAV_SECTIONS: NavSection[] = [
       // studio that uninstalls keeps its live codes redeemable and manageable.
       {
         id: 'promoCodes',
-        href: '/offer/promo-codes',
+        href: '/manage/promo-codes',
         labelKey: 'promoCodes',
         icon: Ticket,
         requiresPlugin: 'promo-codes',
       },
       {
         id: 'onlineCourses',
-        href: '/offer/online-courses',
+        href: '/manage/online-courses',
         labelKey: 'onlineCourses',
         icon: GraduationCap,
         requiresPlugin: 'online-courses',
       },
       {
         id: 'products',
-        href: '/offer/products',
+        href: '/manage/products',
         labelKey: 'products',
         icon: Package,
         requiresPlugin: 'products',
@@ -1100,12 +1107,12 @@ type PluginNavEntry = {
 const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
   operations: 'sectionRun',
   engage: 'sectionGrow',
-  // 'grow' renders in the same place as 'engage' and means something different:
-  // NOT an engagement surface, just not daily business either. Finance and the
-  // asset register are the two — periodic, not operational — and filing them
-  // under 'engage' to reach the same section would have made the manifest say
-  // something untrue about them (Franco, 2026-09-02).
-  grow: 'sectionGrow',
+  // Back office. Finance and the asset register are periodic rather than
+  // operational, and they are not engagement surfaces either — they briefly
+  // reached Grow through a 'grow' value that existed only to avoid saying
+  // 'engage' about a ledger. Manage is where they actually belong (Franco,
+  // 2026-09-02).
+  manage: 'sectionManage',
 }
 
 // Suggestion (muted nudge) dismissals, persisted in the browser only. Affects
@@ -2224,7 +2231,7 @@ function NavSearch({
         .map((st) =>
           entityRow(
             `subscription:${st.id}`,
-            `/offer/catalogue?sel=plan:${st.id}`,
+            `/manage/offer?sel=plan:${st.id}`,
             st.name,
             IdCard,
             'subscription'
@@ -2236,7 +2243,7 @@ function NavSearch({
         .filter((a) => matches(a.name, a.description))
         .slice(0, 4)
         .map((a) =>
-          entityRow(`activity:${a.id}`, `/offer/catalogue?sel=activity:${a.id}`, a.name, Zap, 'activity')
+          entityRow(`activity:${a.id}`, `/manage/offer?sel=activity:${a.id}`, a.name, Zap, 'activity')
         )
     : []
 

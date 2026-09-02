@@ -16,6 +16,6 @@ import type { Route } from 'next'
 
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-  const path = '/offer/catalogue?tab=activities'
+  const path = '/manage/offer?tab=activities'
   redirect((locale === 'en' ? path : `/${locale}${path}`) as Route)
 }

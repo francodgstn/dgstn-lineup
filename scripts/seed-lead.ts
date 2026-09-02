@@ -2960,7 +2960,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     .doc(teamId)
     .set({ products: productMirror }, { merge: true })
 
-  // One live promo code, so /offer/promo-codes and a discounted checkout are
+  // One live promo code, so /manage/promo-codes and a discounted checkout are
   // both demoable. See scripts/lib/storefront.ts for what is deliberately NOT
   // seeded alongside it.
   await seedStorePromoCode({ teamId, uid, currency: profile.currency, installedDaysAgo: 200 })

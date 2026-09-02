@@ -256,7 +256,7 @@ export function PricingSimulator() {
       <p className="mt-4 text-sm text-muted-foreground">
         {t('pricing.simulator.outro')}{' '}
         <Link
-          href={'/offer/pricing' as Route}
+          href={'/manage/pricing' as Route}
           className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
         >
           {t('pricing.linkLabels.pricing')}

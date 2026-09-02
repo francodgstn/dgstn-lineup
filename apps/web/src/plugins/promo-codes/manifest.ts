@@ -28,7 +28,7 @@ export const promoCodesManifest: PluginManifest = {
   // plugins first. Part of UX-43: the built-in nav entry below only exists once
   // the plugin is installed, so without this the ONLY route to a discount
   // campaign was to go browsing the marketplace already knowing it was there.
-  // The other half is the Discounts section on /offer/pricing, which is where a
+  // The other half is the Discounts section on /manage/pricing, which is where a
   // studio thinking about what things cost actually is.
   recommended: true,
   iconName: 'BadgePercent',
