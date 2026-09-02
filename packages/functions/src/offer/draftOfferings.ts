@@ -1,0 +1,319 @@
+// ─── AI offer drafting: propose, then apply ──────────────────────────────────
+//
+// TWO CALLABLES, AND THE SPLIT IS THE SECURITY MODEL.
+//
+// `draftOfferings` runs the model and WRITES NOTHING. It returns an
+// `OfferingDraft` — a type with no ids, no tenant and no reference to anything
+// that already exists (see `packages/shared/src/types/offeringDraft.ts`, which
+// carries the full argument). A studio reads what it proposes and decides.
+//
+// `applyOfferingDraft` takes a draft back and writes it, in ONE batch, through
+// the same shapes the activity and plan forms produce. It re-parses whatever it
+// is handed rather than trusting the client: the review step is a UX
+// affordance, not a boundary — the boundary is that both ends of the round trip
+// go through `parseOfferingDraft` (Franco, 2026-09-02).
+//
+// The applier therefore CANNOT update. Every draft creates; nothing it can
+// express addresses an existing record. A studio that dislikes the result
+// deletes five new rows, which is a recoverable afternoon rather than a
+// restore-from-backup.
+
+import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
+import { onCall, HttpsError } from 'firebase-functions/v2/https'
+import {
+  ACTIVITIES_COLLECTION,
+  TEAMS_COLLECTION,
+  SUBSCRIPTION_TYPES_SUBCOLLECTION,
+  OFFERING_DRAFT_LIMITS,
+  parseOfferingDraft,
+  planKeysForActivity,
+  type OfferingDraft,
+} from '@linyup/shared'
+import { to } from '../utils/async'
+import { hasTeamRole, isTeamMember } from '../utils/teams'
+import { getAssistantModel } from '../utils/vertexClient'
+
+const RATE_LIMIT_MAX = 12 // drafts per user + team per hour
+const RATE_WINDOW_MS = 60 * 60 * 1000
+const EXPERIMENT_ID = 'offer-drafting'
+
+/**
+ * The model is asked for JSON and given the shape by name.
+ *
+ * It is NOT asked to be careful — care is not enforceable in a prompt. It is
+ * asked to be useful, and `parseOfferingDraft` is what makes the result safe.
+ * Everything here is about output QUALITY; nothing here is a security control.
+ */
+const SYSTEM_PROMPT = `You design the offer of a sports, fitness or wellness studio.
+
+Given a short description of a studio, return the ACTIVITIES it should run and
+the PLANS (subscriptions) it should sell. Return JSON only — no prose, no code
+fences.
+
+Shape:
+{
+  "activities": [{
+    "key": "kebab-case-handle",         // unique within this response
+    "name": "Yoga Basics",
+    "description": "one or two sentences, optional",
+    "type": "class" | "appointment",    // default class; appointment = 1:1 time
+    "durations": [{"minutes": 60, "priceAmount": 90}],  // APPOINTMENTS ONLY
+    "accessTier": "open" | "members" | "subscription",
+    "planKeys": ["unlimited"],          // plans in THIS response that open it
+    "dropInPriceAmount": 25             // CLASSES ONLY, price for a single visit
+  }],
+  "plans": [{
+    "key": "unlimited",
+    "name": "Unlimited",
+    "description": "optional",
+    "prices": [{"amount": 89, "recurrence": "monthly", "credits": 10}],
+    "limit": {"count": 8, "per": "month"},
+    "activityKeys": ["yoga-basics"]     // activities in THIS response it includes
+  }],
+  "note": "one line on anything you assumed, optional"
+}
+
+recurrence is one of: per_class, one_time, weekly, biweekly, monthly, quarterly, annual.
+limit.per is one of: day, week, month.
+
+Rules:
+- Only these fields. Never invent an "id" — you are proposing new records.
+- Link activities and plans using the keys in THIS response and no other value.
+- "accessTier": "subscription" only makes sense with planKeys; "open" means
+  anyone may book, "members" means any signed-in member.
+- Prices are in the studio's own currency, as plain numbers. If the description
+  gives no price, LEAVE PRICES OUT rather than guessing a number the studio
+  might not notice.
+- Do not duplicate anything in "Already set up" below; complement it.
+- Keep it small and realistic: a handful of activities, two or three plans.`
+
+type DraftRequest = { teamId?: string; prompt?: string }
+type ApplyRequest = { teamId?: string; draft?: unknown }
+
+function assertShortEnough(prompt: string) {
+  if (prompt.length > OFFERING_DRAFT_LIMITS.promptChars) {
+    throw new HttpsError('invalid-argument', 'That description is too long.')
+  }
+}
+
+/** Member, owner, and the experiment switched on — checked in that order so the
+ *  message a caller gets names the first thing actually wrong. */
+async function assertAllowed(uid: string, teamId: string) {
+  const [memberErr, isMember] = await to(isTeamMember(uid, teamId))
+  if (memberErr || !isMember) {
+    throw new HttpsError('permission-denied', 'You are not a member of this team.')
+  }
+  // OWNER-ONLY, matching where the switch lives: the experiment flag is on the
+  // team document, which only an owner may write. A manager who could run this
+  // but not turn it off would be able to create priced records from a switch
+  // they cannot reach.
+  const [roleErr, isOwner] = await to(hasTeamRole(uid, teamId, 'owner'))
+  if (roleErr || !isOwner) {
+    throw new HttpsError('permission-denied', 'Only the studio owner can draft offerings.')
+  }
+  const snap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
+  const on = snap.data()?.settings?.experimentalFeatures?.[EXPERIMENT_ID] === true
+  if (!on) {
+    throw new HttpsError('failed-precondition', 'Offer drafting is not switched on for this team.')
+  }
+}
+
+async function assertUnderRateLimit(uid: string, teamId: string, bucket: string) {
+  const db = admin.firestore()
+  const windowKey = Math.floor(Date.now() / RATE_WINDOW_MS).toString()
+  const ref = db.collection('rate_limits').doc(uid).collection(bucket).doc(`${teamId}_${windowKey}`)
+  const allowed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    const count = snap.exists ? ((snap.data()!.count as number) ?? 0) : 0
+    if (count >= RATE_LIMIT_MAX) return false
+    tx.set(ref, { count: count + 1, updated_at: FieldValue.serverTimestamp() }, { merge: true })
+    return true
+  })
+  if (!allowed) {
+    throw new HttpsError('resource-exhausted', 'You have reached the hourly limit. Try again later.')
+  }
+}
+
+/** Names only. The model is given what EXISTS so it does not propose a second
+ *  "Yoga Basics" — never ids, prices or access rules, which it has no use for
+ *  and could otherwise echo back as if they were its own proposal. */
+async function existingNames(teamId: string): Promise<string> {
+  const db = admin.firestore()
+  const [acts, plans] = await Promise.all([
+    db.collection(ACTIVITIES_COLLECTION).where('teamId', '==', teamId).limit(60).get(),
+    db.collection(TEAMS_COLLECTION).doc(teamId).collection(SUBSCRIPTION_TYPES_SUBCOLLECTION).limit(40).get(),
+  ])
+  const a = acts.docs.map((d) => String(d.data().name ?? '')).filter(Boolean)
+  const p = plans.docs.map((d) => String(d.data().name ?? '')).filter(Boolean)
+  if (!a.length && !p.length) return 'Already set up: nothing yet.'
+  return `Already set up — do not duplicate these:\nActivities: ${a.join(', ') || '(none)'}\nPlans: ${p.join(', ') || '(none)'}`
+}
+
+/** Strip a ```json fence if the model wrapped its answer in one. Asked not to,
+ *  does anyway often enough to be worth three lines. */
+function unfence(text: string): string {
+  const m = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/)
+  return (m ? m[1] : text).trim()
+}
+
+export const draftOfferings = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.')
+  const uid = request.auth.uid
+  const { teamId, prompt } = (request.data ?? {}) as DraftRequest
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required.')
+  if (!prompt || !prompt.trim()) throw new HttpsError('invalid-argument', 'Describe the studio first.')
+  assertShortEnough(prompt)
+
+  await assertAllowed(uid, teamId)
+  await assertUnderRateLimit(uid, teamId, 'draft_offerings')
+
+  const context = await existingNames(teamId)
+
+  let raw = ''
+  try {
+    const model = getAssistantModel()
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: `${context}\n\nStudio: ${prompt.trim()}` }] }],
+      systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
+      // Low temperature: this is a structured proposal, not a brainstorm, and a
+      // creative model here mostly invents field names.
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' },
+    })
+    raw = result.response?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  } catch (err) {
+    console.error('[draftOfferings] Vertex error:', (err as Error).message)
+    throw new HttpsError('internal', 'The drafting service is unavailable right now.')
+  }
+
+  let parsedJson: unknown
+  try {
+    parsedJson = JSON.parse(unfence(raw))
+  } catch {
+    throw new HttpsError('internal', 'The draft came back in a shape we could not read.')
+  }
+
+  const { draft, problems } = parseOfferingDraft(parsedJson)
+  if (!draft) {
+    console.warn('[draftOfferings] rejected draft:', JSON.stringify(problems).slice(0, 400))
+    throw new HttpsError('internal', 'The draft came back in a shape we could not read.')
+  }
+  // Problems are returned, not thrown: a draft with one dropped colour is still
+  // worth showing, and the studio is the one who decides whether it is useful.
+  return { draft, problems }
+})
+
+export const applyOfferingDraft = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'You must be signed in.')
+  const uid = request.auth.uid
+  const { teamId, draft: incoming } = (request.data ?? {}) as ApplyRequest
+  if (!teamId) throw new HttpsError('invalid-argument', 'teamId is required.')
+
+  await assertAllowed(uid, teamId)
+
+  // RE-PARSED, NOT TRUSTED. The client edited this between the two calls, which
+  // is the point of the review — so what arrives here is user input like any
+  // other, and it goes through the same gate the model's output did.
+  const { draft } = parseOfferingDraft(incoming)
+  if (!draft) throw new HttpsError('invalid-argument', 'There is nothing valid to apply.')
+
+  const db = admin.firestore()
+  const teamRef = db.collection(TEAMS_COLLECTION).doc(teamId)
+
+  // Order the new rows after whatever is already there. Read before the batch:
+  // a batch cannot read, and an approximate starting point is fine — `order` is
+  // a display sort a studio drags to fix, not an invariant.
+  const [actCount, planCount] = await Promise.all([
+    db.collection(ACTIVITIES_COLLECTION).where('teamId', '==', teamId).count().get(),
+    teamRef.collection(SUBSCRIPTION_TYPES_SUBCOLLECTION).count().get(),
+  ])
+
+  const batch = db.batch()
+  const now = FieldValue.serverTimestamp()
+
+  // PLANS FIRST, so an activity's access rule can name the id of a plan created
+  // in the same batch. This is the only place a draft key becomes an id, and it
+  // is why the draft could never spell one itself.
+  const planIds = new Map<string, string>()
+  draft.plans.forEach((plan, i) => {
+    const ref = teamRef.collection(SUBSCRIPTION_TYPES_SUBCOLLECTION).doc()
+    planIds.set(plan.key, ref.id)
+    batch.set(ref, {
+      name: plan.name,
+      ...(plan.description ? { description: plan.description } : {}),
+      source: 'internal',
+      active: true,
+      // NOT PUBLIC. A drafted plan is visible to the studio and to nobody else
+      // until they say so — publishing is a decision, and an AI proposal is not
+      // one (mirrors the `public` default in the plan form).
+      public: false,
+      ...(plan.prices?.length
+        ? {
+            prices: plan.prices.map((p, j) => ({
+              id: `${ref.id}-${j}`,
+              amount: p.amount,
+              recurrence: p.recurrence,
+              active: true,
+              ...(p.label ? { label: p.label } : {}),
+              ...(p.credits ? { credits: p.credits } : {}),
+            })),
+          }
+        : {}),
+      ...(plan.limit ? { limits: [plan.limit] } : {}),
+      teamId,
+      order: planCount.data().count + i,
+      created_at: now,
+      createdBy: uid,
+      created_via: 'ai-draft',
+    })
+  })
+
+  draft.activities.forEach((activity, i) => {
+    const ref = db.collection(ACTIVITIES_COLLECTION).doc()
+    const gatePlanIds = planKeysForActivity(draft, activity.key)
+      .map((k) => planIds.get(k))
+      .filter((id): id is string => !!id)
+    const isAppointment = activity.type === 'appointment'
+    // A gate with nothing behind it would deny everyone, so an activity the
+    // model marked `subscription` but linked to no plan falls back to `open` —
+    // the same direction the activity form's own resolver takes.
+    const tier =
+      activity.accessTier === 'subscription' && !gatePlanIds.length ? 'open' : (activity.accessTier ?? 'open')
+
+    batch.set(ref, {
+      name: activity.name,
+      slug: activity.name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60),
+      ...(activity.description ? { description: activity.description } : {}),
+      ...(activity.color ? { color: activity.color } : {}),
+      ...(activity.tags?.length ? { tags: activity.tags } : {}),
+      type: isAppointment ? 'appointment' : 'class',
+      // DURATIONS ARE APPOINTMENT-ONLY and drop-in is CLASS-ONLY — the same
+      // asymmetry the forms enforce. A model that puts both on one activity
+      // gets the half that applies to what it said the activity was.
+      ...(isAppointment && activity.durations?.length ? { durations: activity.durations } : {}),
+      ...(!isAppointment && activity.dropInPriceAmount !== undefined
+        ? { dropIn: { enabled: true, priceAmount: activity.dropInPriceAmount } }
+        : {}),
+      accessRule: {
+        type: tier,
+        ...(tier === 'subscription' ? { subscriptionTypeIds: gatePlanIds } : {}),
+      },
+      isFreeTrial: tier === 'open',
+      teamId,
+      createdBy: uid,
+      isActive: true,
+      order: actCount.data().count + i,
+      created_at: now,
+      created_via: 'ai-draft',
+    })
+  })
+
+  await batch.commit()
+  return { activities: draft.activities.length, plans: draft.plans.length }
+})
