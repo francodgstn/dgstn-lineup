@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/ui/date-picker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -573,7 +574,7 @@ export function SessionFormDialog({
         order: activities.length,
         created_at: serverTimestamp(),
       })
-      await qc.invalidateQueries({ queryKey: ['activities'] })
+      refreshQueries(qc, ['activities'])
       setValue('activityId', ref.id)
       setNewActivityName('')
     } catch (err) {

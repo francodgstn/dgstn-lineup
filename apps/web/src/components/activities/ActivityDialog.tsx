@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
 import { useAuth } from '@/contexts/AuthContext'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -599,7 +600,7 @@ export function ActivityDialog({
           updates.image_url = null
         }
         await updateDoc(doc(db, ACTIVITIES_COLLECTION, editing.id), updates)
-        await qc.invalidateQueries({ queryKey: ['activities'] })
+        refreshQueries(qc, ['activities'])
         void invalidateSetupChecklist()
         toast.success(t('savedToast'))
         onClose()
@@ -650,7 +651,7 @@ export function ActivityDialog({
         if (url) await updateDoc(newRef, { image_url: url })
       } catch (err) {
         console.error('[activities] cover upload failed:', err)
-        await qc.invalidateQueries({ queryKey: ['activities'] })
+        refreshQueries(qc, ['activities'])
         void invalidateSetupChecklist()
         toast.error(t('createdImageErrorToast'))
         onCreated?.(newRef.id)
@@ -659,7 +660,7 @@ export function ActivityDialog({
       }
     }
 
-    await qc.invalidateQueries({ queryKey: ['activities'] })
+    refreshQueries(qc, ['activities'])
     void invalidateSetupChecklist()
     toast.success(t('createdToast'))
     onCreated?.(newRef.id)

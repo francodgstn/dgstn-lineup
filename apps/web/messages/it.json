@@ -2076,7 +2076,11 @@
     "subTypeMaxPurchases": "Acquisti per persona",
     "subTypeMaxPurchasesSuffix": "× / persona",
     "subTypeMaxPurchasesUnlimited": "Illimitato",
-    "subTypeMaxPurchasesHelp": "Lascia vuoto per nessun limite. Vale solo per gli acquisti fatti dai membri stessi."
+    "subTypeMaxPurchasesHelp": "Lascia vuoto per nessun limite. Vale solo per gli acquisti fatti dai membri stessi.",
+    "subTypeNoPrices": "Ancora nessun prezzo — questo piano tiene solo un nome.",
+    "subTypeIntroSummary": "{amount} per {periods, plural, one {il primo periodo} other {i primi # periodi}}",
+    "subTypeLimitSummary": "Fino a {count, plural, one {# corso} other {# corsi}} {per, select, day {al giorno} week {a settimana} month {al mese} other {al mese}}",
+    "subTypeNoLimit": "Nessun limite di prenotazione."
   },
   "Bookings": {
     "title": "Prenotazioni",
@@ -7566,7 +7570,9 @@
     "fullEditProducts": "Apri la pagina Prodotti",
     "paneTabAccess": "Accesso e prezzi",
     "createNew": "Crea",
-    "paneTabAutomations": "Automazioni"
+    "paneTabAutomations": "Automazioni",
+    "editPrices": "Modifica prezzi",
+    "savePrices": "Salva i prezzi"
   },
   "VerifyEmail": {
     "title": "Conferma {email}",
