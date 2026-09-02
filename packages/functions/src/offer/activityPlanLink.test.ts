@@ -9,6 +9,7 @@ import {
   coursePlanEdge,
   coursePlanEdgeUpdate,
   activityPlanFacets,
+  foldOfferingPlanEdgeUpdates,
   coursePlanFacets,
   courseGatedPlanIds,
   offeringRateEffects,
@@ -262,6 +263,72 @@ describe('the course ↔ plan edge', () => {
   // nothing a member sees — which is the failure these tests exist to stop.
   const course = (accessRule: Record<string, unknown>, benefit?: unknown) =>
     ({ accessRule, benefit } as unknown as CourseEdgeFields)
+
+  describe('MANY EDGES ON ONE DOCUMENT fold into a single update', () => {
+    // Local fixture: the shared `activity` helper is scoped to another block.
+    const activity = (doc: Record<string, unknown>) => doc as never
+    // The `from-offering` direction puts every PLAN on one activity, so a save
+    // that touched several rows wrote several updates to the same ref — each
+    // computed from the same snapshot, each overwriting the last. Only the
+    // bottom row survived.
+    it('adds every ticked plan to the gate, not just the last', () => {
+      const fresh = activity({ type: 'class', accessRule: { type: 'members' } })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: true, rate: false } },
+        { subTypeId: 'elite', next: { access: true, rate: false } },
+        { subTypeId: 'starter', next: { access: true, rate: false } },
+      ])
+      assert.deepEqual(update, {
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium', 'elite', 'starter'] },
+        isFreeTrial: false,
+      })
+    })
+
+    it('collects every rated plan onto the ONE rate rule', () => {
+      const fresh = activity({ type: 'class', dropIn: { enabled: true, priceAmount: 25 } })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: false, rate: true },
+          choice: { effect: 'percent_off', percent: 20 } },
+        { subTypeId: 'elite', next: { access: false, rate: true },
+          choice: { effect: 'percent_off', percent: 20 } },
+      ])
+      assert.deepEqual(update, {
+        memberBenefit: {
+          subscriptionTypeIds: ['premium', 'elite'],
+          effect: 'percent_off',
+          percent: 20,
+        },
+      })
+    })
+
+    it('a removal after an addition leaves only the addition', () => {
+      const fresh = activity({
+        type: 'class',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['starter'] },
+      })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: true, rate: false } },
+        { subTypeId: 'starter', next: { access: false, rate: false } },
+      ])
+      assert.deepEqual(update, {
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
+        isFreeTrial: false,
+      })
+    })
+
+    it('returns null when no edit changes anything', () => {
+      const fresh = activity({
+        type: 'class',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
+      })
+      assert.equal(
+        foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+          { subTypeId: 'premium', next: { access: true, rate: false } },
+        ]),
+        null
+      )
+    })
+  })
 
   describe('an OPEN class carries neither facet', () => {
     it('has no gate to write and no price to reduce', () => {

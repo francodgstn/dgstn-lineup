@@ -46,7 +46,7 @@ import {
   coursePlanFacets,
   offeringFacets,
   offeringPlanEdge,
-  offeringPlanEdgeUpdate,
+  foldOfferingPlanEdgeUpdates,
   offeringRateChoiceOf,
   offeringRateEffects,
   rateHasAPriceToApplyTo,
@@ -369,20 +369,40 @@ export function ActivityPlanLinks({
       // is re-read INSIDE the transaction and its id lists recomputed from that
       // read, so a second studio ticking a different plan on the same offering
       // merges rather than losing.
+      //
+      // GROUPED BY DOCUMENT, because in the `from-offering` direction every row
+      // is a different PLAN on the SAME offering. Writing them one at a time
+      // put several updates on one ref, each computed from the same snapshot,
+      // and only the last survived — "set all" saved one row (Franco,
+      // 2026-09-02). `foldOfferingPlanEdgeUpdates` applies each edit to the
+      // result of the previous and yields one payload.
       await runTransaction(db, async (tx) => {
-        const touched = rows.filter((r) => drafts[r.key])
+        const byDoc = new Map<
+          string,
+          { off: (typeof rows)[number]['off']; edits: Parameters<typeof foldOfferingPlanEdgeUpdates>[1] }
+        >()
+        for (const r of rows) {
+          const d = drafts[r.key]
+          if (!d) continue
+          const key = `${r.off.collection}/${r.off.id}`
+          const entry = byDoc.get(key) ?? { off: r.off, edits: [] }
+          entry.edits.push({
+            subTypeId: r.plan.id,
+            next: d.edge,
+            choice: d.edge.rate ? toChoice(d.rate) : undefined,
+          })
+          byDoc.set(key, entry)
+        }
+        const groups = [...byDoc.values()]
         const snaps = await Promise.all(
-          touched.map((r) => tx.get(doc(db, r.off.collection, r.off.id)))
+          groups.map((g) => tx.get(doc(db, g.off.collection, g.off.id)))
         )
         snaps.forEach((snap, i) => {
           if (!snap.exists()) return
-          const r = touched[i]
-          const d = drafts[r.key]
-          const update = offeringPlanEdgeUpdate(
-            { kind: r.off.target.kind, doc: snap.data() } as PlanLinkTarget,
-            r.plan.id,
-            d.edge,
-            d.edge.rate ? toChoice(d.rate) : undefined
+          const g = groups[i]
+          const update = foldOfferingPlanEdgeUpdates(
+            { kind: g.off.target.kind, doc: snap.data() } as PlanLinkTarget,
+            g.edits
           )
           if (update) tx.update(snap.ref, update)
         })

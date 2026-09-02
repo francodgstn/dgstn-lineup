@@ -499,6 +499,45 @@ export function plansSharingOfferingRate(t: PlanLinkTarget, subTypeId: string): 
     : plansSharingCourseRate(t.doc, subTypeId)
 }
 
+/**
+ * MANY EDGES, ONE DOCUMENT, ONE UPDATE.
+ *
+ * THE BUG THIS EXISTS FOR. In the `from-offering` direction every row is a
+ * different PLAN but the SAME offering document, so ticking several rows and
+ * saving produced several `offeringPlanEdgeUpdate` calls against one ref —
+ * each computed from the same pre-transaction snapshot, each overwriting the
+ * last. Only the bottom-most edited row survived, silently (Franco,
+ * 2026-09-02). "Set all" was the fastest way to hit it.
+ *
+ * Folding is the fix, not batching: the second edit has to see the first, or
+ * two plans added to one allow-list produce two lists of one. Each update is
+ * applied to a running copy of the document and the accumulated payload is
+ * written once.
+ *
+ * Shallow merge is correct here because every key these updates produce is
+ * written WHOLE — `accessRule` is rebuilt by spread, `benefit`/`memberBenefit`
+ * are replaced or nulled. Nothing is a partial map.
+ */
+export function foldOfferingPlanEdgeUpdates(
+  target: PlanLinkTarget,
+  edits: { subTypeId: string; next: ActivityPlanEdge; choice?: ActivityRateChoice }[]
+): Record<string, unknown> | null {
+  let doc = target.doc as Record<string, unknown>
+  const acc: Record<string, unknown> = {}
+  for (const e of edits) {
+    const update = offeringPlanEdgeUpdate(
+      { kind: target.kind, doc } as PlanLinkTarget,
+      e.subTypeId,
+      e.next,
+      e.choice
+    )
+    if (!update) continue
+    Object.assign(acc, update)
+    doc = { ...doc, ...update }
+  }
+  return Object.keys(acc).length ? acc : null
+}
+
 export function offeringPlanEdgeUpdate(
   t: PlanLinkTarget,
   subTypeId: string,
