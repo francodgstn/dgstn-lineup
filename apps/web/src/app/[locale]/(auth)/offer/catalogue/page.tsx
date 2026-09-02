@@ -54,20 +54,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, deleteDoc, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore'
 import {
   AlertTriangle,
-  IdCard,
-  Zap,
-  CalendarClock,
-  GraduationCap,
-  GripVertical,
-  Package,
-  Pencil,
   Archive,
+  CalendarClock,
   CalendarDays,
+  ChevronLeft,
   Copy,
   ExternalLink,
+  GraduationCap,
+  GripVertical,
+  IdCard,
+  Package,
+  Pencil,
   Plus,
   Trash2,
   type LucideIcon,
+  Zap,
 } from 'lucide-react'
 
 import {
@@ -462,6 +463,82 @@ export default function CataloguePage() {
   /** How many dead ends each tab holds — shown on the strip while the filter is
    *  on, because a tab that filters to nothing otherwise reads as "no problems
    *  here" exactly when the studio is hunting for problems. */
+  /**
+   * WHAT THIS TAB HOLDS, before you have clicked anything.
+   *
+   * The pane used to say "select something" over an empty card — the largest
+   * area on the page, spent telling a studio to do the thing they were already
+   * about to do. The catalogue is meant to be the section's MAP, and a map that
+   * shows nothing until you pick a destination is not one (Franco, 2026-09-02).
+   *
+   * Plain counts, no derived scoring: each line is a fact a studio could verify
+   * by reading the list beside it, which is what makes them trustworthy at a
+   * glance. Labels are REUSED from the rows and chips they describe, so the
+   * overview cannot end up calling something by a different name than the list.
+   *
+   * DESKTOP ONLY, and not by omission: it fills a space that only exists there.
+   * On a phone the list is the whole screen and answers "what is here" by being
+   * the thing itself, so an overview below it would just make the list longer.
+   */
+  const overviewRows: { label: string; value: number }[] = (() => {
+    switch (activeTab) {
+      case 'activities':
+        return [
+          { label: t('railClasses'), value: classes.length },
+          { label: t('railAppointments'), value: appointments.length },
+          {
+            label: t('ovOpenToAll'),
+            value: classes.filter((a) => resolveActivityAccessRule(a).type === 'open').length,
+          },
+          {
+            label: t('ovNeedsPlan'),
+            value: classes.filter((a) => resolveActivityAccessRule(a).type !== 'open').length,
+          },
+          {
+            label: t('ovDropIn'),
+            value: classes.filter((a) => a.dropIn?.enabled).length,
+          },
+        ]
+      case 'plans':
+        return [
+          { label: tSet('subTypePublicBadge'), value: plans.filter((s) => s.public).length },
+          {
+            label: tSet('subTypeSourceAggregator'),
+            value: plans.filter((s) => s.source === 'aggregator').length,
+          },
+          {
+            label: t('ovWithPrice'),
+            value: plans.filter((s) => (s.prices ?? []).length > 0).length,
+          },
+          {
+            label: t('ovNoPrice'),
+            value: plans.filter((s) => (s.prices ?? []).length === 0).length,
+          },
+        ]
+      case 'courses':
+        return (['free', 'registered', 'subscription', 'purchase'] as const).map((tier) => ({
+          label: t(`courseAccess_${tier}` as 'courseAccess_free'),
+          value: courses.filter((c) => c.accessRule?.type === tier).length,
+        }))
+      case 'products':
+        return [
+          {
+            label: tSet('subTypeActive'),
+            value: products.filter((pr) => pr.active !== false).length,
+          },
+          {
+            label: tSet('subTypeInactive'),
+            value: products.filter((pr) => pr.active === false).length,
+          },
+        ]
+    }
+  })()
+  const tabIsEmpty =
+    (activeTab === 'activities' && activities.length === 0) ||
+    (activeTab === 'plans' && plans.length === 0) ||
+    (activeTab === 'courses' && courses.length === 0) ||
+    (activeTab === 'products' && products.length === 0)
+
   const deadEndsPerTab: Partial<Record<TabKey, number>> = {
     activities: activities.filter((a) => deadEndIds.has(a.id)).length,
     courses: courses.filter((c) => deadEndIds.has(c.id)).length,
@@ -870,7 +947,7 @@ export default function CataloguePage() {
 
           PADDING, not margin — the page is a `space-y-6` stack, whose
           `> * + *` rule outranks a `mt-*` on a child and silently wins. */}
-      <div className="mb-5 pt-4">
+      <div className={`mb-5 pt-4 ${selection ? 'hidden lg:block' : ''}`}>
         {/* LEFT-ALIGNED from `sm` up. Centred looked right with four tabs and
             wrong with two: a coach has only Activities and Plans, and two tabs
             centred in a full-width band read as stranded rather than composed —
@@ -950,9 +1027,25 @@ export default function CataloguePage() {
         <div className="border-b" />
       </div>
 
+      {/* TWO PANELS ON A DESKTOP, TWO SCREENS ON A PHONE.
+          Side by side is the point of this page — the whole reason it exists is
+          showing plans against the activities they open — so `lg` and up keeps
+          both and a selection is a focus change costing nothing to undo.
+
+          Under `lg` they cannot coexist, and stacking them was a defect rather
+          than a compromise: selecting a row left the detail starting ~700px down
+          the page with no scroll, below the fold, at the top of a list, with
+          nothing on screen saying anything had happened (measured at 375px,
+          Franco, 2026-09-02). So on a phone the list IS the screen until you
+          pick something, and then the detail is — with a back control, which is
+          the affordance that makes it navigation rather than a disappearance. */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
-        <div className="space-y-3 rounded-xl border bg-card p-2">
+        <div
+          className={`space-y-3 rounded-xl border bg-card p-2 ${
+            selection ? 'hidden lg:block' : ''
+          }`}
+        >
 
           {/* ONE LINE PER TAB, printed, and INSIDE THE RAIL: it describes what
               the list below it holds, so it belongs with the list rather than
@@ -1141,11 +1234,54 @@ export default function CataloguePage() {
         </div>
 
         {/* ── the pane ── */}
-        <div className="rounded-xl border bg-card p-4">
+        <div
+          className={`rounded-xl border bg-card p-4 ${
+            selection ? 'motion-safe:animate-in motion-safe:slide-in-from-right-4' : 'hidden lg:block'
+          }`}
+        >
+          {/* THE WAY BACK, on a phone only. On a desktop the list never left,
+              so a back control there would undo something that never happened
+              — and it would compete with clicking another row, which is how a
+              studio actually moves between items. */}
+          {selection && (
+            <button
+              type="button"
+              onClick={() => select(null)}
+              className="mb-3 -ml-1 flex items-center gap-1 rounded-md px-1 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {t('backToList')}
+            </button>
+          )}
+
           {!selection && (
-            <div className="space-y-2 px-4 py-12 text-center">
-              <IdCard className="mx-auto h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">{t('paneEmpty')}</p>
+            <div className="space-y-4 p-2">
+              <div>
+                <h2 className="text-base font-semibold">{t('ovTitle')}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {tabIsEmpty ? t('ovEmptyTab') : t('ovPickHint')}
+                </p>
+              </div>
+
+              {!tabIsEmpty && (
+                <dl className="divide-y rounded-lg border">
+                  {overviewRows.map((row) => (
+                    <div key={row.label} className="flex items-baseline justify-between px-3 py-2">
+                      <dt className="text-sm text-muted-foreground">{row.label}</dt>
+                      {/* Zero is MUTED rather than hidden: "0 sold as drop-in"
+                          is a fact worth seeing, and a row that disappears at
+                          zero makes the list a different shape per studio. */}
+                      <dd
+                        className={`text-sm tabular-nums ${
+                          row.value === 0 ? 'text-muted-foreground/50' : 'font-medium'
+                        }`}
+                      >
+                        {row.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
           )}
 
