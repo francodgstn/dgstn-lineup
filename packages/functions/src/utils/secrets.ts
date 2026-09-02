@@ -19,11 +19,38 @@ const CACHE_TTL = 5 * 60 * 1000
  * Set these in packages/functions/.env.local (loaded automatically by the
  * Functions emulator; never committed to git).
  */
+/**
+ * EVERY RETURN PATH IS TRIMMED, and that is load-bearing rather than tidy.
+ *
+ * A secret is an opaque token — an API key, a webhook signing secret, a
+ * password. None of them has meaningful leading or trailing whitespace, so
+ * trimming can only ever remove damage. What it removes is the damage a human
+ * does when storing one: `gcloud secrets versions add` stores the bytes it is
+ * given, so a value pasted or piped from a Windows editor arrives with a
+ * trailing CRLF and looks perfectly correct in every console that renders it.
+ *
+ * The failure that follows is silent and reads as something else entirely. A
+ * key with a `\r` in it is fed to `new Stripe(key)`, becomes the
+ * `Authorization: Bearer …` header, and Node's ClientRequest refuses it —
+ * `ERR_INVALID_CHAR`, thrown from the HTTP layer with no mention of secrets.
+ * On 2026-08-31 that was every Stripe call in the sandbox: Settings → Payments
+ * rendered its "Start setup" state (getConnectStatus caught the throw), and
+ * every checkout would have died at the callable, while the public shop kept
+ * showing prices because it reads the Firestore mirror and calls no API. A
+ * whole environment could not take a payment, and the surface looked healthy.
+ *
+ * Trim here rather than at each call site: this is the ONE door every secret
+ * comes through, and a per-consumer trim is a rule that only holds until the
+ * next consumer forgets it.
+ */
 export async function getSecret(secretName: string, version = 'latest'): Promise<string> {
   // ── emulator fallback ────────────────────────────────────────────────────────
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
     const envKey = secretName.replace(/-/g, '_').toUpperCase()
-    const value = process.env[envKey]
+    // Trimmed for the same reason as the Secret Manager path below — a value
+    // pasted into packages/functions/.env.local carries whatever the editor
+    // put there, and a trailing CR breaks the emulator identically.
+    const value = process.env[envKey]?.trim()
     if (value) return value
     throw new Error(
       `[emulator] Secret '${secretName}' not found in env. ` +
@@ -48,7 +75,9 @@ export async function getSecret(secretName: string, version = 'latest'): Promise
 
   try {
     const [accessResponse] = await client.accessSecretVersion({ name })
-    const secretValue = accessResponse.payload!.data!.toString()
+    // Trim BEFORE caching, so a warm instance cannot serve the damaged value
+    // for the rest of the cache window.
+    const secretValue = accessResponse.payload!.data!.toString().trim()
     secretCache.set(cacheKey, { value: secretValue, timestamp: now })
     return secretValue
   } catch (error) {

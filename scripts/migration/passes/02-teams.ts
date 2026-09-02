@@ -28,6 +28,11 @@ export async function pass02Teams(cfg: MigrationConfig): Promise<string[]> {
 
     if (!cfg.dryRun) {
       const existing = await tgtRef.get()
+      // NOT under --overwrite, deliberately. A team doc accumulates state the
+      // source has no copy of — the Connect/payments block, bookingSettings,
+      // plan — so a full re-set would silently un-configure a working tenant to
+      // fix a field the source owns. The partial merge below is what the source
+      // is actually authoritative for.
       if (existing.exists) {
         bw.merge(tgtRef, ALWAYS_MERGE)
       } else {

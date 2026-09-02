@@ -13,7 +13,7 @@ export async function pass10Referrals(cfg: MigrationConfig): Promise<void> {
     const tgtRef = tgt.collection('referrals').doc(d.id)
     if (!cfg.dryRun) {
       const existing = await tgtRef.get()
-      if (existing.exists) { bw.skip(); continue }
+      if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
     }
     bw.set(tgtRef, d.data())
   }

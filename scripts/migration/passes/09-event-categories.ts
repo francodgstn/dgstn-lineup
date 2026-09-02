@@ -236,7 +236,7 @@ export async function pass09EventCategories(cfg: MigrationConfig): Promise<void>
       const tgtRef = tgt.collection('events').doc(eventId).collection('categories').doc(id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
+        if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
       }
       bw.set(tgtRef, mapCategory(id, sourceCategories.get(id)!, index))
       written++
