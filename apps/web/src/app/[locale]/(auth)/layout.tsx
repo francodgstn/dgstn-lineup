@@ -95,6 +95,7 @@ import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
 import { FloatingDock } from '@/components/layout/FloatingDock'
 import { PLUGIN_ICON_MAP } from '@/plugins/icons'
+import { Tip } from '@/components/ui/tip'
 
 // Icons referenced by string name in plugin manifest navContributions resolve
 // through the ONE map in @/plugins/icons — this file used to keep its own, and
@@ -469,37 +470,39 @@ function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
   const shown = isAlwaysShown(id)
   if (addOnly && shown) return null
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        toggleAlwaysShown(id)
-      }}
-      title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
-      aria-pressed={shown}
-      className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
-        shown
-          ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
-          : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
-      }`}
-    >
-      {/* Filled while ON — an icon that only changes opacity reads as "hovered",
-          not as "this is switched on", which is the state that matters here.
-          A STAR, since 2026-08-29 (UX-84) — it was a pin (UX-23) until then, but
-          a pin already carries one mental model everywhere else in this nav —
-          "keep this within reach" — worn by the open-tabs strip (see THE
-          NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). Reusing it here for
-          "this is a personal favourite" doubled that meaning onto one glyph,
-          which is also what the star was doing at the other end: a few hundred
-          lines below, the same star meant "recommended by Linyup" on a plugin
-          suggestion row. Both collisions were solved in the same pass by giving
-          each meaning its own glyph — this one keeps the star ("favourite," a
-          personal choice), the plugin suggestion moved to a puzzle piece
-          ("plugin," an endorsement) — so no glyph on this screen carries two
-          meanings any more. */}
-      <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
-    </button>
+    <Tip label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          toggleAlwaysShown(id)
+        }}
+        aria-label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+        aria-pressed={shown}
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
+          shown
+            ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
+            : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
+        }`}
+      >
+        {/* Filled while ON — an icon that only changes opacity reads as "hovered",
+            not as "this is switched on", which is the state that matters here.
+            A STAR, since 2026-08-29 (UX-84) — it was a pin (UX-23) until then, but
+            a pin already carries one mental model everywhere else in this nav —
+            "keep this within reach" — worn by the open-tabs strip (see THE
+            NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). Reusing it here for
+            "this is a personal favourite" doubled that meaning onto one glyph,
+            which is also what the star was doing at the other end: a few hundred
+            lines below, the same star meant "recommended by Linyup" on a plugin
+            suggestion row. Both collisions were solved in the same pass by giving
+            each meaning its own glyph — this one keeps the star ("favourite," a
+            personal choice), the plugin suggestion moved to a puzzle piece
+            ("plugin," an endorsement) — so no glyph on this screen carries two
+            meanings any more. */}
+        <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+      </button>
+    </Tip>
   )
 }
 
@@ -533,42 +536,46 @@ function NavLink({
 
   if (isLocked) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          openUpgradeModal({ minPlan: item.minPlan })
-          onClick?.()
-        }}
-        title={collapsed ? label : undefined}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
-          collapsed ? 'justify-center px-2' : ''
-        }`}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed && (
-          <>
-            <span className="flex-1 text-left">{label}</span>
-            <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
-          </>
-        )}
-      </button>
+      <Tip label={collapsed ? label : undefined} side="right">
+        <button
+          type="button"
+          onClick={() => {
+            openUpgradeModal({ minPlan: item.minPlan })
+            onClick?.()
+          }}
+          aria-label={collapsed ? label : undefined}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
+            collapsed ? 'justify-center px-2' : ''
+          }`}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">{label}</span>
+              <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
+            </>
+          )}
+        </button>
+      </Tip>
     )
   }
 
   const link = (
-    <Link
-      href={item.href as Route}
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span>{label}</span>}
-    </Link>
+    <Tip label={collapsed ? label : undefined} side="right">
+      <Link
+        href={item.href as Route}
+        onClick={onClick}
+        aria-label={collapsed ? label : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span>{label}</span>}
+      </Link>
+    </Tip>
   )
 
   if (shortcutId && !collapsed) {
@@ -841,18 +848,19 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       {expanded && overflows && hidden.length > 0 ? (
         <UtilityFlyout onLinkClick={onLinkClick} items={hidden} />
       ) : revealable.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setPinned((prev) => !prev)}
-          title={t('utilities')}
-          aria-label={t('utilities')}
-          aria-expanded={expanded}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-          />
-        </button>
+        <Tip label={t('utilities')}>
+          <button
+            type="button"
+            onClick={() => setPinned((prev) => !prev)}
+            aria-label={t('utilities')}
+            aria-expanded={expanded}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+        </Tip>
       ) : null}
     </div>
   )
@@ -897,14 +905,15 @@ function UtilityFlyout({
     <NavFlyout
       label={label}
       trigger={
-        <button
-          type="button"
-          title={label}
-          aria-label={label}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4 shrink-0" />
-        </button>
+        <Tip label={label}>
+          <button
+            type="button"
+            aria-label={label}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <MoreHorizontal className="h-4 w-4 shrink-0" />
+          </button>
+        </Tip>
       }
     >
       {/* A labelled column, not the icon strip this used to be: once the menu is
@@ -1044,20 +1053,21 @@ function OrgNavRows({
           const Icon = item.icon
           const label = t(item.labelKey as Parameters<typeof t>[0])
           return (
-            <Link
-              key={item.id}
-              href={href as Route}
-              onClick={onLinkClick}
-              title={collapsed ? label : undefined}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                isActive
-                  ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-                  : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-              } ${collapsed ? 'justify-center px-2' : ''}`}
-            >
-              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span className="truncate">{label}</span>}
-            </Link>
+            <Tip key={item.id} label={collapsed ? label : undefined} side="right">
+              <Link
+                href={href as Route}
+                onClick={onLinkClick}
+                aria-label={collapsed ? label : undefined}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                  isActive
+                    ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+                    : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+                } ${collapsed ? 'justify-center px-2' : ''}`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </Link>
+            </Tip>
           )
         })}
       </div>
@@ -1323,18 +1333,19 @@ function PluginNavItem({
           <Puzzle className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-amber-500/60 transition-opacity group-hover/suggestion:opacity-0" />
         )}
         {!collapsed && onDismiss && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDismiss(nav.pluginId)
-            }}
-            title={t('hideSuggestion')}
-            aria-label={t('hideSuggestion')}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/suggestion:opacity-100"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('hideSuggestion')}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDismiss(nav.pluginId)
+              }}
+              aria-label={t('hideSuggestion')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/suggestion:opacity-100"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         )}
       </div>
     )
@@ -1343,19 +1354,21 @@ function PluginNavItem({
   const isActive = pathname.startsWith(nav.href)
   const shortcutId = `plugin:${nav.pluginId}:${nav.href}`
   const link = (
-    <Link
-      href={nav.href as Route}
-      onClick={onLinkClick}
-      title={collapsed ? linkLabel : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : 'pr-8'}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span>{linkLabel}</span>}
-    </Link>
+    <Tip label={collapsed ? linkLabel : undefined} side="right">
+      <Link
+        href={nav.href as Route}
+        onClick={onLinkClick}
+        aria-label={collapsed ? linkLabel : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : 'pr-8'}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span>{linkLabel}</span>}
+      </Link>
+    </Tip>
   )
   if (collapsed) return link
   return (
@@ -1667,20 +1680,22 @@ function ShortcutRow({
   const isActive = entry.exact ? pathname === path : pathname.startsWith(path)
   const Icon = entry.icon
   const link = (
-    <Link
-      href={entry.href as Route}
-      onClick={onClick}
-      draggable={false}
-      title={collapsed ? entry.label : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : 'pr-14'}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span className="truncate">{entry.label}</span>}
-    </Link>
+    <Tip label={collapsed ? entry.label : undefined} side="right">
+      <Link
+        href={entry.href as Route}
+        onClick={onClick}
+        draggable={false}
+        aria-label={collapsed ? entry.label : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : 'pr-14'}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span className="truncate">{entry.label}</span>}
+      </Link>
+    </Tip>
   )
   if (collapsed) return link
   return (
@@ -1688,19 +1703,20 @@ function ShortcutRow({
       {link}
       {/* Remove from Favourites entirely — the star only promotes/demotes
           (turning "always show" off keeps the row listed as a recent). */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          removeShortcut(entry.id)
-        }}
-        title={t('navRemoveShortcut')}
-        aria-label={t('navRemoveShortcut')}
-        className="absolute right-7 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <Tip label={t('navRemoveShortcut')}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            removeShortcut(entry.id)
+          }}
+          aria-label={t('navRemoveShortcut')}
+          className="absolute right-7 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </Tip>
       <ShortcutButton id={entry.id} />
     </div>
   )
@@ -1904,15 +1920,16 @@ function ShortcutsNav({
           <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
             {t('navGroupShortcuts')}
           </p>
-          <button
-            type="button"
-            onClick={() => setClearOpen(true)}
-            title={t('navShortcutsClear')}
-            aria-label={t('navShortcutsClear')}
-            className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Eraser className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('navShortcutsClear')}>
+            <button
+              type="button"
+              onClick={() => setClearOpen(true)}
+              aria-label={t('navShortcutsClear')}
+              className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Eraser className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         </div>
       )}
       {!collapsed && (
@@ -3206,18 +3223,20 @@ function SidebarContent({
                     <NavFlyout
                       label={label}
                       trigger={
-                        <button
-                          type="button"
-                          title={label}
-                          aria-current={sectionHoldsActive ? 'true' : undefined}
-                          className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-accent ${
-                            sectionHoldsActive
-                              ? 'text-primary hover:text-primary'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          <SectionIcon className="h-4 w-4 shrink-0" />
-                        </button>
+                        <Tip label={label}>
+                          <button
+                            type="button"
+                            aria-label={label}
+                            aria-current={sectionHoldsActive ? 'true' : undefined}
+                            className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-accent ${
+                              sectionHoldsActive
+                                ? 'text-primary hover:text-primary'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            <SectionIcon className="h-4 w-4 shrink-0" />
+                          </button>
+                        </Tip>
                       }
                     >
                       {rows}

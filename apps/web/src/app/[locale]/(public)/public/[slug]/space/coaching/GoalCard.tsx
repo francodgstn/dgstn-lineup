@@ -22,6 +22,7 @@ import { GoalFormDialog } from './GoalFormDialog'
 import { EvaluationFormDialog } from './EvaluationFormDialog'
 import { useAddGoalEvaluation, useGoalEvaluations } from './useSpaceGoals'
 import type { SpaceGoalsState } from './useSpaceGoals'
+import { Tip } from '@/components/ui/tip'
 
 const STATUS_KEYS: Record<GoalStatus, string> = {
   open: 'statusOpen',
@@ -86,12 +87,16 @@ export function GoalCard({ goal, steps, categories, dimensions, createGoal, upda
         </div>
         {own ? (
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={() => setEditing(true)} title={t('editGoal')}>
-              <Pencil className="h-3.5 w-3.5" style={{ color: textMuted }} />
-            </button>
-            <button type="button" onClick={handleDelete} disabled={deleteGoal.isPending} title={t('deleteGoal')}>
-              <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
-            </button>
+            <Tip label={t('editGoal')}>
+              <button type="button" onClick={() => setEditing(true)} aria-label={t('editGoal')}>
+                <Pencil className="h-3.5 w-3.5" style={{ color: textMuted }} />
+              </button>
+            </Tip>
+            <Tip label={t('deleteGoal')}>
+              <button type="button" onClick={handleDelete} disabled={deleteGoal.isPending} aria-label={t('deleteGoal')}>
+                <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
+              </button>
+            </Tip>
           </div>
         ) : (
           <span title={t('goalCoachCreatedNote')} className="shrink-0">

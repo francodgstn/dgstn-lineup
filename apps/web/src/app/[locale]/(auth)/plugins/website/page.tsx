@@ -76,6 +76,7 @@ import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugi
 import { EmbedWidgets } from '@/plugins/website/EmbedWidgets'
 import { SECTION_LIBRARY, newSection, newSectionId, emptyDraft } from '@/plugins/website/defaults'
 import { getWebsiteLimits } from '@/plugins/website/limits'
+import { Tip } from '@/components/ui/tip'
 
 const limits = getWebsiteLimits()
 
@@ -653,28 +654,31 @@ export default function WebsiteBuilderPage() {
                                   Never for the hero: it is the top of the page
                                   and is not a menu destination. */}
                               {s.type !== 'hero' && (
+                                <Tip label={t('addToMenu')}>
+                                  <button
+                                    type="button"
+                                    onClick={() => addSectionToMenu(s)}
+                                    aria-label={t('addToMenu')}
+                                    className="rounded p-1 hover:bg-muted"
+                                  >
+                                    <ListPlus className="h-3.5 w-3.5" />
+                                  </button>
+                                </Tip>
+                              )}
+                              <Tip label={t('toggleVisible')}>
                                 <button
                                   type="button"
-                                  onClick={() => addSectionToMenu(s)}
-                                  title={t('addToMenu')}
-                                  aria-label={t('addToMenu')}
+                                  onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                                  aria-label={t('toggleVisible')}
                                   className="rounded p-1 hover:bg-muted"
                                 >
-                                  <ListPlus className="h-3.5 w-3.5" />
+                                  {s.hidden ? (
+                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => updateSection(s.id, { hidden: !s.hidden })}
-                                title={t('toggleVisible')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                {s.hidden ? (
-                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setOpenId(open ? null : s.id)}
@@ -682,14 +686,16 @@ export default function WebsiteBuilderPage() {
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => duplicateSection(s.id)}
-                                title={tCommon('duplicate')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
+                              <Tip label={tCommon('duplicate')}>
+                                <button
+                                  type="button"
+                                  onClick={() => duplicateSection(s.id)}
+                                  aria-label={tCommon('duplicate')}
+                                  className="rounded p-1 hover:bg-muted"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setDeleteId(s.id)}

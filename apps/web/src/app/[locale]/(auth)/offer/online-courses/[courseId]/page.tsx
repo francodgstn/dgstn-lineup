@@ -45,6 +45,7 @@ import {
 } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
+import { Tip } from '@/components/ui/tip'
 
 const LESSON_ICON: Record<LessonType, typeof FileText> = {
   text: FileText,
@@ -183,9 +184,11 @@ function LessonPanel({
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b">
         <span className="text-sm font-medium">{initial ? t('editLesson') : t('addLesson')}</span>
-        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} title={t('cancel')}>
-          <X className="h-4 w-4" />
-        </Button>
+        <Tip label={t('cancel')}>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} aria-label={t('cancel')}>
+            <X className="h-4 w-4" />
+          </Button>
+        </Tip>
       </div>
 
       <div className="p-4 space-y-5">

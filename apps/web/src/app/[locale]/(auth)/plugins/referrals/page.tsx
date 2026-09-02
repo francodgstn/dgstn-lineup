@@ -30,6 +30,7 @@ import { Gift, RefreshCw, Info } from 'lucide-react'
 import {
   TEAMS_COLLECTION, CONTACTS_COLLECTION, REFERRALS_COLLECTION,
 } from '@linyup/shared'
+import { Tip } from '@/components/ui/tip'
 
 /**
  * A referral names two people, and both ids are on the row — so both are links
@@ -389,9 +390,11 @@ function ReferralsTab({
             </Button>
           ))}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setInfoOpen(true)} title={t('table.statusGuide')}>
-          <Info className="h-4 w-4" />
-        </Button>
+        <Tip label={t('table.statusGuide')}>
+          <Button size="sm" variant="ghost" onClick={() => setInfoOpen(true)} aria-label={t('table.statusGuide')}>
+            <Info className="h-4 w-4" />
+          </Button>
+        </Tip>
       </div>
 
       {/* Table */}

@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { MapPin, Plus, Trash2, ExternalLink, Star, Building2, X, Pencil, DoorOpen } from 'lucide-react'
 import type { Place, PlaceRoom } from '@linyup/shared'
+import { Tip } from '@/components/ui/tip'
 
 export interface PlaceFormValues {
   name: string
@@ -388,14 +389,16 @@ function PlaceCard({
       {!readOnly && (
         <div className="flex shrink-0 items-center gap-1">
           {allowPrimary && !place.isPrimary && onSetPrimary && (
-            <button
-              type="button"
-              onClick={onSetPrimary}
-              title={t('setAsMainAddress')}
-              className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Star className="h-4 w-4" />
-            </button>
+            <Tip label={t('setAsMainAddress')}>
+              <button
+                type="button"
+                onClick={onSetPrimary}
+                aria-label={t('setAsMainAddress')}
+                className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Star className="h-4 w-4" />
+              </button>
+            </Tip>
           )}
           <button
             type="button"

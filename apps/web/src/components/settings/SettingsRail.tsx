@@ -17,6 +17,7 @@ import { useNavPins } from '@/contexts/NavPinsContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { NavRail, type NavRailGroup } from './NavRail'
+import { Tip } from '@/components/ui/tip'
 
 export function SettingsRail() {
   const t = useTranslations('Nav')
@@ -92,32 +93,34 @@ export function SettingsRail() {
         active: isActive(item.href),
         keywords: keywordsOf(item.id),
         trailing: (
-          <button
-            type="button"
-            onClick={() => toggleAlwaysShown(item.id)}
-            title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
-            aria-pressed={shown}
-            className={`absolute right-1 rounded-md p-1 transition-all ${
-              shown
-                ? 'text-primary opacity-100'
-                : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
-            }`}
-          >
-            {/* A star, matching the "always show in Favourites" toggle in the
-                main sidebar (ShortcutButton, app/[locale]/(auth)/layout.tsx) —
-                the two must never drift, since both read/write the same
-                `useNavPins` state. NOTE: on /settings/plugins this row (for the
-                "Plugins" settings destination itself) sits on the same screen as
-                the marketplace GRID's own amber "recommended" star badge on each
-                plugin card — that one is a different object (a manifest flag,
-                not a personal choice) and was out of scope for the 2026-08-29
-                rename (UX-84), which only moved the SIDEBAR's collision (nav
-                favourite vs. nav plugin-suggestion, both then a star) onto a
-                puzzle piece. If the two stars on /settings/plugins read as
-                confusing in practice, the marketplace grid is the one left to
-                move. */}
-            <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
-          </button>
+          <Tip label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}>
+            <button
+              type="button"
+              onClick={() => toggleAlwaysShown(item.id)}
+              aria-label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+              aria-pressed={shown}
+              className={`absolute right-1 rounded-md p-1 transition-all ${
+                shown
+                  ? 'text-primary opacity-100'
+                  : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
+              }`}
+            >
+              {/* A star, matching the "always show in Favourites" toggle in the
+                  main sidebar (ShortcutButton, app/[locale]/(auth)/layout.tsx) —
+                  the two must never drift, since both read/write the same
+                  `useNavPins` state. NOTE: on /settings/plugins this row (for the
+                  "Plugins" settings destination itself) sits on the same screen as
+                  the marketplace GRID's own amber "recommended" star badge on each
+                  plugin card — that one is a different object (a manifest flag,
+                  not a personal choice) and was out of scope for the 2026-08-29
+                  rename (UX-84), which only moved the SIDEBAR's collision (nav
+                  favourite vs. nav plugin-suggestion, both then a star) onto a
+                  puzzle piece. If the two stars on /settings/plugins read as
+                  confusing in practice, the marketplace grid is the one left to
+                  move. */}
+              <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+            </button>
+          </Tip>
         ),
       }
     }),

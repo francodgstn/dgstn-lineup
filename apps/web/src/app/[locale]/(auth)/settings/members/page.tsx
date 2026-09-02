@@ -61,6 +61,7 @@ import {
 } from '@linyup/shared'
 import type { TeamInvitation, TeamRole } from '@linyup/shared'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
+import { Tip } from '@/components/ui/tip'
 
 // ----- types ----------------------------------------------------------------
 
@@ -360,20 +361,21 @@ function MemberEmail({ email }: { email: string }) {
   return (
     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="truncate">{email}</span>
-      <button
-        type="button"
-        onClick={() => {
-          navigator.clipboard.writeText(email).then(() => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          })
-        }}
-        title={copied ? t('copied') : t('copyEmail')}
-        aria-label={t('copyEmail')}
-        className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground"
-      >
-        {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
-      </button>
+      <Tip label={copied ? t('copied') : t('copyEmail')}>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(email).then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            })
+          }}
+          aria-label={t('copyEmail')}
+          className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground"
+        >
+          {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+        </button>
+      </Tip>
     </div>
   )
 }
@@ -753,15 +755,17 @@ export default function TeamMembersPage() {
                       {t('statusPending')}
                     </Badge>
                     {canManage && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setCancelInviteTarget(inv)}
-                        title={t('cancelInvite')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <Tip label={t('cancelInvite')}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setCancelInviteTarget(inv)}
+                          aria-label={t('cancelInvite')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </Tip>
                     )}
                   </div>
                 </li>

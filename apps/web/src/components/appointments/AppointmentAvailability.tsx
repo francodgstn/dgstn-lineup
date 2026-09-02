@@ -60,6 +60,7 @@ import type { Availability, AvailabilityException, AppointmentBooking, Session, 
 import { useActivities } from '@/hooks/useActivities'
 import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { Pause, Play, Pencil, Plus, MapPin, Video, CalendarClock, CalendarOff, ChevronRight, Trash2, X, User } from 'lucide-react'
+import { Tip } from '@/components/ui/tip'
 
 // ─── error surfacing (mirrors AppointmentFormDialog / TemplateDialog conventions) ──
 
@@ -1515,24 +1516,27 @@ export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <button onClick={() => toggleTemplateStatus(tmpl)}
-                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                                  title={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}
-                                  aria-label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
-                                  {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </button>
-                                <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
-                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
-                                  title={t('editTemplate')}
-                                  aria-label={t('editTemplate')}>
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => setDeletingTemplate(tmpl)}
-                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
-                                  title={t('deleteTemplate')}
-                                  aria-label={t('deleteTemplate')}>
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                <Tip label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                                  <button onClick={() => toggleTemplateStatus(tmpl)}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                                    aria-label={tmpl.status === 'active' ? t('pauseTemplate') : t('resumeTemplate')}>
+                                    {tmpl.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                  </button>
+                                </Tip>
+                                <Tip label={t('editTemplate')}>
+                                  <button onClick={() => setTemplateDialog({ open: true, editing: tmpl })}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                                    aria-label={t('editTemplate')}>
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                </Tip>
+                                <Tip label={t('deleteTemplate')}>
+                                  <button onClick={() => setDeletingTemplate(tmpl)}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+                                    aria-label={t('deleteTemplate')}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </Tip>
                               </div>
                             </div>
                           ))
@@ -1557,16 +1561,17 @@ export function AppointmentAvailabilityManager({ teamId, userId, variant = 'page
                                   {formatExceptionRange(exc.start.toDate(), exc.end.toDate())}
                                   {exc.note && <span className="text-muted-foreground"> · {exc.note}</span>}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => void deleteException(exc.id)}
-                                  disabled={deletingExceptionId === exc.id}
-                                  title={t('timeOffRemove')}
-                                  aria-label={t('timeOffRemove')}
-                                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                <Tip label={t('timeOffRemove')}>
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteException(exc.id)}
+                                    disabled={deletingExceptionId === exc.id}
+                                    aria-label={t('timeOffRemove')}
+                                    className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </Tip>
                               </li>
                             ))}
                           </ul>

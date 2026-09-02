@@ -19,6 +19,7 @@ import { SeriesSummary } from '@/components/sessions/SeriesSummary'
 import { SESSIONS_COLLECTION, PARTICIPANTS_SUBCOLLECTION } from '@linyup/shared'
 import type { Session, Activity, Booking } from '@linyup/shared'
 import type { Route } from 'next'
+import { Tip } from '@/components/ui/tip'
 
 const BOOKINGS_SUB = 'bookings'
 const PARTICIPANTS_PREVIEW_LIMIT = 8
@@ -160,23 +161,27 @@ export function SessionPeekSheet({ sessionId, onClose, activities, onEdit, onDel
                 </div>
                 {/* Action icons in the header — visible immediately without scrolling */}
                 <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onEdit(session)}
-                    title={t('peekEdit')}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => onDelete(session)}
-                    title={t('peekDelete')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <Tip label={t('peekEdit')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onEdit(session)}
+                      aria-label={t('peekEdit')}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tip>
+                  <Tip label={t('peekDelete')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => onDelete(session)}
+                      aria-label={t('peekDelete')}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tip>
                 </div>
               </div>
               <div className="space-y-1.5 text-sm text-muted-foreground mt-1">

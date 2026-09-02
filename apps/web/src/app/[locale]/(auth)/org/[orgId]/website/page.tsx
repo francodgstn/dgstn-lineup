@@ -48,6 +48,7 @@ import { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { OrgSectionEditor } from './OrgSectionEditor'
 import { useOrgSiteDraft, saveOrgSiteDraft, publishOrgSite, unpublishOrgSite } from './hooks'
 import { ORG_SECTION_LIBRARY, newOrgSection, emptyOrgDraft } from './defaults'
+import { Tip } from '@/components/ui/tip'
 
 const MAX_SECTIONS = 12
 
@@ -519,18 +520,20 @@ export default function OrgWebsiteBuilderPage() {
                               <p className="truncate text-xs text-muted-foreground">{sectionSummary(s)}</p>
                             </button>
                             <div className="flex items-center gap-0.5">
-                              <button
-                                type="button"
-                                onClick={() => updateSection(s.id, { hidden: !s.hidden })}
-                                title={t('toggleVisible')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                {s.hidden ? (
-                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+                              <Tip label={t('toggleVisible')}>
+                                <button
+                                  type="button"
+                                  onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                                  aria-label={t('toggleVisible')}
+                                  className="rounded p-1 hover:bg-muted"
+                                >
+                                  {s.hidden ? (
+                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setOpenId(open ? null : s.id)}

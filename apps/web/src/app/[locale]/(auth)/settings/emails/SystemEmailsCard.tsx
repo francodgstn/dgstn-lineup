@@ -26,6 +26,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { MailCheck, Plus, X } from 'lucide-react'
+import { Tip } from '@/components/ui/tip'
 
 type ToggleKey =
   | 'booking_confirmation'
@@ -123,15 +124,17 @@ function ReminderStepsEditor({
                 ))}
             </SelectContent>
           </Select>
-          <button
-            type="button"
-            disabled={disabled || steps.length <= 1}
-            onClick={() => onChange(steps.filter((_, idx) => idx !== i))}
-            className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors disabled:opacity-30"
-            title={t('reminderRemoveStep')}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('reminderRemoveStep')}>
+            <button
+              type="button"
+              disabled={disabled || steps.length <= 1}
+              onClick={() => onChange(steps.filter((_, idx) => idx !== i))}
+              className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors disabled:opacity-30"
+              aria-label={t('reminderRemoveStep')}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         </div>
       ))}
       <div className="flex items-center justify-between gap-2">

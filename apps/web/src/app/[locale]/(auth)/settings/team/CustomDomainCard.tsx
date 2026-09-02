@@ -17,6 +17,7 @@ import {
   type PublicDomainStatus,
   type SaasPlan,
 } from '@linyup/shared'
+import { Tip } from '@/components/ui/tip'
 
 /**
  * The studio's custom PUBLIC domain — where their pages are SERVED from, as
@@ -219,18 +220,20 @@ export function CustomDomainCard({
                       <td className="px-3 py-2 font-mono break-all">{config.dns_record.host}</td>
                       <td className="px-3 py-2 font-mono break-all">{config.dns_record.value}</td>
                       <td className="px-2 py-2">
-                        <button
-                          type="button"
-                          onClick={() => copy(config.dns_record.value)}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                          title={t('copyValue')}
-                        >
-                          {copied ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                        <Tip label={t('copyValue')}>
+                          <button
+                            type="button"
+                            onClick={() => copy(config.dns_record.value)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={t('copyValue')}
+                          >
+                            {copied ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </Tip>
                       </td>
                     </tr>
                   </tbody>

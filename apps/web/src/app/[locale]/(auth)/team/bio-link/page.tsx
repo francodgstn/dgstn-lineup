@@ -56,6 +56,7 @@ import {
   Share2,
 } from 'lucide-react'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { Tip } from '@/components/ui/tip'
 
 // ─── form schema ─────────────────────────────────────────────────────────────
 
@@ -411,18 +412,20 @@ function LinksTab({
                         control={control}
                         name={`links.${i}.showInBioLink`}
                         render={({ field: cf }) => (
-                          <button
-                            type="button"
-                            onClick={() => cf.onChange(!cf.value)}
-                            title={t('showOnBioLink')}
-                            className="rounded p-1 hover:bg-muted"
-                          >
-                            {cf.value === false ? (
-                              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                          <Tip label={t('showOnBioLink')}>
+                            <button
+                              type="button"
+                              onClick={() => cf.onChange(!cf.value)}
+                              aria-label={t('showOnBioLink')}
+                              className="rounded p-1 hover:bg-muted"
+                            >
+                              {cf.value === false ? (
+                                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </Tip>
                         )}
                       />
                       <button

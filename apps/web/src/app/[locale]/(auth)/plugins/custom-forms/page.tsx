@@ -20,6 +20,7 @@ import { ClipboardList, Plus, Copy, MessageSquare } from 'lucide-react'
 import type { Form, FormStatus } from '@linyup/shared'
 import { useForms, createForm, duplicateForm, countForms } from '@/plugins/custom-forms/hooks'
 import { MAX_FORMS_PER_TEAM } from '@/plugins/custom-forms/limits'
+import { Tip } from '@/components/ui/tip'
 
 const STATUS_BADGE: Record<FormStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -67,16 +68,17 @@ function FormCard({
         </span>
       </div>
     </button>
-      <button
-        type="button"
-        onClick={onDuplicate}
-        disabled={duplicating}
-        title={tCommon('duplicate')}
-        aria-label={tCommon('duplicate')}
-        className="absolute bottom-3 right-3 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-      >
-        <Copy className="h-4 w-4" />
-      </button>
+      <Tip label={tCommon('duplicate')}>
+        <button
+          type="button"
+          onClick={onDuplicate}
+          disabled={duplicating}
+          aria-label={tCommon('duplicate')}
+          className="absolute bottom-3 right-3 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          <Copy className="h-4 w-4" />
+        </button>
+      </Tip>
     </div>
   )
 }

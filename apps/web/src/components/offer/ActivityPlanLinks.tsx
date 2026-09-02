@@ -66,6 +66,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { SectionHeading } from '@/components/layout/SectionHeading'
+import { Tip } from '@/components/ui/tip'
 
 const DEFAULT_ACCENT = '#6366f1'
 
@@ -481,15 +482,16 @@ export function ActivityPlanLinks({
               const choiceLabel = c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)
               return (
                 <div key={c} className="flex items-center justify-center bg-muted/10 px-1 py-1">
-                  <button
-                    type="button"
-                    onClick={() => setColumn(c)}
-                    title={t('setColumn', { choice: choiceLabel })}
-                    aria-label={t('setColumn', { choice: choiceLabel })}
-                    className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <ChevronsDown className="h-3.5 w-3.5" />
-                  </button>
+                  <Tip label={t('setColumn', { choice: choiceLabel })}>
+                    <button
+                      type="button"
+                      onClick={() => setColumn(c)}
+                      aria-label={t('setColumn', { choice: choiceLabel })}
+                      className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <ChevronsDown className="h-3.5 w-3.5" />
+                    </button>
+                  </Tip>
                 </div>
               )
             })}

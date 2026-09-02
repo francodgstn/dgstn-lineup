@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
 import { CustomDomainCard } from '../team/CustomDomainCard'
+import { Tip } from '@/components/ui/tip'
 
 const KEY_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
@@ -261,17 +262,19 @@ function EmailSenderForm({
                         <td className="px-3 py-2 font-mono break-all max-w-[160px]">{record.host}</td>
                         <td className="px-3 py-2 font-mono break-all max-w-[200px]">{record.value}</td>
                         <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(record.value, `${idx}-value`)}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                            title={t('copyValue')}
-                          >
-                            {copiedKey === `${idx}-value`
-                              ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                              : <Copy className="h-3.5 w-3.5" />
-                            }
-                          </button>
+                          <Tip label={t('copyValue')}>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(record.value, `${idx}-value`)}
+                              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label={t('copyValue')}
+                            >
+                              {copiedKey === `${idx}-value`
+                                ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                : <Copy className="h-3.5 w-3.5" />
+                              }
+                            </button>
+                          </Tip>
                         </td>
                       </tr>
                     ))}
