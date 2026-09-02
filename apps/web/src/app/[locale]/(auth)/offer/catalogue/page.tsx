@@ -1108,6 +1108,19 @@ export default function CataloguePage() {
             selection ? 'hidden lg:block' : ''
           }`}
         >
+          {/* KEYED ON THE TAB so the list announces that it CHANGED. Switching
+              tabs swaps every row at once while the frame around them stays
+              put, which without motion reads as a redraw rather than as a
+              move — the same reason the pane slides when the selection changes
+              (Franco, 2026-09-02).
+
+              From the LEFT, where the pane comes from the right: the two
+              panels then move away from each other rather than in convoy, so
+              the direction says which half changed. */}
+          <div
+            key={activeTab}
+            className="space-y-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-left-3 motion-safe:duration-200"
+          >
 
           {/* ONE LINE PER TAB, printed, and INSIDE THE RAIL: it describes what
               the list below it holds, so it belongs with the list rather than
@@ -1225,7 +1238,7 @@ export default function CataloguePage() {
           )}
 
           {!loading && activeTab === 'plans' && (
-            <div className="space-y-0.5 p-1">
+            <div className="space-y-2.5 p-1">
               {plans.length === 0 ? (
                 <RailEmpty text={t('noPlans')} />
               ) : (
@@ -1251,7 +1264,7 @@ export default function CataloguePage() {
           )}
 
           {!loading && activeTab === 'courses' && (
-            <div className="space-y-0.5 p-1">
+            <div className="space-y-2.5 p-1">
               {visibleCourses.length === 0 ? (
                 <RailEmpty text={onlyDeadEnds ? t('noneFiltered') : t('noCourses')} />
               ) : (
@@ -1272,7 +1285,7 @@ export default function CataloguePage() {
           )}
 
           {!loading && activeTab === 'products' && (
-            <div className="space-y-0.5 p-1">
+            <div className="space-y-2.5 p-1">
               {/* NEVER filtered by the dead-end banner: no health code is ever
                   raised for a product (it has no access rule to be wrong), so
                   filtering would empty the tab and imply the opposite. */}
@@ -1293,10 +1306,19 @@ export default function CataloguePage() {
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* ── the pane ── */}
-        <div className={`lg:pl-1 ${selection ? '' : 'hidden lg:block'}`}>
+        {/* THE PANE IS A CARD. It is a settings surface — a stack of fields,
+            switches and a table — and a panel of controls floating on the page
+            background has no edge saying where the form starts and the page
+            ends (Franco, 2026-09-02). */}
+        <div
+          className={`rounded-xl border bg-card p-4 ${
+            selection ? '' : 'hidden lg:block'
+          }`}
+        >
           {/* KEYED ON THE SELECTION so the slide replays on EVERY change, not
               only the first. `animate-in` fires on mount, and the pane element
               itself never unmounts — it only gains and loses `hidden` — so
@@ -1960,7 +1982,10 @@ function RailGroup({
   return (
     <div>
       <SectionHeading level="eyebrow" icon={Icon} title={label} className="px-2 pb-1.5 pt-2" />
-      <div className="space-y-1">{children}</div>
+      {/* Cards need a real gap, not a hairline's worth of space — at
+          `space-y-1` twenty bordered rows read as one striped block, and the
+          eye has to find each boundary instead of being handed it. */}
+      <div className="space-y-2.5">{children}</div>
     </div>
   )
 }
@@ -2026,9 +2051,21 @@ function RailRow({
     <div
       ref={sortable?.setNodeRef}
       style={sortable?.style}
-      className={`group flex items-center rounded-lg ${
-        sortable?.isDragging ? 'bg-card shadow-lg' : ''
-      } ${selected ? 'bg-primary/10' : 'hover:bg-muted'}`}
+      // ONE CARD PER ITEM. The rail lost its wrapping card, and a bare list on
+      // the page background gave each item no edge of its own — so a card each,
+      // which also gives the selected one somewhere to put its state (Franco,
+      // 2026-09-02).
+      //
+      // The border carries selection rather than a fill: on a card the fill
+      // reads as a hover that got stuck, while a coloured edge reads as "this
+      // one", and it survives the drag shadow without fighting it.
+      className={`group flex items-center rounded-lg border bg-card transition-colors ${
+        sortable?.isDragging ? 'shadow-lg' : ''
+      } ${
+        selected
+          ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+          : 'hover:border-muted-foreground/30 hover:bg-muted/40'
+      }`}
     >
       {sortable && (
         <button
@@ -2051,9 +2088,11 @@ function RailRow({
         aria-pressed={selected}
         // ROOM TO SCAN. Two lines of text in `py-1.5` made a rail of twenty
         // items one dense block; the eye needs a gap to find the boundary
-        // between rows, and the name is doing the work now that it has weight
-        // (Franco, 2026-09-02).
-        className={`flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-2.5 text-left ${
+        // between rows, and the name is doing the work now that it has weight.
+        // Loosened again once each row became a card — a border makes tight
+        // padding read as cramped where whitespace alone did not (Franco,
+        // 2026-09-02).
+        className={`flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2.5 py-3 text-left ${
           selected ? 'text-primary' : ''
         }`}
       >
