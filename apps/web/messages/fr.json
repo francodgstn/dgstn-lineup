@@ -1779,7 +1779,8 @@
     "sectionAppearanceTitle": "Apparence",
     "sectionAppearanceHint": "Couleur et libellés affichés sur votre page publique.",
     "sectionVisitorTitle": "Ce que voit un visiteur",
-    "sectionVisitorHint": "Les textes et questions rencontrés avant de réserver. Tous les champs sont facultatifs."
+    "sectionVisitorHint": "Les textes et questions rencontrés avant de réserver. Tous les champs sont facultatifs.",
+    "durationsInCatalogue": "Les durées, leurs tarifs et le tarif membre se définissent dans Accès et tarifs, à côté des abonnements auxquels ils s'appliquent."
   },
   "Benefit": {
     "fieldLabel": "Avantage membre",
@@ -7521,7 +7522,7 @@
     "noneFiltered": "Aucun dans ce groupe.",
     "noPlans": "Aucun abonnement pour l'instant.",
     "noPlansAction": "Créer un abonnement",
-    "noPriceAppointment": "Ce rendez-vous n'a pas de tarif, il n'y a donc rien à réduire. Tarifez une durée pour que cela s'applique.",
+    "noPriceAppointment": "Cette durée n'a pas de tarif, il n'y a donc rien à réduire. Fixez-en un ci-dessus pour que cela s'applique.",
     "noPriceCourse": "Ce cours n'est pas en vente, il n'y a donc pas encore de prix à réduire. Cochez « Vendre sans formule » dans les réglages du cours.",
     "noPriceDropIn": "Ce cours ne vend pas de drop-in, il n'y a donc pas encore de prix à réduire. Ajoutez un tarif drop-in pour que cela s'applique.",
     "noProducts": "Aucun produit pour l'instant.",
@@ -7568,7 +7569,10 @@
     "toGiftCards": "Cartes cadeaux",
     "toPricing": "Tarifs",
     "toSchedule": "Planning",
-    "unsaved": "Modifications non enregistrées"
+    "unsaved": "Modifications non enregistrées",
+    "lengthGroup": "{minutes} min",
+    "lengthRow": "{name} · {minutes} min",
+    "durationRulesHint": "Chaque durée a son propre tarif, donc chaque abonnement y répond séparément."
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",

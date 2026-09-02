@@ -186,7 +186,9 @@ function IntroOfferRow({
           type="checkbox"
           className="accent-primary"
           checked={state.enabled}
-          onChange={(e) => setValue(`prices.${index}.introEnabled`, e.target.checked)}
+          onChange={(e) =>
+            setValue(`prices.${index}.introEnabled`, e.target.checked, { shouldDirty: true })
+          }
         />
         {t('subTypeIntro')}
       </label>
@@ -275,7 +277,14 @@ function defaultsOf(plan: SubscriptionType): PricingData {
     }),
     limitEnabled: !!limit,
     limitCount: limit?.count,
-    limitPer: limit?.per,
+    // NEVER `limit?.per` ALONE. The Select below falls back to 'week' for
+    // DISPLAY, so a plan with no limit yet showed "a week" over a form value of
+    // `undefined` — and the save condition needs all three, so enabling the
+    // limit, typing a count and leaving the period on the period it was already
+    // showing wrote NOTHING. The prices in the same update saved, which is what
+    // made it read as "the limit is not persisted" rather than as a form that
+    // never held a period (Franco, staging, 2026-09-02).
+    limitPer: limit?.per ?? 'week',
   }
 }
 
@@ -386,6 +395,13 @@ export function PlanPricingForm({
     // Only the matcher touched? Run it and stop — there is nothing of this
     // form's to write, and writing it anyway would stamp `updated_at` for no
     // reason.
+    //
+    // WHICH IS WHY EVERY `setValue` HERE PASSES `shouldDirty`. React Hook Form
+    // does not mark a field dirty on a bare `setValue`, so a control that is not
+    // `register`ed — the recurrence select, the active switch, the usage-limit
+    // toggle and period — left `isDirty` false, and a studio that touched one of
+    // those AND the plan table fell down this branch and had its change dropped
+    // without a word.
     if (!isDirty && linksHandle?.dirty) {
       setSaving(true)
       try {
@@ -422,15 +438,17 @@ export function PlanPricingForm({
         }
         return entry
       })
+      // Usage limit: written when enabled with a valid count/period, cleared
+      // when disabled. Computed ONCE, because the re-seed below has to read the
+      // same answer the write did — `defaultsOf` given the stale `plan` put the
+      // OLD limit back into the form the moment the new one landed.
+      const limits =
+        data.limitEnabled && data.limitCount && data.limitPer
+          ? [{ count: data.limitCount, per: data.limitPer }]
+          : null
       await updateDoc(doc(db, TEAMS_COLLECTION, teamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, plan.id), {
         prices,
-        // Usage limit: write when enabled with a valid count/period, clear when
-        // disabled.
-        ...(data.limitEnabled && data.limitCount && data.limitPer
-          ? { limits: [{ count: data.limitCount, per: data.limitPer }] }
-          : plan.limits?.length
-            ? { limits: deleteField() }
-            : {}),
+        ...(limits ? { limits } : plan.limits?.length ? { limits: deleteField() } : {}),
         // Intro offers: the sound ones, one per price; the key is cleared when
         // none remain. The LEGACY single-offer field is deleted in the same
         // update — this write is where a document migrates forward, so the two
@@ -443,7 +461,17 @@ export function PlanPricingForm({
         ...(plan.introOffer ? { introOffer: deleteField() } : {}),
       })
       await qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
-      reset(defaultsOf({ ...plan, prices }))
+      // Re-seed from WHAT WAS WRITTEN, not from the prop — the plans query has
+      // only just been invalidated, so `plan` is still the pre-save document.
+      reset(
+        defaultsOf({
+          ...plan,
+          prices,
+          limits: limits ?? undefined,
+          introOffers: introDrafts.length > 0 ? introDrafts : undefined,
+          introOffer: undefined,
+        })
+      )
       if (linksHandle?.dirty) await linksHandle.run()
       // Back to reading — the change is made, and staying in a form of inputs
       // says it is not.
@@ -541,7 +569,8 @@ export function PlanPricingForm({
                         onValueChange={(v) =>
                           setValue(
                             `prices.${i}.recurrence`,
-                            v as (typeof RECURRENCES)[number]
+                            v as (typeof RECURRENCES)[number],
+                            { shouldDirty: true }
                           )
                         }
                       >
@@ -649,7 +678,7 @@ export function PlanPricingForm({
                       </button>
                       <Switch
                         checked={watch(`prices.${i}.active`) ?? true}
-                        onCheckedChange={(v) => setValue(`prices.${i}.active`, v)}
+                        onCheckedChange={(v) => setValue(`prices.${i}.active`, v, { shouldDirty: true })}
                       />
                       <button
                         type="button"
@@ -675,7 +704,7 @@ export function PlanPricingForm({
             action={
               <Switch
                 checked={limitEnabled}
-                onCheckedChange={(v) => setValue('limitEnabled', v)}
+                onCheckedChange={(v) => setValue('limitEnabled', v, { shouldDirty: true })}
               />
             }
           >
@@ -691,7 +720,9 @@ export function PlanPricingForm({
                 />
                 <Select
                   value={limitPer}
-                  onValueChange={(v) => setValue('limitPer', v as 'day' | 'week' | 'month')}
+                  onValueChange={(v) =>
+                    setValue('limitPer', v as 'day' | 'week' | 'month', { shouldDirty: true })
+                  }
                 >
                   <SelectTrigger className="w-[150px]">
                     <SelectValue />

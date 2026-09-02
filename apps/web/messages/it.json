@@ -1779,7 +1779,8 @@
     "sectionAppearanceTitle": "Aspetto",
     "sectionAppearanceHint": "Colore ed etichette mostrati sulla tua pagina pubblica.",
     "sectionVisitorTitle": "Cosa vede un visitatore",
-    "sectionVisitorHint": "I testi e le domande che si incontrano prima di prenotare. Tutti i campi sono facoltativi."
+    "sectionVisitorHint": "I testi e le domande che si incontrano prima di prenotare. Tutti i campi sono facoltativi.",
+    "durationsInCatalogue": "Le durate, i loro prezzi e la tariffa per i membri si impostano in Accesso e prezzi, accanto agli abbonamenti a cui si applicano."
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -7521,7 +7522,7 @@
     "noneFiltered": "Nessuno in questo gruppo.",
     "noPlans": "Nessun abbonamento per ora.",
     "noPlansAction": "Crea un abbonamento",
-    "noPriceAppointment": "Questo appuntamento non ha prezzo, quindi non c'è nulla da ridurre. Assegna un prezzo a una durata perché abbia effetto.",
+    "noPriceAppointment": "Questa durata non ha un prezzo, quindi non c'è nulla da ridurre. Impostane uno sopra perché si applichi.",
     "noPriceCourse": "Questo corso non è in vendita, quindi non c'è ancora un prezzo da ridurre. Spunta «Vendilo senza piano» nelle impostazioni del corso.",
     "noPriceDropIn": "Questa lezione non vende drop-in, quindi non c'è ancora un prezzo da ridurre. Aggiungi un prezzo drop-in perché abbia effetto.",
     "noProducts": "Ancora nessun prodotto.",
@@ -7568,7 +7569,10 @@
     "toGiftCards": "Carte regalo",
     "toPricing": "Prezzi",
     "toSchedule": "Calendario",
-    "unsaved": "Modifiche non salvate"
+    "unsaved": "Modifiche non salvate",
+    "lengthGroup": "{minutes} min",
+    "lengthRow": "{name} · {minutes} min",
+    "durationRulesHint": "Ogni durata ha il suo prezzo, quindi ogni abbonamento risponde separatamente."
   },
   "VerifyEmail": {
     "title": "Conferma {email}",

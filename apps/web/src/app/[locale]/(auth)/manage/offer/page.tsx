@@ -81,6 +81,8 @@ import {
   courseRatedPlanIds,
   gatedPlanIds,
   isAppointmentActivity,
+  resolveAppointmentDurations,
+  anyRatedPlanIds,
   ratedPlanIds,
   resolveActivityAccessRule,
   type Activity,
@@ -433,14 +435,28 @@ export default function CataloguePage() {
   // Products and gift cards are deliberately absent: a product carries no
   // access rule and no benefit, and a gift card is a tender. Neither has an
   // edge for a plan to sit on. See `PlanLinkTarget` in @linyup/shared.
-  const toActivityOffering = (a: Activity): Offering => ({
-    id: a.id,
-    name: a.name,
-    collection: ACTIVITIES_COLLECTION,
-    color: a.color ?? '',
-    badge: isAppointmentActivity(a) ? t('appointmentBadge') : undefined,
-    target: { kind: 'activity', doc: a },
-  })
+  // ONE ROW PER SESSION LENGTH, on an appointment. Its member rule is per
+  // length, so a single row for the whole appointment could only ever write one
+  // of them — and would answer "does this plan include it?" with one tick for
+  // three different prices. The rows share a document and an id; `key` is what
+  // tells them apart (see `Offering.key`), and the length rides on the target.
+  const toActivityOfferings = (a: Activity): Offering[] => {
+    const base = {
+      id: a.id,
+      collection: ACTIVITIES_COLLECTION,
+      color: a.color ?? '',
+    }
+    if (!isAppointmentActivity(a)) {
+      return [{ ...base, name: a.name, target: { kind: 'activity', doc: a } }]
+    }
+    return resolveAppointmentDurations(a).map((d) => ({
+      ...base,
+      key: `${a.id}:${d.minutes}`,
+      name: t('lengthRow', { name: a.name, minutes: d.minutes }),
+      badge: t('appointmentBadge'),
+      target: { kind: 'activity', doc: a, minutes: d.minutes },
+    }))
+  }
   const toCourseOffering = (c: Course): Offering => ({
     id: c.id,
     name: c.title,
@@ -449,7 +465,7 @@ export default function CataloguePage() {
     target: { kind: 'course', doc: c },
   })
   const allOfferings: Offering[] = [
-    ...activities.map(toActivityOffering),
+    ...activities.flatMap(toActivityOfferings),
     ...courses.map(toCourseOffering),
   ]
 
@@ -773,8 +789,18 @@ export default function CataloguePage() {
   const selectedActivity =
     selection?.kind === 'activity' ? activities.find((a) => a.id === selection.id) : undefined
   /** An open class carries neither facet — see `activityPlanFacets`. Used for
-   *  the SUMMARY line only; what to render is the pricing form's decision. */
-  const openActivity = !!selectedActivity && !activityPlanFacets(selectedActivity).access
+   *  the SUMMARY line only; what to render is the pricing form's decision.
+   *
+   *  CLASSES ONLY, and the guard is load-bearing. An APPOINTMENT has no access
+   *  facet either (the price is the gate), so the bare facet test called every
+   *  appointment "Open to everyone — no plan needed to book it" — wrong on a
+   *  priced one, and it shadowed `summaryAppointment` so completely that the
+   *  message was unreachable. Plainly false now that a plan can include, cut or
+   *  fix the price of each length. */
+  const openActivity =
+    !!selectedActivity &&
+    !isAppointmentActivity(selectedActivity) &&
+    !activityPlanFacets(selectedActivity).access
   const selectedCourse =
     selection?.kind === 'course' ? courses.find((c) => c.id === selection.id) : undefined
   const selectedPlan =
@@ -1310,7 +1336,7 @@ export default function CataloguePage() {
                 openActivity
                   ? t('summaryClassOpen')
                   : isAppointmentActivity(selectedActivity)
-                    ? t('summaryAppointment', { plans: ratedPlanIds(selectedActivity).length })
+                    ? t('summaryAppointment', { plans: anyRatedPlanIds(selectedActivity).length })
                     : t('summaryClass', {
                         gated: gatedPlanIds(selectedActivity).length,
                         rated: ratedPlanIds(selectedActivity).length,
@@ -1373,7 +1399,7 @@ export default function CataloguePage() {
                   activities.filter(
                     (a) =>
                       gatedPlanIds(a).includes(selectedPlan.id) ||
-                      ratedPlanIds(a).includes(selectedPlan.id)
+                      anyRatedPlanIds(a).includes(selectedPlan.id)
                   ).length +
                   courses.filter(
                     (c) =>
