@@ -15,7 +15,7 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query'
  * never settles. Everything after the `await` is then dead code: the toast, the
  * `onClose()`, the `setSaving(false)`.
  *
- * That is not hypothetical. On `/offer/catalogue` an awaited
+ * That is not hypothetical. On `/manage/offer` an awaited
  * `invalidateQueries({ queryKey: ['activities'] })` was measured hanging
  * indefinitely, leaving Save stuck on "Saving…" after a transaction that had
  * already committed, and leaving the activity dialog open after a successful
