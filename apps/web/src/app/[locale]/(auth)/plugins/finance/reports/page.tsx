@@ -7,9 +7,9 @@
 // close an elapsed fiscal year.
 
 import { useMemo, useState } from 'react'
-import { useTranslations } from 'next-intl'
+import { useTranslations, useLocale } from 'next-intl'
 import { toast } from 'sonner'
-import { ArrowLeft, Download, Lock, Table2 } from 'lucide-react'
+import { ArrowLeft, Download, FileDown, Lock, Printer, Table2 } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import type { Route } from 'next'
 import {
@@ -23,6 +23,11 @@ import {
   type ReportAccountRef,
 } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  buildFinanceStatementHtml,
+  downloadStatementHtml,
+  printStatementHtml,
+} from '@/lib/financeStatementHtml'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,7 +76,8 @@ function downloadCsvRows(filename: string, header: string[], rows: string[][]) {
 
 export default function AccountingReportsPage() {
   const t = useTranslations('Finance')
-  const { currentTeamId, teamRole } = useAuth()
+  const locale = useLocale()
+  const { currentTeamId, teamRole, team } = useAuth()
   const teamId = currentTeamId ?? null
   const isOwner = teamRole === 'owner'
   const { isInstalled, isLoading: pluginsLoading } = useInstalledPlugins()
@@ -128,6 +134,55 @@ export default function AccountingReportsPage() {
   const nextToClose = closableYear ?? firstFy
   const canClose = isOwner && nextToClose != null && nextToClose < currentFy
 
+  // ONE document, two ways out: printing and downloading are the same bytes.
+  // Built on demand rather than memoised — it is a click, not a render.
+  const buildStatement = () =>
+    buildFinanceStatementHtml({
+      studioName: team?.name ?? 'Linyup',
+      periodLabel: `${asOf} · ${t(`range_${range}` as 'range_month')}`,
+      currency,
+      generatedAt: new Date(),
+      locale,
+      money,
+      trialBalance,
+      pnl,
+      balanceSheet,
+      labels: {
+        documentTitle: t('statementTitle'),
+        trialBalance: t('trialBalance'),
+        profitAndLoss: t('profitAndLoss'),
+        balanceSheet: t('balanceSheet'),
+        account: t('accountName'),
+        debit: t('debit'),
+        credit: t('credit'),
+        balance: t('balance'),
+        revenue: t('type_revenue'),
+        expenses: t('type_expense'),
+        totalRevenue: t('totalRevenue'),
+        totalExpenses: t('totalExpenses'),
+        netProfit: t('netProfit'),
+        assets: t('assets'),
+        liabilities: t('liabilities'),
+        equity: t('equity'),
+        currentResult: t('currentResult'),
+        totalAssets: t('totalAssets'),
+        totalLiabilitiesEquity: t('totalLiabilitiesEquity'),
+        total: t('total'),
+        generatedOn: t('generatedOn'),
+        disclaimer: t('statementDisclaimer'),
+      },
+    })
+
+  const onPrint = () => {
+    // A blocked pop-up looks exactly like a broken button, so say which it is.
+    if (!printStatementHtml(buildStatement())) toast.error(t('popupBlocked'))
+  }
+  const onDownloadHtml = () =>
+    downloadStatementHtml(
+      buildStatement(),
+      `linyup-statement-${teamId}-${asOf}-${range}.html`
+    )
+
   const confirmClose = async () => {
     if (closeTarget == null) return
     try {
@@ -178,6 +233,17 @@ export default function AccountingReportsPage() {
               ))}
             </SelectContent>
           </Select>
+          {/* The statement — all three reports in one document, which the tabs
+              on this page cannot show at once. Print and download are the same
+              bytes; see lib/financeStatementHtml.ts. */}
+          <Button size="sm" variant="outline" onClick={onPrint} disabled={isLoading}>
+            <Printer className="mr-1 h-4 w-4" />
+            {t('printStatement')}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDownloadHtml} disabled={isLoading}>
+            <FileDown className="mr-1 h-4 w-4" />
+            {t('downloadStatementHtml')}
+          </Button>
           {canClose && (
             <Button size="sm" variant="outline" onClick={() => setCloseTarget(nextToClose)}>
               <Lock className="h-4 w-4 mr-1" />
