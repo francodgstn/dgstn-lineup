@@ -1455,7 +1455,11 @@ function RailRow({
           />
         )}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm leading-tight">{name}</span>
+          {/* THE NAME CARRIES THE ROW. It was `text-sm` with no weight, one
+              step from the muted detail line under it, so a rail of twenty
+              items read as twenty pairs of similar-looking lines rather than a
+              list of names with notes attached (Franco, 2026-09-02). */}
+          <span className="block truncate text-[15px] font-semibold leading-tight">{name}</span>
           {detail && (
             <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
               {detail}
