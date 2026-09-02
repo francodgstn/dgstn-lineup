@@ -301,6 +301,9 @@ export default function CataloguePage() {
   // three namespaces, because three pages own these words and a fourth set of
   // strings saying the same things is how they start saying different ones.
   const tAct = useTranslations('Activities')
+  // The quick links borrow the SIDEBAR's labels, so a shortcut and the row it
+  // leads to can never end up calling the same page two things.
+  const tNav = useTranslations('Nav')
   const tCommon = useTranslations('Common')
   const tSet = useTranslations('TeamSettings')
   const tc = useTranslations('Contacts')
@@ -781,9 +784,17 @@ export default function CataloguePage() {
         // plus the denominations) and then a ledger of issued codes. Neither is
         // a catalogue item, so it is a link rather than a tab (Franco,
         // 2026-09-01).
+        // Places and Payment settings join them for the same reason: both are
+        // things a studio reaches for WHILE filling this page in — a class needs
+        // a room that does not exist yet, and a price needs a gateway before it
+        // can be charged — and neither is a catalogue row, so neither can be a
+        // tab (Franco, 2026-09-02). Labels come from `Nav`, so the shortcut and
+        // the sidebar row it leads to can never drift apart.
         quickLinks={[
           { href: '/offer/pricing' as Route, label: t('toPricing') },
           { href: '/schedule' as Route, label: t('toSchedule') },
+          { href: '/schedule/places' as Route, label: tNav('places') },
+          { href: '/settings/team?tab=payments' as Route, label: tNav('teamPayments') },
           { href: '/payments?tab=giftCards' as Route, label: t('toGiftCards') },
         ]}
         // CREATE BELONGS TO THE ACTIVE TAB. One button that makes whatever the
@@ -839,28 +850,39 @@ export default function CataloguePage() {
           it. Inside the rail it read as secondary, and it was spending the top
           of a 340px column that filters will want later.
 
-          SIZE IS THE POINT. This is where a studio spends its first weeks
-          setting the business up, and rendered as four small segmented-control
-          cells it looked like one more of the thousand tiny settings controls
-          an app like this accumulates. So: cards, room to breathe, the icon in
-          a tinted square above the word, and the COUNT — which turns a label
-          into a fact worth glancing at ("6 activities, 5 plans") and gives the
-          card something to say (Franco, 2026-09-02).
+          NO TILES. Four bordered cards made four boxes to look at before you
+          could read any of them, and the borders were doing work the words
+          already did. The icon and the word sit straight on the background,
+          divided by hairlines, and ONLY THE ACTIVE ONE is marked — by colour and
+          an underline, the two cheapest signals there are (Franco, 2026-09-02).
 
-          Icon ABOVE the label, not beside it: stacked, each card is as wide as
-          its word and the icons cost no width at all. Left-aligned at natural
-          width rather than stretched — across ~1000px these four short words
-          end up further apart than they are related. */}
-      <div className="mb-5 space-y-2.5">
-        {/* Two even columns on a phone, natural width from `sm` up. Wrapping
-            flex cards left a ragged right edge on mobile — four cards, two per
-            row, and the second of each row floating short of the screen. */}
-        <div
-          className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap"
-          role="tablist"
-          aria-label={t('title')}
-        >
-          {tabs.map((tab) => {
+          Size is still the point: this is where a studio spends its first weeks
+          setting the business up, and it should not look like one more of the
+          thousand tiny settings controls an app like this accumulates. The room
+          now comes from padding rather than from boxes.
+
+          The COUNT turns a label into a fact worth glancing at ("6 activities,
+          5 plans"). Zero still prints — "0 products" is exactly what a studio
+          needs to see on the tab it has not filled in yet. */}
+      {/* Space ABOVE as well as below: the related links sit directly over the
+          strip, and on the page's default gap the two rows read as one block of
+          links rather than a page header and the control under it.
+
+          PADDING, not margin — the page is a `space-y-6` stack, whose
+          `> * + *` rule outranks a `mt-*` on a child and silently wins. */}
+      <div className="mb-5 pt-4">
+        {/* LEFT-ALIGNED from `sm` up. Centred looked right with four tabs and
+            wrong with two: a coach has only Activities and Plans, and two tabs
+            centred in a full-width band read as stranded rather than composed —
+            the strip has to hold for every plan, not the widest one (Franco,
+            2026-09-02). Left, they start where every other row on the page
+            starts.
+
+            On a phone they stay full-width and equal (`flex-1`): four tabs
+            share the width there, and a horizontally scrolling strip hides the
+            very tab a studio is looking for. */}
+        <div className="flex" role="tablist" aria-label={t('title')}>
+          {tabs.map((tab, i) => {
             const on = tab.key === activeTab
             const dead = onlyDeadEnds ? (deadEndsPerTab[tab.key] ?? 0) : 0
             const TabIcon = tab.icon
@@ -880,37 +902,42 @@ export default function CataloguePage() {
                   setPickedTab(tab.key)
                   if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
                 }}
-                className={`relative flex flex-col items-center gap-2 rounded-xl border px-5 py-4 transition-all sm:min-w-[7.5rem] ${
-                  on
-                    ? 'border-primary/40 bg-primary/5 shadow-sm'
-                    : 'border-transparent bg-muted/40 hover:border-border hover:bg-muted'
-                }`}
+                className={`group relative flex min-w-0 flex-1 flex-col items-center gap-1.5 px-2 py-3 transition-colors sm:min-w-[8rem] sm:flex-none sm:px-6 sm:py-3.5 ${
+                  i > 0 ? 'border-l' : ''
+                } ${on ? '' : 'hover:bg-muted/40'}`}
               >
-                <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                    on
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground'
+                <TabIcon
+                  className={`h-5 w-5 transition-colors ${
+                    on ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
                   }`}
-                >
-                  <TabIcon className="h-5 w-5" />
-                </span>
+                />
+                {/* Four tabs share a phone's width, so the label takes the
+                    smaller size there and truncates rather than letting the
+                    strip overflow — a horizontally scrolling strip hides the
+                    very tab a studio is looking for, on the width where that
+                    matters most. */}
                 <span
-                  className={`text-sm font-semibold leading-none ${
-                    on ? 'text-foreground' : 'text-muted-foreground'
+                  className={`max-w-full truncate text-xs leading-none transition-colors sm:text-sm ${
+                    on ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'
                   }`}
                 >
                   {tab.label}
                 </span>
-                {/* The count is the card's fact. Zero still prints — "0
-                    products" is exactly what a studio needs to see on the tab
-                    it has not filled in yet. */}
                 <span className="text-xs leading-none text-muted-foreground">{tab.count}</span>
+                {/* The underline is the whole active state. It sits ON the
+                    hairline row so the strip reads as one band rather than four
+                    things, and it is inset by the padding so it underlines the
+                    word rather than the gap beside it. */}
+                <span
+                  className={`absolute inset-x-3 bottom-0 h-0.5 rounded-full transition-colors ${
+                    on ? 'bg-primary' : 'bg-transparent'
+                  }`}
+                />
                 {/* The dead-end count rides in the CORNER: inline it would sit
-                    where the item count already is and the two numbers would
-                    be read as one. */}
+                    where the item count already is and the two numbers would be
+                    read as one. */}
                 {dead > 0 && (
-                  <span className="absolute right-2 top-2 rounded-full bg-amber-500/20 px-1.5 text-[10px] leading-tight text-amber-700">
+                  <span className="absolute right-2 top-1.5 rounded-full bg-amber-500/20 px-1.5 text-[10px] leading-tight text-amber-700">
                     {dead}
                   </span>
                 )}
@@ -918,31 +945,38 @@ export default function CataloguePage() {
             )
           })}
         </div>
-
-        {/* ONE LINE PER TAB, printed. It briefly lived behind an info mark to
-            save the height; the mark cost more than the lines did — a studio had
-            to know there was something to hover before it could tell them
-            anything, which is the wrong trade for a sentence that orients
-            somebody who has just arrived (Franco, 2026-09-01).
-
-            Written as four literal keys rather than `t(`hint_${activeTab}`)`:
-            `i18n:check` counts computed keys and never fails them, so a typo in
-            one would ship silently. */}
-        <p className="text-xs leading-snug text-muted-foreground">
-          {
-            {
-              activities: t('hintActivities'),
-              plans: t('hintPlans'),
-              courses: t('hintCourses'),
-              products: t('hintProducts'),
-            }[activeTab]
-          }
-        </p>
+        {/* The hairline the underline sits on — under the whole strip, so the
+            unselected tabs are divided from the content too. */}
+        <div className="border-b" />
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
         <div className="space-y-3 rounded-xl border bg-card p-2">
+
+          {/* ONE LINE PER TAB, printed, and INSIDE THE RAIL: it describes what
+              the list below it holds, so it belongs with the list rather than
+              with the cards that switch between them (Franco, 2026-09-02).
+
+              It briefly lived behind an info mark to save the height; the mark
+              cost more than the lines did — a studio had to know there was
+              something to hover before it could tell them anything, which is the
+              wrong trade for a sentence that orients somebody who has just
+              arrived (Franco, 2026-09-01).
+
+              Written as four literal keys rather than `t(`hint_${activeTab}`)`:
+              `i18n:check` counts computed keys and never fails them, so a typo
+              in one would ship silently. */}
+          <p className="px-2 pt-1 text-xs leading-snug text-muted-foreground">
+            {
+              {
+                activities: t('hintActivities'),
+                plans: t('hintPlans'),
+                courses: t('hintCourses'),
+                products: t('hintProducts'),
+              }[activeTab]
+            }
+          </p>
 
           {/* THE WAY OUT, on the two tabs that need one. A course and a product
               are only PRICED here — their content, media, variants and
