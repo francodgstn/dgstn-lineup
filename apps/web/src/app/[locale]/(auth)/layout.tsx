@@ -328,7 +328,6 @@ const NAV_SECTIONS: NavSection[] = [
       // LEAD of Offer: it is the section's MAP, and a map that sorts into the
       // middle of the things it maps is just another row.
       { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library, lead: true },
-      { id: 'activities', href: '/offer/activities', labelKey: 'activities', icon: Zap },
       // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
       // second tab held the affiliation TYPES while the roster below had no nav
       // item at all; the roster now owns both, so the umbrella is gone and the
@@ -337,7 +336,6 @@ const NAV_SECTIONS: NavSection[] = [
       // "Subscriptions" named the wrong thing: it reads as the list of
       // subscriptions people HOLD, which is `/subscriptions` — a different page
       // entirely. This one is the catalogue of plans on sale.
-      { id: 'plans', href: '/offer/plans', labelKey: 'subscriptionPlans', icon: IdCard },
       // The affiliation ROSTER — who is affiliated, at what status, expiring when.
       // It had no nav item at all: reachable only from a link inside the types
       // manager and one dashboard figure, which is the same shape UX-99 fixed
@@ -2210,13 +2208,26 @@ function NavSearch({
     ? subscriptionTypes
         .filter((st) => matches(st.name, st.description))
         .slice(0, 4)
-        .map((st) => entityRow(`subscription:${st.id}`, '/offer/plans', st.name, IdCard, 'subscription'))
+        // The CATALOGUE, and the row itself — `?sel=` selects it. This used to
+        // open the plans list and leave the studio to find the plan they had
+        // just searched for by name (Franco, 2026-09-02).
+        .map((st) =>
+          entityRow(
+            `subscription:${st.id}`,
+            `/offer/catalogue?sel=plan:${st.id}`,
+            st.name,
+            IdCard,
+            'subscription'
+          )
+        )
     : []
   const activityResults: SearchEntry[] = q
     ? activities
         .filter((a) => matches(a.name, a.description))
         .slice(0, 4)
-        .map((a) => entityRow(`activity:${a.id}`, '/offer/activities', a.name, Zap, 'activity'))
+        .map((a) =>
+          entityRow(`activity:${a.id}`, `/offer/catalogue?sel=activity:${a.id}`, a.name, Zap, 'activity')
+        )
     : []
 
   // Order = how a studio reads the panel: where-to-go first (few, precise
