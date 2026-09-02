@@ -271,6 +271,20 @@ export default function CataloguePage() {
   const qc = useQueryClient()
 
   const selection = parseSelection(params.get('sel'))
+  /**
+   * `?tab=` — which list to open on, when no `?sel=` names a row.
+   *
+   * The retired activities and plans pages redirect here through it, so a
+   * bookmark of either lands on the list it used to show rather than on
+   * whichever tab this page would have picked. Ignored when it names a tab the
+   * team has not installed; `activeTab` already guards that.
+   */
+  const tabParam = params.get('tab')
+  const requestedTab: TabKey | null =
+    tabParam === 'activities' || tabParam === 'plans' || tabParam === 'courses' ||
+    tabParam === 'products'
+      ? tabParam
+      : null
   const [onlyDeadEnds, setOnlyDeadEnds] = useState(false)
   // NULL until the studio picks a tab, so a deep link (`?sel=plan:x`, which the
   // pricing warnings and both editors produce) opens on the tab that HOLDS the
@@ -388,8 +402,8 @@ export default function CataloguePage() {
   // A tab can vanish under a stored choice: uninstall the products plugin with
   // that tab open and `pickedTab` names a tab that is not rendered, which would
   // show an empty rail with nothing selected in the strip.
-  const activeTab = tabs.some((x) => x.key === (pickedTab ?? fallbackTab))
-    ? (pickedTab ?? fallbackTab)
+  const activeTab = tabs.some((x) => x.key === (pickedTab ?? requestedTab ?? fallbackTab))
+    ? (pickedTab ?? requestedTab ?? fallbackTab)
     : 'activities'
 
   /** How many dead ends each tab holds — shown on the strip while the filter is
@@ -785,7 +799,16 @@ export default function CataloguePage() {
                   type="button"
                   role="tab"
                   aria-selected={on}
-                  onClick={() => setPickedTab(tab.key)}
+                  // SWITCHING TABS CLEARS A SELECTION FROM ANOTHER ONE. The
+                  // rail and the pane are one screen making one statement, and
+                  // a rail of plans beside a pane of activity pricing is two
+                  // (Franco, 2026-09-02). A selection that BELONGS to the tab
+                  // being opened survives — going Plans → Activities → Plans
+                  // should not lose your place.
+                  onClick={() => {
+                    setPickedTab(tab.key)
+                    if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
+                  }}
                   className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium leading-none transition-colors ${
                     on
                       ? 'bg-primary text-primary-foreground'
