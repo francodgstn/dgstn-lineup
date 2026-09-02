@@ -1753,7 +1753,7 @@
     "waitlistRequiresCapacity": "Ha effetto solo sulle sessioni con un limite di partecipanti — una sessione senza limite non è mai al completo.",
     "waitlistRequiresPlan": "Disponibile dal piano {plan}.",
     "sectionBookingTitle": "Opzioni di prenotazione",
-    "sectionBookingSubtitle": "Come viene gestita una prenotazione una volta effettuata — e, per gli appuntamenti, le durate offerte. Prezzi e accesso stanno nel catalogo.",
+    "sectionBookingSubtitle": "Come viene gestita una prenotazione una volta effettuata. Prezzi e accesso stanno in Accesso e prezzi.",
     "moreOptionsLabel": "Altre opzioni",
     "moreOptionsHint": "Colore, livello e i dettagli mostrati sulla tua pagina pubblica",
     "viewSchedule": "Vedi la programmazione",
@@ -1779,7 +1779,11 @@
     "tagsMax": "Massimo {max} etichette.",
     "tagRemove": "Rimuovi {tag}",
     "accessSubscriptionPlansValidation": "Scegli almeno un abbonamento che permetta di prenotare questa attività.",
-    "planLinksUnsaved": "La selezione degli abbonamenti qui sopra non è ancora salvata — salvala in quel riquadro, altrimenti questo salvataggio la scarterà."
+    "planLinksUnsaved": "La selezione degli abbonamenti qui sopra non è ancora salvata — salvala in quel riquadro, altrimenti questo salvataggio la scarterà.",
+    "sectionAppearanceTitle": "Aspetto",
+    "sectionAppearanceHint": "Colore ed etichette mostrati sulla tua pagina pubblica.",
+    "sectionVisitorTitle": "Cosa vede un visitatore",
+    "sectionVisitorHint": "I testi e le domande che si incontrano prima di prenotare. Tutti i campi sono facoltativi."
   },
   "Benefit": {
     "fieldLabel": "Vantaggio membri",
@@ -7534,10 +7538,11 @@
     "newPlan": "Nuovo piano",
     "newCourse": "Nuovo corso",
     "newProduct": "Nuovo prodotto",
-    "paneTabBooking": "Prenotazione e prezzi",
+    "paneTabBooking": "Prenotazione",
     "paneTabDetails": "Dettagli",
     "fullEditCourses": "Contenuti, lezioni e media del corso — nella pagina Corsi online",
-    "fullEditProducts": "Immagini, varianti e collezioni — nella pagina Prodotti"
+    "fullEditProducts": "Immagini, varianti e collezioni — nella pagina Prodotti",
+    "paneTabAccess": "Accesso e prezzi"
   },
   "VerifyEmail": {
     "title": "Conferma {email}",
