@@ -46,7 +46,7 @@
 // plan on it. The per-pair matrix existed and was cut in 2026-07 after it
 // produced real coach confusion.
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import type { Route } from 'next'
@@ -330,6 +330,26 @@ export default function CataloguePage() {
       ? tabParam
       : null
   const [onlyDeadEnds, setOnlyDeadEnds] = useState(false)
+
+  /**
+   * THE DECK'S HEIGHT, MEASURED.
+   *
+   * The header block is sticky and the rail hangs off its bottom edge, so the
+   * rail's `top` is the deck's height — which is not a constant: the related
+   * links wrap at some widths, the dead-end banner comes and goes, and a coach
+   * gets two tabs where a studio gets four. A hard-coded offset is right on one
+   * screen and wrong on the rest (Franco, 2026-09-02).
+   */
+  const deckRef = useRef<HTMLDivElement>(null)
+  const [deckH, setDeckH] = useState(0)
+  useEffect(() => {
+    const el = deckRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setDeckH(el.offsetHeight))
+    ro.observe(el)
+    setDeckH(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [])
   // NULL until the studio picks a tab, so a deep link (`?sel=plan:x`, which the
   // pricing warnings and both editors produce) opens on the tab that HOLDS the
   // selection rather than on Activities with the pane showing something the rail
@@ -841,6 +861,22 @@ export default function CataloguePage() {
 
   return (
     <div className="space-y-6">
+      {/* THE DECK — the page's own header, pinned on a desktop.
+          The tab strip is this page's primary control now, and scrolling it away
+          undoes the point of lifting it out of the rail. Everything above the
+          panels rides with it: title, related links, the dead-end banner, strip.
+
+          `lg` and up only. On a phone the strip already hides once a detail is
+          open, and a pinned deck would spend scarce vertical space on a header
+          for a screen that is showing exactly one thing.
+
+          The negative margins bleed the background out to the layout wrapper's
+          own padding (`px-4 sm:px-6`), so content scrolling under the deck does
+          not show through at its edges. */}
+      <div
+        ref={deckRef}
+        className="relative lg:sticky lg:top-0 lg:z-20 lg:-mx-6 lg:-mt-6 lg:bg-background lg:px-6 lg:pt-6"
+      >
       <PageHeader
         title={t('title')}
         back={{
@@ -1027,6 +1063,15 @@ export default function CataloguePage() {
         <div className="border-b" />
       </div>
 
+      {/* The same gradient the sidebar's scroll edge uses, so a pinned surface
+          reads the same way in both places. It hangs BELOW the deck's box, which
+          is why the deck is `relative`. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-black/10 to-transparent dark:from-black/40 lg:block"
+      />
+      </div>
+
       {/* TWO PANELS ON A DESKTOP, TWO SCREENS ON A PHONE.
           Side by side is the point of this page — the whole reason it exists is
           showing plans against the activities they open — so `lg` and up keeps
@@ -1039,10 +1084,27 @@ export default function CataloguePage() {
           Franco, 2026-09-02). So on a phone the list IS the screen until you
           pick something, and then the detail is — with a back control, which is
           the affordance that makes it navigation rather than a disappearance. */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
+      <div
+        className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]"
+        style={{ '--deck-h': `${deckH}px` } as React.CSSProperties}
+      >
         {/* ── the rail ── */}
+        {/* NO CARD. Once the deck above is the raised surface, a bordered box
+            around the list and another around the pane made three layers of
+            framing for two panels. The list is a list; whitespace and one
+            hairline separate its rows faster than borders would — the same
+            reason the tab strip lost its tiles (Franco, 2026-09-02).
+
+            PINNED, AND SCROLLING ITSELF. Sticky alone was not enough: a rail
+            taller than the viewport would pin its top and put its own tail out
+            of reach, so a studio with thirty activities could not get to the
+            last one while a long pane scrolled beside it. `max-h` + overflow is
+            what makes pinning safe. The PANE deliberately does not do this — it
+            scrolls with the page, because at 1280x800 there are only ~550px
+            below the deck and an 855px pane in a 550px window is harder to read
+            than the page scroll it replaces. */}
         <div
-          className={`space-y-3 rounded-xl border bg-card p-2 ${
+          className={`space-y-3 lg:sticky lg:top-[var(--deck-h)] lg:max-h-[calc(100vh-var(--deck-h))] lg:overflow-y-auto lg:pb-4 lg:pr-1 ${
             selection ? 'hidden lg:block' : ''
           }`}
         >
@@ -1234,11 +1296,21 @@ export default function CataloguePage() {
         </div>
 
         {/* ── the pane ── */}
-        <div
-          className={`rounded-xl border bg-card p-4 ${
-            selection ? 'motion-safe:animate-in motion-safe:slide-in-from-right-4' : 'hidden lg:block'
-          }`}
-        >
+        <div className={`lg:pl-1 ${selection ? '' : 'hidden lg:block'}`}>
+          {/* KEYED ON THE SELECTION so the slide replays on EVERY change, not
+              only the first. `animate-in` fires on mount, and the pane element
+              itself never unmounts — it only gains and loses `hidden` — so
+              without a key the motion appeared just once per visit, when a tab
+              switch had cleared the selection and the pane came back (Franco,
+              2026-09-02).
+
+              A SHORT slide, and motion-safe: this is a focus change, not a
+              navigation, so it should read as the pane catching up rather than
+              as a screen arriving. */}
+          <div
+            key={selection ? `${selection.kind}:${selection.id}` : 'overview'}
+            className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-200"
+          >
           {/* THE WAY BACK, on a phone only. On a desktop the list never left,
               so a back control there would undo something that never happened
               — and it would compete with clicking another row, which is how a
@@ -1504,6 +1576,7 @@ export default function CataloguePage() {
                 </Button>
               </div>
             )}
+          </div>
         </div>
       </div>
 
