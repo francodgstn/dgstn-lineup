@@ -29,6 +29,7 @@ import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { useSubscriptionTypes } from '@/hooks/useSubscriptionTypes'
 import { formatCurrency } from '@/lib/format'
 import { SubTypeDialog } from './SubscriptionTypeDialog'
+import { Tip } from '@/components/ui/tip'
 
 export interface SubscriptionTypesManagerHandle {
   openAdd: () => void
@@ -223,13 +224,15 @@ export const SubscriptionTypesManager = forwardRef<
                     >
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
-                    <button
-                      onClick={() => openDuplicate(st)}
-                      title={tCommon('duplicate')}
-                      className="p-1.5 rounded hover:bg-muted transition-colors"
-                    >
-                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
+                    <Tip label={tCommon('duplicate')}>
+                      <button
+                        onClick={() => openDuplicate(st)}
+                        aria-label={tCommon('duplicate')}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                      >
+                        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </Tip>
                     <button
                       onClick={() => setDeleting(st.id)}
                       className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"

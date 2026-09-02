@@ -22,6 +22,7 @@ import type { Course, CourseStatus } from '@linyup/shared'
 import { formatCurrency } from '@/lib/format'
 import { useCourses, createCourse, updateCourse, countCourses } from '@/plugins/online-courses/hooks'
 import { getOnlineCoursesLimits } from '@/plugins/online-courses/limits'
+import { Tip } from '@/components/ui/tip'
 
 async function uploadFile(file: File, path: string): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg'
@@ -291,9 +292,11 @@ export default function OnlineCoursesPage() {
                   {t('uploadCover')}
                 </Button>
                 {coverPreview && (
-                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearCover} title={t('cancel')}>
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <Tip label={t('cancel')}>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearCover} aria-label={t('cancel')}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </Tip>
                 )}
                 <input
                   ref={coverInputRef} type="file" accept="image/*" className="hidden"

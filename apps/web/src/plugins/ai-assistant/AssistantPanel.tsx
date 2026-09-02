@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Sparkles, Send, Loader2 } from 'lucide-react'
+import { Tip } from '@/components/ui/tip'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -70,15 +71,16 @@ function AssistantPanel() {
           corner and swallow taps meant for a page FAB or a dirty form's Save
           (UX-9). Never give this a `fixed bottom-*` again. */}
       <FloatingSlot lane="shell">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label={t('launcherLabel')}
-          title={t('launcherLabel')}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
+        <Tip label={t('launcherLabel')}>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label={t('launcherLabel')}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+          >
+            <Sparkles className="h-5 w-5" />
+          </button>
+        </Tip>
       </FloatingSlot>
 
       <Sheet open={open} onOpenChange={setOpen}>

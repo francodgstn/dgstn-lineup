@@ -47,6 +47,7 @@ import { EventPublishCard } from '@/components/events/EventPublishCard'
 import { useOrg } from '@/contexts/OrgContext'
 import { pluginSlot } from '@/plugins/slots'
 import type { Route } from 'next'
+import { Tip } from '@/components/ui/tip'
 
 // ─── subcollection types ──────────────────────────────────────────────────────
 
@@ -657,14 +658,16 @@ export default function EventDetailPage() {
             <Pencil className="h-4 w-4 mr-1.5" />
             {t('editEvent')}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDuplicateOpen(true)}
-            title={tp('duplicateEvent')}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
+          <Tip label={tp('duplicateEvent')}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDuplicateOpen(true)}
+              aria-label={tp('duplicateEvent')}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </Tip>
           <Button
             size="sm"
             variant="outline"

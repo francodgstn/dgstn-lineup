@@ -45,6 +45,7 @@ import {
 import { ActivityScheduleSheet } from '@/components/activities/ActivityScheduleSheet'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 import { ActivityDialog } from '@/components/activities/ActivityDialog'
+import { Tip } from '@/components/ui/tip'
 
 function ArchiveConfirmDialog({
   activity,
@@ -177,34 +178,42 @@ function ActivityCard({
             on the calendar?" is the question this row could never answer about
             itself — an activity with no sessions behind it is invisible to every
             visitor while looking perfectly configured. */}
-        <button
-          onClick={onViewSchedule}
-          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-          title={t('viewSchedule')}
-        >
-          <CalendarDays className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onEdit}
-          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-          title={t('editActivity')}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onDuplicate}
-          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-          title={tCommon('duplicate')}
-        >
-          <Copy className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onArchive}
-          className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
-          title={t('archive')}
-        >
-          <Archive className="h-4 w-4" />
-        </button>
+        <Tip label={t('viewSchedule')}>
+          <button
+            onClick={onViewSchedule}
+            className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+            aria-label={t('viewSchedule')}
+          >
+            <CalendarDays className="h-4 w-4" />
+          </button>
+        </Tip>
+        <Tip label={t('editActivity')}>
+          <button
+            onClick={onEdit}
+            className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+            aria-label={t('editActivity')}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </Tip>
+        <Tip label={tCommon('duplicate')}>
+          <button
+            onClick={onDuplicate}
+            className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+            aria-label={tCommon('duplicate')}
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+        </Tip>
+        <Tip label={t('archive')}>
+          <button
+            onClick={onArchive}
+            className="p-1.5 text-muted-foreground hover:text-destructive rounded transition-colors"
+            aria-label={t('archive')}
+          >
+            <Archive className="h-4 w-4" />
+          </button>
+        </Tip>
       </div>
     </div>
   )

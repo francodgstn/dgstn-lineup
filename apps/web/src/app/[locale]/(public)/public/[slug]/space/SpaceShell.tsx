@@ -5,6 +5,7 @@ import { LogOut } from 'lucide-react'
 import { useSpaceAuth } from './SpaceAuthProvider'
 import { useSpaceTheme } from './useSpaceTheme'
 import SpacePortalNav from './SpacePortalNav'
+import { Tip } from '@/components/ui/tip'
 
 // Portal chrome shared by every module page (home / bookings / account): themed
 // background, team header + sign-in, and the module nav. The course player
@@ -52,14 +53,16 @@ export default function SpaceShell({ children }: { children: React.ReactNode }) 
               <span className="text-xs hidden sm:inline" style={{ color: textMuted }}>
                 {t('signedInAs', { name: `${contact.firstname} ${contact.lastname}` })}
               </span>
-              <button
-                onClick={() => logout()}
-                className="h-8 w-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
-                style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
-                title={t('signOut')}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
+              <Tip label={t('signOut')}>
+                <button
+                  onClick={() => logout()}
+                  className="h-8 w-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+                  style={{ background: cardBg, border: `1px solid ${cardBorder}`, color: textMain }}
+                  aria-label={t('signOut')}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </Tip>
             </div>
           ) : (
             <button

@@ -6,6 +6,7 @@ import type { EventCheckin } from '@linyup/shared'
 import { useFightingCupCategories } from './useCategories'
 import { exportFightingCupPdf } from './pdfExport'
 import { exportFightingCupCsv } from './csvExport'
+import { Tip } from '@/components/ui/tip'
 
 /**
  * Lineup export buttons for fighting-cup events. Rendered by CheckinPanel in the
@@ -37,16 +38,18 @@ export function Exports({
         <Download className="h-3.5 w-3.5 mr-1.5" />
         Export CSV
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={disabled || categories.length === 0}
-        onClick={() => exportFightingCupPdf(checkins, categories, eventTitle, eventDate)}
-        title={categories.length === 0 ? 'Add categories first' : undefined}
-      >
-        <FileText className="h-3.5 w-3.5 mr-1.5" />
-        Lineup PDF
-      </Button>
+      <Tip label={categories.length === 0 ? 'Add categories first' : undefined}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled || categories.length === 0}
+          onClick={() => exportFightingCupPdf(checkins, categories, eventTitle, eventDate)}
+          aria-label={categories.length === 0 ? 'Add categories first' : undefined}
+        >
+          <FileText className="h-3.5 w-3.5 mr-1.5" />
+          Lineup PDF
+        </Button>
+      </Tip>
     </>
   )
 }

@@ -35,10 +35,20 @@ export function Tip({
   children,
   side = 'top',
 }: {
-  label: string
+  /**
+   * ABSENT MEANS NO TOOLTIP, and the child renders untouched.
+   *
+   * That is not a convenience: it is how the collapsed-sidebar pattern works.
+   * Those rows carried `title={collapsed ? label : undefined}` — a tooltip only
+   * while the label is hidden, and silence once the row shows its own name,
+   * which is exactly right. Modelling that here keeps the call sites a
+   * one-for-one swap instead of a conditional wrapper each.
+   */
+  label?: string
   children: React.ReactElement
   side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
+  if (!label) return children
   return (
     <Tooltip>
       <TooltipTrigger render={children} />

@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { UserCog, UserPlus, Trash2, Mail, Clock, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { Tip } from '@/components/ui/tip'
 
 type Member = { userId: string; role: TeamRole; displayName?: string; email?: string; isCoach?: boolean }
 type Invite = { id: string; email: string; role: string }
@@ -209,16 +210,17 @@ export default function CoachesPage() {
               </div>
               <Badge variant="secondary" className="shrink-0">{t('roleCoach')}</Badge>
               {canRemove(m) && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => setRemoveTarget(m)}
-                  aria-label={t('remove')}
-                  title={t('remove')}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <Tip label={t('remove')}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setRemoveTarget(m)}
+                    aria-label={t('remove')}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </Tip>
               )}
             </div>
           ))}
@@ -242,17 +244,18 @@ export default function CoachesPage() {
                   <Clock className="h-3 w-3" /> {t('pending')}
                 </p>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => cancelInviteMutation.mutate(inv.id)}
-                disabled={cancelInviteMutation.isPending}
-                aria-label={t('cancelInvite')}
-                title={t('cancelInvite')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <Tip label={t('cancelInvite')}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => cancelInviteMutation.mutate(inv.id)}
+                  disabled={cancelInviteMutation.isPending}
+                  aria-label={t('cancelInvite')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </Tip>
             </div>
           ))}
         </div>

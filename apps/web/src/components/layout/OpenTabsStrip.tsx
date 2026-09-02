@@ -39,6 +39,7 @@ import {
   toRoute,
   type EntityKind,
 } from '@/lib/tab-routes'
+import { Tip } from '@/components/ui/tip'
 
 const KIND_ICON: Record<EntityKind, LucideIcon> = {
   contact: User,
@@ -196,15 +197,16 @@ export function OpenTabsStrip() {
             })}
 
             {/* Explicit branch — the only way (besides ctrl/⌘-click) to add a tab. */}
-            <button
-              type="button"
-              onClick={handleNewTab}
-              aria-label={tNav('tabNew')}
-              title={tNav('tabNew')}
-              className="shrink-0 self-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            <Tip label={tNav('tabNew')}>
+              <button
+                type="button"
+                onClick={handleNewTab}
+                aria-label={tNav('tabNew')}
+                className="shrink-0 self-center rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </Tip>
           </div>
         </SortableList>
       </div>

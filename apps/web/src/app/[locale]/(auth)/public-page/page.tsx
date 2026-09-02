@@ -71,6 +71,7 @@ import {
   Globe, Monitor, MonitorCheck, ShoppingBag, GraduationCap, CalendarCheck,
   UserPlus, ClipboardList, FileText, CalendarRange, ExternalLink, Copy, Check, Plus, Settings2,
 } from 'lucide-react'
+import { Tip } from '@/components/ui/tip'
 
 // Plugin a surface needs; clicking "Set up" deep-links the plugins page, whose
 // modal handles the included / add-on / upgrade flow for the current plan.
@@ -139,15 +140,17 @@ function SurfaceRow({
         </span>
       )}
       {previewUrl && (
-        <a
-          href={previewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={t('preview')}
-          className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </a>
+        <Tip label={t('preview')}>
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('preview')}
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        </Tip>
       )}
       <div className="shrink-0">{action}</div>
     </div>
@@ -341,23 +344,27 @@ export default function PublicPageHub() {
               {homeUrl ? (
                 <div className="mt-1 flex items-center gap-2">
                   <code className="truncate rounded bg-muted px-2 py-1 text-sm font-medium">{`/public/${slug}`}</code>
-                  <button
-                    type="button"
-                    onClick={copyUrl}
-                    title={t('copy')}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                  <a
-                    href={homeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('open')}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                  <Tip label={t('copy')}>
+                    <button
+                      type="button"
+                      onClick={copyUrl}
+                      aria-label={t('copy')}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </Tip>
+                  <Tip label={t('open')}>
+                    <a
+                      href={homeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={t('open')}
+                      className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Tip>
                 </div>
               ) : (
                 <p className="mt-1 text-sm text-muted-foreground">{t('noSlug')}</p>

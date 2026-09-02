@@ -8,6 +8,7 @@ import { CircleUser, LogIn, LogOut } from 'lucide-react'
 import { usePublicContactAuth } from './PublicContactAuthProvider'
 import { useSpaceTheme } from './space/useSpaceTheme'
 import SignInDialog from './space/SignInDialog'
+import { Tip } from '@/components/ui/tip'
 
 // Shared sign-in control for public surfaces that lack their own auth chrome
 // (bio-link, booking, signup, documents, shop, appointments …). Space has its own
@@ -73,16 +74,17 @@ export function PublicContactBar() {
                 {contact.firstname}
               </span>
             </Link>
-            <button
-              type="button"
-              onClick={() => logout()}
-              aria-label={t('signOut')}
-              title={t('signOut')}
-              className="flex h-6 w-6 items-center justify-center rounded-full transition-opacity hover:opacity-70"
-              style={{ color: textMuted }}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
+            <Tip label={t('signOut')}>
+              <button
+                type="button"
+                onClick={() => logout()}
+                aria-label={t('signOut')}
+                className="flex h-6 w-6 items-center justify-center rounded-full transition-opacity hover:opacity-70"
+                style={{ color: textMuted }}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </Tip>
           </div>
         ) : (
           <button

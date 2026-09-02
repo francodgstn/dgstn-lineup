@@ -43,6 +43,7 @@ import {
   type FeedbackType,
 } from '@linyup/shared'
 import type { ActivePrompt, PromptBuckets } from './hooks'
+import { Tip } from '@/components/ui/tip'
 
 const RATING_FACES = ['😞', '😕', '😐', '🙂', '😍'] as const
 
@@ -419,17 +420,18 @@ function PromptCard({
             <p className="mt-0.5 text-xs text-muted-foreground">{prompt.description}</p>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('mute')}
-          title={t('mute')}
-          disabled={muting}
-          onClick={mute}
-          className="shrink-0 text-muted-foreground"
-        >
-          <BellOff className="h-4 w-4" />
-        </Button>
+        <Tip label={t('mute')}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('mute')}
+            disabled={muting}
+            onClick={mute}
+            className="shrink-0 text-muted-foreground"
+          >
+            <BellOff className="h-4 w-4" />
+          </Button>
+        </Tip>
       </div>
       {prompt.allow_rating && <RatingRow value={rating} onChange={setRating} size="sm" />}
       {prompt.allow_text && (

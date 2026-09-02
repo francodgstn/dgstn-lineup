@@ -22,6 +22,7 @@ import type { Goal } from '@linyup/shared'
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog'
 import { useSpaceTheme } from '../useSpaceTheme'
 import type { SpaceGoalsState } from './useSpaceGoals'
+import { Tip } from '@/components/ui/tip'
 
 interface Props {
   step: Goal
@@ -57,17 +58,19 @@ export function StepRow({ step, setStepDone, deleteGoal, confirm }: Props) {
   return (
     <div>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!canToggle || togglePending}
-          onClick={() => setStepDone.mutate({ goalId: step.id, done: !done })}
-          aria-pressed={done}
-          title={!canToggle ? t('stepCoachCreatedNote') : undefined}
-          className="grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors disabled:opacity-60"
-          style={{ borderColor: done ? accent : cardBorder, background: done ? accent : 'transparent' }}
-        >
-          {done && <Check className="h-3 w-3 text-white" />}
-        </button>
+        <Tip label={!canToggle ? t('stepCoachCreatedNote') : undefined}>
+          <button
+            type="button"
+            disabled={!canToggle || togglePending}
+            onClick={() => setStepDone.mutate({ goalId: step.id, done: !done })}
+            aria-pressed={done}
+            aria-label={!canToggle ? t('stepCoachCreatedNote') : undefined}
+            className="grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors disabled:opacity-60"
+            style={{ borderColor: done ? accent : cardBorder, background: done ? accent : 'transparent' }}
+          >
+            {done && <Check className="h-3 w-3 text-white" />}
+          </button>
+        </Tip>
         <span
           className="flex-1 text-sm"
           style={{ color: done ? textMuted : textMain, textDecoration: done ? 'line-through' : undefined }}
@@ -80,15 +83,17 @@ export function StepRow({ step, setStepDone, deleteGoal, confirm }: Props) {
           </span>
         )}
         {own && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deletePending}
-            title={t('deleteGoal')}
-            className="shrink-0 disabled:opacity-50"
-          >
-            <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
-          </button>
+          <Tip label={t('deleteGoal')}>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deletePending}
+              aria-label={t('deleteGoal')}
+              className="shrink-0 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
+            </button>
+          </Tip>
         )}
       </div>
       {toggleFailed && (

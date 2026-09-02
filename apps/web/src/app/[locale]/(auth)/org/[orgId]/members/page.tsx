@@ -48,6 +48,7 @@ import {
   ORG_MEMBER_INVITATIONS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type { OrgMember, OrgMemberInvitation, OrgRole } from '@linyup/shared'
+import { Tip } from '@/components/ui/tip'
 
 interface OrgMemberRow extends OrgMember {
   id: string
@@ -412,15 +413,17 @@ export default function OrgMembersPage() {
                     {isAdmin && (
                       <td className="px-4 py-3">
                         {!isSelf && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setRemoveTarget(m)}
-                            title={t('removeButton')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <Tip label={t('removeButton')}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setRemoveTarget(m)}
+                              aria-label={t('removeButton')}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </Tip>
                         )}
                       </td>
                     )}
@@ -452,15 +455,17 @@ export default function OrgMembersPage() {
                   </div>
                 </div>
                 <Badge variant="secondary">{roleLabel(inv.role)}</Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => setRevokeTarget(inv)}
-                  title={t('inviteRevoke')}
-                >
-                  <MailX className="h-4 w-4" />
-                </Button>
+                <Tip label={t('inviteRevoke')}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => setRevokeTarget(inv)}
+                    aria-label={t('inviteRevoke')}
+                  >
+                    <MailX className="h-4 w-4" />
+                  </Button>
+                </Tip>
               </div>
             ))}
           </div>

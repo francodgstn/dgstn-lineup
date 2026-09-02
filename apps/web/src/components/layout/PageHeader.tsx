@@ -5,6 +5,7 @@ import type { Route } from 'next'
 import { ArrowLeft } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { QuickLinks, type QuickLink } from './QuickLinks'
+import { Tip } from '@/components/ui/tip'
 
 // Shared page header for list/config pages (Activities, Event types,
 // Subscriptions, …). Keeps the title block + primary action consistent.
@@ -45,14 +46,15 @@ export function PageHeader({
                 row to come back from, and a page reached only from other pages
                 has none. */}
             {back && (
-              <Link
-                href={back.href}
-                aria-label={back.label}
-                title={back.label}
-                className="-ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
+              <Tip label={back.label}>
+                <Link
+                  href={back.href}
+                  aria-label={back.label}
+                  className="-ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+              </Tip>
             )}
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           </div>

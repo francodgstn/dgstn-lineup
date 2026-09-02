@@ -72,6 +72,7 @@ import {
   countProducts,
   type ProductInput,
 } from '@/plugins/products/hooks'
+import { Tip } from '@/components/ui/tip'
 
 const MAX_IMAGE_MB = 5
 
@@ -561,24 +562,28 @@ export default function ProductsPage() {
                     <Pencil className="h-3.5 w-3.5 mr-1" />
                     {t('edit')}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground"
-                    onClick={() => openDuplicate(p)}
-                    title={tCommon('duplicate')}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteTarget(p)}
-                    title={t('delete')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Tip label={tCommon('duplicate')}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground"
+                      onClick={() => openDuplicate(p)}
+                      aria-label={tCommon('duplicate')}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </Tip>
+                  <Tip label={t('delete')}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteTarget(p)}
+                      aria-label={t('delete')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </Tip>
                 </div>
               </div>
             </div>
@@ -654,19 +659,21 @@ export default function ProductsPage() {
                   {t('uploadImage')}
                 </Button>
                 {(imagePreview || draft.imageUrl) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      clearImage()
-                      setDraft((d) => ({ ...d, imageUrl: undefined }))
-                    }}
-                    title={t('removeImage')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <Tip label={t('removeImage')}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        clearImage()
+                        setDraft((d) => ({ ...d, imageUrl: undefined }))
+                      }}
+                      aria-label={t('removeImage')}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </Tip>
                 )}
                 <input
                   ref={imageInputRef}
@@ -752,16 +759,18 @@ export default function ProductsPage() {
                         inputMode="decimal"
                         className="h-8 text-sm w-24"
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => removeVariant(v.id)}
-                        title={t('removeVariant')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <Tip label={t('removeVariant')}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => removeVariant(v.id)}
+                          aria-label={t('removeVariant')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </Tip>
                     </div>
                   ))}
                   <p className="text-xs text-muted-foreground">{t('variantPriceHint')}</p>

@@ -20,6 +20,7 @@ import type { Event, EventCheckin, EventType } from '@linyup/shared'
 import type { Route } from 'next'
 import { ProgramTab } from '@/components/events/program/ProgramTab'
 import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
+import { Tip } from '@/components/ui/tip'
 
 interface Team { id: string; name: string }
 
@@ -162,14 +163,16 @@ export default function OrgEventDetailPage() {
             <div className="flex shrink-0 items-center gap-2">
               <Badge variant="secondary" className="capitalize">{eventTypeLabel(t, event.type)}</Badge>
               {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDuplicateOpen(true)}
-                  title={tpp('duplicateEvent')}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+                <Tip label={tpp('duplicateEvent')}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDuplicateOpen(true)}
+                    aria-label={tpp('duplicateEvent')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </Tip>
               )}
             </div>
           </div>
@@ -288,18 +291,20 @@ export default function OrgEventDetailPage() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          disabled={toggling === checkin.id}
-                          onClick={() => toggleConfirm(checkin)}
-                          title={checkin.is_completed ? t('titleUnconfirm') : t('titleConfirm')}
-                        >
-                          {checkin.is_completed
-                            ? <X className="h-3.5 w-3.5 text-muted-foreground" />
-                            : <Check className="h-3.5 w-3.5 text-green-600" />}
-                        </Button>
+                        <Tip label={checkin.is_completed ? t('titleUnconfirm') : t('titleConfirm')}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            disabled={toggling === checkin.id}
+                            onClick={() => toggleConfirm(checkin)}
+                            aria-label={checkin.is_completed ? t('titleUnconfirm') : t('titleConfirm')}
+                          >
+                            {checkin.is_completed
+                              ? <X className="h-3.5 w-3.5 text-muted-foreground" />
+                              : <Check className="h-3.5 w-3.5 text-green-600" />}
+                          </Button>
+                        </Tip>
                       </td>
                     )}
                   </tr>

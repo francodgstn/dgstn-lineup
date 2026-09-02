@@ -12,6 +12,7 @@ import {
 import { ChevronsUpDown } from 'lucide-react'
 import { getDay, getHours } from 'date-fns'
 import type { SessionDoc, BookingDoc } from '@/hooks/useDashboardData'
+import { Tip } from '@/components/ui/tip'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 // JS getDay: 0=Sun,1=Mon,...,6=Sat → col 0=Mon...6=Sun
@@ -150,15 +151,19 @@ export function SessionsHeatmapCard({
       <CardHeader>
         <div className="flex items-center gap-2">
           <CardTitle className="flex-1">{title || 'Attendance heatmap'}</CardTitle>
-          <button
-            onClick={() => setAutoHours((v) => !v)}
-            title={
+          <Tip label={
               autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'
-            }
-            className={`p-1 rounded transition-colors ${autoHours ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <ChevronsUpDown className="h-4 w-4" />
-          </button>
+            }>
+            <button
+              onClick={() => setAutoHours((v) => !v)}
+              aria-label={
+                autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'
+              }
+              className={`p-1 rounded transition-colors ${autoHours ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <ChevronsUpDown className="h-4 w-4" />
+            </button>
+          </Tip>
           <Select
             value={source}
             onValueChange={(v) => {

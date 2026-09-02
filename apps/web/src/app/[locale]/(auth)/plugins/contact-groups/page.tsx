@@ -29,6 +29,7 @@ import {
 } from '@/plugins/contact-groups/hooks'
 import type { GroupTreeNode } from '@/plugins/contact-groups/hooks'
 import { GroupRuleDialog, stashRuleForContactsPage } from '@/plugins/contact-groups/GroupRuleDialog'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -670,11 +671,13 @@ export default function ContactGroupsPage() {
                         <FolderPlus className="h-4 w-4" />
                       </GroupPickerPopover>
                       {removable && (
-                        <button type="button" onClick={() => removeMember(c.id)}
-                          className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
-                          title={t('removeMember')}>
-                          <X className="h-4 w-4" />
-                        </button>
+                        <Tip label={t('removeMember')}>
+                          <button type="button" onClick={() => removeMember(c.id)}
+                            className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+                            aria-label={t('removeMember')}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        </Tip>
                       )}
                     </div>
                   )

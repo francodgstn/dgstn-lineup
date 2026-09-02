@@ -81,6 +81,7 @@ import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { getPrimaryRank } from '@/lib/rank-utils'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -725,10 +726,12 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
                   NOT called "pin": that word belongs to the open-tabs strip, and
                   this is not a destination at all — see THE NAV-MEMORY CENSUS in
                   contexts/NavPinsContext.tsx. */}
-              <button type="button" onClick={() => togglePresetPin(q.id)}
-                className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                title={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
-              ><Eye className="h-3 w-3" /></button>
+              <Tip label={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}>
+                <button type="button" onClick={() => togglePresetPin(q.id)}
+                  className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                  aria-label={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+                ><Eye className="h-3 w-3" /></button>
+              </Tip>
             </div>
           )
         })}
@@ -739,10 +742,12 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
             {saved.map((q) => (
               <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
                 <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
-                <button type="button" onClick={() => togglePin(q.id)}
-                  className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                  title={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
-                ><Eye className="h-3 w-3" /></button>
+                <Tip label={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}>
+                  <button type="button" onClick={() => togglePin(q.id)}
+                    className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                    aria-label={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+                  ><Eye className="h-3 w-3" /></button>
+                </Tip>
                 <button type="button" onClick={() => remove(q.id)}
                   className="shrink-0 p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                 ><X className="h-3 w-3" /></button>
