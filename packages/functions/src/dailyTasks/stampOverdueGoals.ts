@@ -26,7 +26,7 @@
 // (status, target_date) query is fetched avoids that trap entirely.
 
 import * as admin from 'firebase-admin'
-import { CONTACT_GOALS_SUBCOLLECTION, type Goal } from '@linyup/shared'
+import { CONTACT_GOALS_SUBCOLLECTION, goalIsArchived, type Goal } from '@linyup/shared'
 import { fireTaskOverdue } from '../coaching/events'
 
 const BATCH_SIZE = 400
@@ -54,6 +54,10 @@ export async function stampOverdueGoals(): Promise<{ stamped: number }> {
   for (const docSnap of snap.docs) {
     const goal = docSnap.data() as Goal
     if (goal.overdue_at) continue // already stamped — nothing to do
+    // Filed away: stop stamping it, which also stops it firing `task_overdue`
+    // at a coach who has explicitly put it aside. Same in-memory reason as
+    // `overdue_at` above — `archived_at` is absent on older goals.
+    if (goalIsArchived(goal)) continue
 
     const contactRef = docSnap.ref.parent.parent
     if (!contactRef) continue // 'goals' is always nested under a contact; defensive only

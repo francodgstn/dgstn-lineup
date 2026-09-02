@@ -342,7 +342,19 @@ export interface Goal {
   created_by: GoalCreatedBy;
   created_at: any;
   target_date?: any; // Firestore Timestamp or null
+  /** Informational start date, authored in the admin Coaching tab. Mirrored so
+   *  the shape matches; this app does not render or write it yet. */
+  start_date?: any | null;
   completed_at?: any | null; // set when a task is marked done (status → 'achieved')
+
+  /**
+   * Filed away by a coach — hidden here as it is everywhere else. Orthogonal to
+   * `status`, so an achieved goal can be archived without losing its outcome.
+   * Read with `!goal.archived_at` IN MEMORY: the field is absent on every goal
+   * written before 2026-09, and a Firestore `== null` filter matches only
+   * documents that have it.
+   */
+  archived_at?: any | null;
 
   /**
    * The check-in axis this goal was created FROM, when it came from a weak
@@ -357,6 +369,11 @@ export interface Goal {
    * null on `type: 'goal'`.
    */
   parent_goal_id?: string | null;
+
+  /** Manual position within its list, tasks only — written by the admin tab's
+   *  drag-and-drop. Sparse: unset sorts last. Mirrored for shape; this app
+   *  keeps its own created_at order. */
+  order?: number;
 
   /** Denormalized from the newest evaluation, written by the `onGoalWrite`
    *  Cloud Function trigger — never set from the client. */

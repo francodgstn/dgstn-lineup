@@ -865,7 +865,7 @@ export const FirestoreService = {
       const goalsRef = collection(db, 'contacts', contactId, 'goals');
       const q = query(goalsRef, orderBy('created_at', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(docSnap => {
+      const all = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -876,6 +876,18 @@ export const FirestoreService = {
           type: (data.type as GoalType | undefined) ?? 'goal',
         } as Goal;
       });
+      // A goal the coach archived is hidden here too, with its steps — the same
+      // rule the admin tab and the member Space apply. IN MEMORY, because
+      // `archived_at` is absent on older goals and a `where(== null)` would
+      // match none of them.
+      const archivedGoalIds = new Set(
+        all.filter(g => g.type !== 'task' && !!g.archived_at).map(g => g.id),
+      );
+      return all.filter(
+        g =>
+          !g.archived_at &&
+          !(g.type === 'task' && g.parent_goal_id && archivedGoalIds.has(g.parent_goal_id)),
+      );
     } catch (error) {
       console.error('Error fetching goals:', error);
       return [];

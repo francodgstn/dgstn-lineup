@@ -28,7 +28,7 @@ const APP_MAP = `Linyup dashboard map (menu path → what it's for):
   Run › Payments — money in (needs Stripe Connect). Run › Automations — rules that act on contacts/bookings.
 - Offer › Activities — class/service types. Offer › Plans & affiliations — subscriptions + affiliations.
   Offer › Online courses — course library (Space). Offer › Products — sellable products. Offer › Documents — public docs.
-- Grow › All public pages — hub of every public surface (bio-link, website, shop, space, booking, signup, forms, documents) with a default-landing picker; Shop settings and Space settings live under it. Grow › Bio link — the link-in-bio editor. Grow › Website, Forms, Gamification — plugin surfaces.
+- Grow › All public pages — hub of every public surface (bio-link, website, shop, space, booking, signup, forms, documents) with a default-landing picker; Space settings lives under it, and what the shop sells is Offer › Catalogue. Grow › Bio link — the link-in-bio editor. Grow › Website, Forms, Gamification — plugin surfaces.
 - Settings › Team (general, payments/currency, branding), Booking, Event types, Places, Members, Roles (capabilities per role), Plugins (marketplace), Billing (plan & invoices).
 Contact detail tabs: Profile, Appointments, Stats, Bookings, Plans & Affiliation, Payments, Activity, Follow-ups (alerts + outreach), Gamification.`
 

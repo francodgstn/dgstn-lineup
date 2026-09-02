@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import {
@@ -8,8 +8,8 @@ import {
   doc, serverTimestamp, Timestamp, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveGoalCategories, goalCategoryLabel, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
-import type { Contact, Team, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator } from '@linyup/shared'
+import { CONTACTS_COLLECTION, CONTACT_GOALS_SUBCOLLECTION, resolveGoalCategories, goalCategoryLabel, resolveCoachingDimensions, dimensionLabel, groupGoalsWithSteps, goalIsOverdue, goalIsArchived, sortSteps, CONTACT_GOAL_EVALUATIONS_SUBCOLLECTION } from '@linyup/shared'
+import type { Contact, Team, Goal, GoalEvaluation, GoalStatus, GoalType, PerformanceIndicator, StepSortMode } from '@linyup/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -21,9 +21,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Flag, CheckSquare, Circle, ChevronDown, ChevronUp, Plus, Trash2,
-  Star, Info, CheckCircle2, AlertTriangle,
+  Flag, CheckSquare, Circle, ChevronDown, ChevronUp, ChevronRight, Plus, Trash2,
+  Star, Info, CheckCircle2, AlertTriangle, Archive, ArchiveRestore,
 } from 'lucide-react'
+import { Segmented } from '@/components/ui/segmented'
+import { GoalProgressBar } from './GoalProgressBar'
+import { SortableTaskList } from './SortableTaskList'
 import { CoachAssignment } from './CoachAssignment'
 import { PerformanceProfilePanel } from './PerformanceProfilePanel'
 import {
@@ -226,7 +229,7 @@ interface GoalFormDialogProps {
    *  step" button; unset (General) when opened from the General section. */
   defaultParentGoalId?: string | null
   onClose: () => void
-  onSubmit: (data: { title: string; description: string; categories: string[]; targetDate: Date | null; parentGoalId: string | null }) => Promise<void>
+  onSubmit: (data: { title: string; description: string; categories: string[]; targetDate: Date | null; startDate: Date | null; parentGoalId: string | null }) => Promise<void>
 }
 
 function GoalFormDialog({ open, type, categories, initial, parentOptions, defaultParentGoalId, onClose, onSubmit }: GoalFormDialogProps) {
@@ -236,6 +239,9 @@ function GoalFormDialog({ open, type, categories, initial, parentOptions, defaul
   const [selectedCats, setSelectedCats] = useState<string[]>(initial?.categories ?? [])
   const [targetDate, setTargetDate] = useState<Date | null>(
     tsToDate(initial?.target_date) ?? null,
+  )
+  const [startDate, setStartDate] = useState<Date | null>(
+    tsToDate(initial?.start_date) ?? null,
   )
   const [parentGoalId, setParentGoalId] = useState<string | null>(
     initial ? (initial.parent_goal_id ?? null) : (defaultParentGoalId ?? null),
@@ -248,6 +254,7 @@ function GoalFormDialog({ open, type, categories, initial, parentOptions, defaul
       setDescription(initial?.description ?? '')
       setSelectedCats(initial?.categories ?? [])
       setTargetDate(tsToDate(initial?.target_date) ?? null)
+      setStartDate(tsToDate(initial?.start_date) ?? null)
       setParentGoalId(initial ? (initial.parent_goal_id ?? null) : (defaultParentGoalId ?? null))
     }
   }
@@ -264,6 +271,7 @@ function GoalFormDialog({ open, type, categories, initial, parentOptions, defaul
         description: description.trim(),
         categories: selectedCats,
         targetDate: targetDate,
+        startDate: startDate,
         parentGoalId,
       })
     } finally { setSaving(false) }
@@ -328,15 +336,29 @@ function GoalFormDialog({ open, type, categories, initial, parentOptions, defaul
               </Select>
             </div>
           )}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">{t('goalFormTargetDate')}</label>
-            <DatePicker
-              value={targetDate ?? undefined}
-              onChange={(d) => setTargetDate(d ?? null)}
-              placeholder="No target date"
-              fromYear={new Date().getFullYear() - 1}
-              toYear={new Date().getFullYear() + 5}
-            />
+          {/* Start beside target: two halves of the same question, and the
+              start is the one a coach fills in when planning ahead. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t('goalFormStartDate')}</label>
+              <DatePicker
+                value={startDate ?? undefined}
+                onChange={(d) => setStartDate(d ?? null)}
+                placeholder={t('goalFormNoStartDate')}
+                fromYear={new Date().getFullYear() - 1}
+                toYear={new Date().getFullYear() + 5}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">{t('goalFormTargetDate')}</label>
+              <DatePicker
+                value={targetDate ?? undefined}
+                onChange={(d) => setTargetDate(d ?? null)}
+                placeholder={t('goalFormNoTargetDate')}
+                fromYear={new Date().getFullYear() - 1}
+                toYear={new Date().getFullYear() + 5}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -387,12 +409,21 @@ interface GoalCardProps {
   onChanged: () => void
   onAddStep: (goalId: string) => void
   onEditStep: (step: Goal) => void
+  /** Owned by the tab: one control orders every list on the page. */
+  sortMode: StepSortMode
+  onReorderSteps: (list: Goal[], from: number, to: number) => void
 }
 
-function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, onAddStep, onEditStep }: GoalCardProps) {
+function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, onAddStep, onEditStep, sortMode, onReorderSteps }: GoalCardProps) {
   const t = useTranslations('Contacts')
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState(false)
+  // NOT the same thing as `expanded` above, which opens the EVALUATIONS panel.
+  // This folds the card's own body away so a long list of goals stays readable;
+  // the header, its status and the step rail stay visible, because a collapsed
+  // goal you cannot read the state of is just a hidden goal.
+  const [collapsed, setCollapsed] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [evals, setEvals] = useState<GoalEvaluation[]>([])
   const [loadingEvals, setLoadingEvals] = useState(false)
   const [showEvalDialog, setShowEvalDialog] = useState(false)
@@ -445,12 +476,13 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
     qc.invalidateQueries({ queryKey: ['contact-goals', contactId] })
   }
 
-  const handleEdit = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => {
+  const handleEdit = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null; startDate: Date | null }) => {
     await updateDoc(goalRef, {
       title: data.title,
       description: data.description || null,
       categories: data.categories,
       target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
+      start_date: data.startDate ? Timestamp.fromDate(data.startDate) : null,
     })
     setEditOpen(false)
     onChanged()
@@ -461,14 +493,27 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
     try { await deleteDoc(goalRef); onChanged() } finally { setDeleting(false); setConfirmDelete(false) }
   }
 
+  // Filing away, not deleting: the document is untouched but for this stamp, and
+  // un-archiving is writing null back. The counters and the overdue job read the
+  // same field, so this also stops the goal nagging.
+  const toggleArchived = async () => {
+    setArchiving(true)
+    try {
+      await updateDoc(goalRef, { archived_at: archived ? null : serverTimestamp() })
+      onChanged()
+    } finally { setArchiving(false) }
+  }
+
+  const archived = goalIsArchived(goal)
   const canEval = goal.status === 'open' || goal.status === 'in_progress'
   const targetDateStr = formatDate(goal.target_date)
+  const startDateStr = formatDate(goal.start_date)
   const doneSteps = steps.filter((s) => s.status === 'achieved').length
 
   return (
     <>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="p-4 space-y-3">
+        <div className={`p-4 space-y-3 ${archived ? 'opacity-60' : ''}`}>
           {/* Header */}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
@@ -478,6 +523,16 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label={collapsed ? t('goalExpandCard') : t('goalCollapseCard')}
+                title={collapsed ? t('goalExpandCard') : t('goalCollapseCard')}
+                className="p-1 rounded hover:bg-muted transition-colors"
+              >
+                {collapsed
+                  ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+              </button>
               {goal.created_by !== 'coach' ? (
                 // Visible chip, not a hover-only cue — front-desk iPads have no
                 // hover state, so a tooltip here explained nothing to anyone.
@@ -490,6 +545,17 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
                 </span>
               ) : (
                 <>
+                  <button
+                    onClick={toggleArchived}
+                    disabled={archiving}
+                    aria-label={archived ? t('goalUnarchive') : t('goalArchive')}
+                    title={archived ? t('goalUnarchive') : t('goalArchive')}
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                  >
+                    {archived
+                      ? <ArchiveRestore className="h-3.5 w-3.5 text-muted-foreground" />
+                      : <Archive className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
                   <button onClick={() => setEditOpen(true)} className="p-1 rounded hover:bg-muted transition-colors">
                     <Flag className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
@@ -502,7 +568,7 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
           </div>
 
           {/* Chips */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className={`flex flex-wrap gap-1.5 ${collapsed ? 'hidden' : ''}`}>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[goal.status]}`}>
               {t(`goalStatus_${goal.status}`)}
             </span>
@@ -520,6 +586,16 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
                 {t('goalFromDimension', { dimension: dimensionLabel(goal.from_dimension, dimensions) })}
               </span>
             )}
+            {archived && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
+                {t('goalArchivedBadge')}
+              </span>
+            )}
+            {startDateStr && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
+                {t('goalStartDate')}: {startDateStr}
+              </span>
+            )}
             {targetDateStr && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
                 {t('goalTargetDate')}: {targetDateStr}
@@ -532,42 +608,68 @@ function GoalCard({ goal, contactId, categories, dimensions, steps, onChanged, o
 
           {/* Latest score / last evaluated / overdue — so the one stale goal in
               a list is visible WITHOUT expanding every card. */}
-          <GoalStateChips goal={goal} t={t} />
+          {!collapsed && <GoalStateChips goal={goal} t={t} />}
 
-          {/* Steps nested under their goal — see groupGoalsWithSteps. */}
-          <div className="rounded-lg border bg-muted/20 divide-y">
-            <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                {steps.length > 0
-                  ? t('goalStepsCompleted', { done: doneSteps, total: steps.length })
-                  : t('goalNoSteps')}
-              </p>
+          {/* THE RAIL STAYS WHEN COLLAPSED. It is the one thing worth reading
+              about a goal you have folded away — "two of five done" answers the
+              question the card is there to answer. */}
+          <GoalProgressBar
+            steps={steps}
+            label={t('goalStepsCompleted', { done: doneSteps, total: steps.length })}
+          />
+
+          {!collapsed && (
+            <>
+              {/* Steps nested under their goal — see groupGoalsWithSteps. */}
+              <div className="rounded-lg border bg-muted/20 divide-y">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {steps.length > 0
+                      ? t('goalStepsCompleted', { done: doneSteps, total: steps.length })
+                      : t('goalNoSteps')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onAddStep(goal.id)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t('goalsAddTask')}
+                  </button>
+                </div>
+                <SortableTaskList
+                  tasks={steps}
+                  enabled={sortMode === 'manual' && !archived && steps.length > 1}
+                  onReorder={(from, to) => onReorderSteps(steps, from, to)}
+                  dragLabel={t('goalReorderTask')}
+                >
+                  {(step, handle) => (
+                    <TaskCard
+                      goal={step}
+                      contactId={contactId}
+                      nested
+                      onChanged={onChanged}
+                      onEdit={() => onEditStep(step)}
+                      handle={handle}
+                    />
+                  )}
+                </SortableTaskList>
+              </div>
+
+              {/* Expand toggle */}
               <button
-                type="button"
-                onClick={() => onAddStep(goal.id)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={handleExpand}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
               >
-                <Plus className="h-3 w-3" />
-                {t('goalsAddTask')}
+                {t('goalEvaluations')}
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
-            </div>
-            {steps.map((s) => (
-              <TaskCard key={s.id} goal={s} contactId={contactId} nested onChanged={onChanged} onEdit={() => onEditStep(s)} />
-            ))}
-          </div>
-
-          {/* Expand toggle */}
-          <button
-            onClick={handleExpand}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
-          >
-            {t('goalEvaluations')}
-            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
+            </>
+          )}
         </div>
 
         {/* Evaluations panel */}
-        {expanded && (
+        {expanded && !collapsed && (
           <div className="border-t px-4 py-3 space-y-2 bg-muted/30">
             {loadingEvals ? (
               <p className="text-xs text-muted-foreground py-2">{t('loading')}</p>
@@ -664,9 +766,12 @@ interface TaskCardProps {
   /** Opens the shared edit dialog (with the parent picker) from the parent —
    *  General-section steps render this inline instead (see GoalsTab). */
   onEdit?: () => void
+  /** The drag handle, supplied by SortableTaskList in manual order; null in a
+   *  date order, where dragging would be overwritten by the sort. */
+  handle?: ReactNode
 }
 
-function TaskCard({ goal, contactId, onChanged, nested, onEdit }: TaskCardProps) {
+function TaskCard({ goal, contactId, onChanged, nested, onEdit, handle }: TaskCardProps) {
   const t = useTranslations('Contacts')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [acting, setActing] = useState(false)
@@ -692,6 +797,7 @@ function TaskCard({ goal, contactId, onChanged, nested, onEdit }: TaskCardProps)
   return (
     <>
       <div className={`flex items-start gap-3 ${nested ? 'px-3 py-2' : 'rounded-xl border bg-card px-4 py-3'} ${isDone ? 'opacity-60' : ''}`}>
+        {handle}
         <button onClick={toggleDone} disabled={acting} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors">
           {isDone
             ? <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -704,9 +810,12 @@ function TaskCard({ goal, contactId, onChanged, nested, onEdit }: TaskCardProps)
           {goal.description && (
             <p className="text-xs text-muted-foreground mt-0.5">{goal.description}</p>
           )}
-          {goal.target_date && (
+          {(goal.start_date || goal.target_date) && (
             <p className="text-xs text-muted-foreground mt-1">
-              {t('goalTargetDate')}: {formatDate(goal.target_date)}
+              {[
+                goal.start_date && `${t('goalStartDate')}: ${formatDate(goal.start_date)}`,
+                goal.target_date && `${t('goalTargetDate')}: ${formatDate(goal.target_date)}`,
+              ].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
@@ -751,6 +860,11 @@ export function GoalsTab({ contact, teamId, team }: Props) {
   const qc = useQueryClient()
   const { data: goals = [], isLoading } = useGoals(contact.id)
   const [addGoalOpen, setAddGoalOpen] = useState(false)
+  // ONE sort for every task list on the tab (a goal's steps and General alike):
+  // a coach thinks "how am I looking at tasks", not "how is this one list".
+  // Not persisted — it is a way of reading the page, not a setting.
+  const [sortMode, setSortMode] = useState<StepSortMode>('manual')
+  const [showArchived, setShowArchived] = useState(false)
   // The attendance trend's own period selector. Default 12 weeks, as it was in
   // the Stats tab it came from.
   const [trendPeriod, setTrendPeriod] = useState<TrendPeriodKey>('12w')
@@ -771,12 +885,52 @@ export function GoalsTab({ contact, teamId, team }: Props) {
   const categories = resolveGoalCategories(team)
   const dimensions = resolveCoachingDimensions(team)
 
-  const { goals: goalsWithSteps, generalSteps } = groupGoalsWithSteps(goals)
+  // ARCHIVING A GOAL TAKES ITS STEPS WITH IT. Hiding the parent alone would
+  // send its steps through groupGoalsWithSteps' missing-parent fallback and out
+  // into General, where they would read as loose to-dos the coach never wrote.
+  const archivedGoalIds = new Set(
+    goals.filter((g) => g.type !== 'task' && goalIsArchived(g)).map((g) => g.id),
+  )
+  const visibleGoals = showArchived
+    ? goals
+    : goals.filter(
+        (g) =>
+          !goalIsArchived(g) &&
+          !(g.type === 'task' && g.parent_goal_id && archivedGoalIds.has(g.parent_goal_id)),
+      )
+  const hasArchived = goals.some((g) => goalIsArchived(g))
+
+  // Sort AROUND the grouping helper, never inside it: its contract is to
+  // preserve input order, and the mobile app mirrors it byte-for-byte.
+  const { goals: groupedGoals, generalSteps: ungroupedGeneral } = groupGoalsWithSteps(visibleGoals)
+  const goalsWithSteps = groupedGoals.map(({ goal, steps }) => ({
+    goal,
+    steps: sortSteps(steps, sortMode),
+  }))
+  const generalSteps = sortSteps(ungroupedGeneral, sortMode)
   const goalOptions = goalsWithSteps.map(({ goal }) => ({ id: goal.id, title: goal.title }))
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-goals', contact.id] })
 
-  const handleAddGoal = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null }) => {
+  // Renumber the whole list densely from the order it is displayed in, in ONE
+  // commit: a reorder is a single fact about a list, and half of it landing
+  // would leave two tasks claiming the same position.
+  const reorderSteps = async (list: Goal[], from: number, to: number) => {
+    const next = [...list]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    const batch = writeBatch(db)
+    next.forEach((task, i) => {
+      batch.update(
+        doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_GOALS_SUBCOLLECTION, task.id),
+        { order: i },
+      )
+    })
+    await batch.commit()
+    invalidate()
+  }
+
+  const handleAddGoal = async (data: { title: string; description: string; categories: string[]; targetDate: Date | null; startDate: Date | null }) => {
     await addDoc(collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_GOALS_SUBCOLLECTION), {
       type: 'goal',
       title: data.title,
@@ -787,6 +941,7 @@ export function GoalsTab({ contact, teamId, team }: Props) {
       created_by: 'coach',
       created_at: serverTimestamp(),
       target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
+      start_date: data.startDate ? Timestamp.fromDate(data.startDate) : null,
     })
     setAddGoalOpen(false)
     invalidate()
@@ -798,11 +953,12 @@ export function GoalsTab({ contact, teamId, team }: Props) {
     setStepDialog({ open: true, editing: step, defaultParentGoalId: step.parent_goal_id ?? null })
   const closeStepDialog = () => setStepDialog({ open: false, editing: null, defaultParentGoalId: null })
 
-  const handleSubmitStep = async (data: { title: string; description: string; targetDate: Date | null; parentGoalId: string | null }) => {
+  const handleSubmitStep = async (data: { title: string; description: string; targetDate: Date | null; startDate: Date | null; parentGoalId: string | null }) => {
     const payload = {
       title: data.title,
       description: data.description || null,
       target_date: data.targetDate ? Timestamp.fromDate(data.targetDate) : null,
+      start_date: data.startDate ? Timestamp.fromDate(data.startDate) : null,
       parent_goal_id: data.parentGoalId,
     }
     if (stepDialog.editing) {
@@ -868,14 +1024,39 @@ export function GoalsTab({ contact, teamId, team }: Props) {
           make both unreadable, and where the page scrolls anyway. */}
       <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
         <div className="space-y-3 lg:col-span-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Flag className="h-4 w-4 text-violet-500" />
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{t('goalsTitle')}</h3>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              options={[
+                { value: 'manual', label: t('goalSortManual') },
+                { value: 'start_date', label: t('goalSortStart') },
+                { value: 'target_date', label: t('goalSortTarget') },
+              ]}
+              value={sortMode}
+              onChange={setSortMode}
+              size="sm"
+              ariaLabel={t('goalSortLabel')}
+            />
+            {/* Offered only once there IS something filed away — otherwise it is
+                a control that does nothing, on the page's busiest row. */}
+            {hasArchived && (
+              <Button
+                variant={showArchived ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                <Archive className="h-3.5 w-3.5 mr-1" />
+                {t('goalShowArchived')}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setAddGoalOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />{t('goalsAddGoal')}
+            </Button>
+          </div>
         </div>
 
         {goalsWithSteps.length === 0 ? (
@@ -895,6 +1076,8 @@ export function GoalsTab({ contact, teamId, team }: Props) {
                 onChanged={invalidate}
                 onAddStep={openAddStep}
                 onEditStep={openEditStep}
+                sortMode={sortMode}
+                onReorderSteps={reorderSteps}
               />
             ))}
           </div>
@@ -921,9 +1104,22 @@ export function GoalsTab({ contact, teamId, team }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              {generalSteps.map((s) => (
-                <TaskCard key={s.id} goal={s} contactId={contact.id} onChanged={invalidate} onEdit={() => openEditStep(s)} />
-              ))}
+              <SortableTaskList
+                tasks={generalSteps}
+                enabled={sortMode === 'manual' && generalSteps.length > 1}
+                onReorder={(from, to) => reorderSteps(generalSteps, from, to)}
+                dragLabel={t('goalReorderTask')}
+              >
+                {(step, handle) => (
+                  <TaskCard
+                    goal={step}
+                    contactId={contact.id}
+                    onChanged={invalidate}
+                    onEdit={() => openEditStep(step)}
+                    handle={handle}
+                  />
+                )}
+              </SortableTaskList>
             </div>
           )}
         </div>
