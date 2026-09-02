@@ -234,6 +234,7 @@ export function ActivityDialog({
   currency,
   onCreated,
   inline = false,
+  section,
 }: {
   open: boolean
   onClose: () => void
@@ -284,6 +285,9 @@ export function ActivityDialog({
    * "make a new thing", which is what a modal is for.
    */
   inline?: boolean
+  /** Which group of fields to render when `inline`. Omitted renders both,
+   *  which is what the dialog does — creating asks for everything at once. */
+  section?: 'details' | 'booking'
 }) {
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
@@ -662,8 +666,32 @@ export function ActivityDialog({
     onClose()
   }
 
-  const fields = (
+  /**
+   * THREE GROUPS, NOT TWO — and the boundary is what a studio is deciding.
+   *
+   * "Booking & pricing" was the wrong name for the first tab the moment the
+   * second one also held booking fields: the queue, the review step and every
+   * word shown to somebody about to book all lived under "Details" (Franco,
+   * 2026-09-02). So:
+   *
+   *   Access & pricing  who may book and what it costs — in the catalogue pane
+   *   Details           what the thing IS: name, kind, session lengths, cover,
+   *                     description, colour, tags
+   *   Booking           everything that happens AROUND a booking — whether it
+   *                     confirms itself, whether a full session queues, and the
+   *                     prose and questions a visitor meets on the way in
+   *
+   * Session lengths sit in Details rather than Booking because a duration is
+   * part of what an appointment IS, not a rule about booking it — the same
+   * reason they never moved to the pricing form.
+   *
+   * The DIALOG renders both groups, because creating asks for everything at
+   * once; the pane renders one per tab.
+   */
+  const fieldsFor = (section: 'details' | 'booking') => (
     <>
+      {section === 'details' && (
+        <>
           <div className="space-y-1.5">
             <Label htmlFor="act-name">{t('fieldName')}</Label>
             <Input id="act-name" {...register('name')} autoFocus />
@@ -770,16 +798,15 @@ export function ActivityDialog({
               here is not about money: whether a booking confirms itself,
               whether a full session keeps a queue, and how long an appointment
               runs. */}
-          <FormSection
-            title={t('sectionBookingTitle')}
-            description={t('sectionBookingSubtitle')}
-          >
+        </>
+      )}
 
-
-            {/* The per-activity switches, gathered into one outlined group:
-                label (+ hint) on the left, control on the right, one per row.
-                Session lengths join the group for appointments only. */}
-            <div className="divide-y rounded-lg border">
+      {section === 'booking' && (
+        <FormSection
+          title={t('sectionBookingTitle')}
+          description={t('sectionBookingSubtitle')}
+        >
+          <div className="divide-y rounded-lg border">
               {/* A field, not implied by type: either kind may require a review step. */}
               <Controller
                 name="autoConfirm"
@@ -835,6 +862,12 @@ export function ActivityDialog({
               )}
 
 
+          </div>
+        </FormSection>
+      )}
+
+      {section === 'details' && (
+        <>
               {type === 'appointment' && (
                 <div className="p-3 space-y-3">
                   <div className="flex items-center justify-between gap-4">
@@ -962,25 +995,11 @@ export function ActivityDialog({
                   </Link>
                 </div>
               )}
-            </div>
-          </FormSection>
+        </>
+      )}
 
-          {/* ── Everything with an honest default ─────────────────────────────
-              Presentation and the public-page prose. Every field in here is
-              optional and an empty one renders nothing, so a studio that never
-              opens this ships a correct class. Opened up-front when the
-              activity being edited already carries any of it — a field she
-              filled in must never be the one she cannot find. */}
-          {/* PRESENTATION AND PUBLIC PROSE. Every field here is optional and
-              an empty one renders nothing, so a studio that fills in none of it
-              still ships a correct class.
-
-              It used to sit behind a "More options" disclosure, which earned
-              its keep when this form held every decision about an activity. One
-              closed section now hides real fields to save a few hundred pixels
-              — and a hidden field is one a studio does not know it has
-              (Franco, 2026-09-01). */}
-          <FormSection title={t('moreOptionsLabel')} description={t('moreOptionsHint')}>
+      {section === 'details' && (
+        <FormSection title={t('sectionAppearanceTitle')} description={t('sectionAppearanceHint')}>
           <div className="divide-y rounded-lg border">
             <div className="flex items-center justify-between gap-4 p-3">
               <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
@@ -1013,6 +1032,11 @@ export function ActivityDialog({
               />
             </div>
           </div>
+        </FormSection>
+      )}
+
+      {section === 'booking' && (
+        <FormSection title={t('sectionVisitorTitle')} description={t('sectionVisitorHint')}>
 
           {/* Secondary prose — side by side when the dialog is wide */}
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1123,8 +1147,17 @@ export function ActivityDialog({
               )}
             />
           </div>
-          </FormSection>
+        </FormSection>
+      )}
+    </>
+  )
 
+  const fields = section ? (
+    fieldsFor(section)
+  ) : (
+    <>
+      {fieldsFor('details')}
+      {fieldsFor('booking')}
     </>
   )
 

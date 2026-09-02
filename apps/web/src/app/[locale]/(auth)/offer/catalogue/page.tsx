@@ -1048,23 +1048,31 @@ export default function CataloguePage() {
                 description: selectedActivity.description,
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
-              details={
-                currentTeamId && user ? (
-                  <ActivityDialog
-                    // Keyed by the record so switching rows remounts the form
-                    // rather than leaving the previous one's draft in it.
-                    key={`details-${selectedActivity.id}`}
-                    inline
-                    open
-                    onClose={() => {}}
-                    teamId={currentTeamId}
-                    userId={user.uid}
-                    editing={selectedActivity}
-                    duplicating={null}
-                    nextOrder={activities.length}
-                    currency={currency}
-                  />
-                ) : undefined
+              extraTabs={
+                currentTeamId && user
+                  ? (['details', 'booking'] as const).map((section) => ({
+                      key: section,
+                      label: section === 'details' ? t('paneTabDetails') : t('paneTabBooking'),
+                      content: (
+                        <ActivityDialog
+                          // Keyed by the record AND the section so switching
+                          // rows remounts each form rather than leaving the
+                          // previous one's draft in it.
+                          key={`${section}-${selectedActivity.id}`}
+                          inline
+                          section={section}
+                          open
+                          onClose={() => {}}
+                          teamId={currentTeamId}
+                          userId={user.uid}
+                          editing={selectedActivity}
+                          duplicating={null}
+                          nextOrder={activities.length}
+                          currency={currency}
+                        />
+                      ),
+                    }))
+                  : undefined
               }
             >
               {/* ALWAYS MOUNTED, and the guard that used to sit here was a dead
@@ -1105,8 +1113,9 @@ export default function CataloguePage() {
                 description: selectedPlan.description,
               }}
               actions={paneActionsFor('plan', selectedPlan.id)}
-              details={
-                currentTeamId ? (
+              extraTabs={
+                currentTeamId
+                  ? [{ key: 'details', label: t('paneTabDetails'), content: (
                   <SubTypeDialog
                     key={`details-${selectedPlan.id}`}
                     inline
@@ -1122,7 +1131,8 @@ export default function CataloguePage() {
                       void qc.invalidateQueries({ queryKey: ['activities'] })
                     }}
                   />
-                ) : undefined
+                ) }]
+                  : undefined
               }
             >
               {/* PRICES FIRST, then what they open. A plan is a price and a
@@ -1401,7 +1411,7 @@ function PaneBody({
   summary,
   facts,
   actions,
-  details,
+  extraTabs,
   children,
 }: {
   title: string
@@ -1412,13 +1422,12 @@ function PaneBody({
   /** The icon row. Empty for a reader who cannot edit — see PaneAction. */
   actions?: PaneAction[]
   /**
-   * The "Details" half — the record's own fields, shown under a second tab.
-   *
-   * ABSENT MEANS NO TABS: a course and a product are edited on their own page,
-   * so their pane has one thing in it and a strip of one tab would be a lie
-   * about there being a choice.
+   * The tabs BESIDE the main one, in order. Empty or absent means no strip at
+   * all: a course and a product are edited on their own page, so their pane
+   * has one thing in it and a strip of one tab would be a lie about there
+   * being a choice.
    */
-  details?: React.ReactNode
+  extraTabs?: { key: string; label: string; content: React.ReactNode }[]
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
@@ -1488,7 +1497,7 @@ function PaneBody({
                 fields are right here under a tab, a button labelled "Edit"
                 beside them said the visible fields were not editing, which was
                 false, and gave no hint of what it hid (Franco, 2026-09-02). */}
-            {(details ? [] : actions.filter((a) => a.key === 'edit')).map((a) =>
+            {(extraTabs?.length ? [] : actions.filter((a) => a.key === 'edit')).map((a) =>
                 'href' in a ? (
                   <Link
                     key={a.key}
@@ -1513,8 +1522,8 @@ function PaneBody({
           thing IS — while everything below the line is what it CONNECTS to. */}
       {facts && <OfferFacts {...facts} />}
 
-      {details ? (
-        <PaneTabs main={children} details={details} />
+      {extraTabs?.length ? (
+        <PaneTabs main={children} extra={extraTabs} />
       ) : (
         children && <div className="border-t pt-4">{children}</div>
       )}
@@ -1533,9 +1542,15 @@ function PaneBody({
  * Booking and pricing leads because it is the one asked most often, and it is
  * where the plan matcher lives.
  */
-function PaneTabs({ main, details }: { main?: React.ReactNode; details: React.ReactNode }) {
+function PaneTabs({
+  main,
+  extra,
+}: {
+  main?: React.ReactNode
+  extra: { key: string; label: string; content: React.ReactNode }[]
+}) {
   const t = useTranslations('OfferCatalogue')
-  const [tab, setTab] = useState<'main' | 'details'>('main')
+  const [tab, setTab] = useState('main')
   // AN UNDERLINE, not pills — the same shape the contact detail page uses for
   // its tabs. The rail above already spends a filled pill strip on choosing
   // WHAT you are looking at, and a second filled strip choosing which half of
@@ -1551,18 +1566,24 @@ function PaneTabs({ main, details }: { main?: React.ReactNode; details: React.Re
       <div className="mb-3 flex gap-1 overflow-x-auto border-b" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'main'}
           onClick={() => setTab('main')} className={tabCls(tab === 'main')}>
-          {t('paneTabBooking')}
+          {t('paneTabAccess')}
         </button>
-        <button type="button" role="tab" aria-selected={tab === 'details'}
-          onClick={() => setTab('details')} className={tabCls(tab === 'details')}>
-          {t('paneTabDetails')}
-        </button>
+        {extra.map((x) => (
+          <button key={x.key} type="button" role="tab" aria-selected={tab === x.key}
+            onClick={() => setTab(x.key)} className={tabCls(tab === x.key)}>
+            {x.label}
+          </button>
+        ))}
       </div>
-      {/* BOTH STAY MOUNTED. Each half is a form holding unsaved input, and
-          unmounting the one you tabbed away from would throw it away without
-          saying so. */}
+      {/* EVERY TAB STAYS MOUNTED. Each is a form that may hold unsaved input,
+          and unmounting the one you tabbed away from would throw it away
+          without saying so. */}
       <div className={tab === 'main' ? '' : 'hidden'}>{main}</div>
-      <div className={tab === 'details' ? '' : 'hidden'}>{details}</div>
+      {extra.map((x) => (
+        <div key={x.key} className={tab === x.key ? '' : 'hidden'}>
+          {x.content}
+        </div>
+      ))}
     </div>
   )
 }
@@ -1578,8 +1599,8 @@ function RailGroup({
 }) {
   return (
     <div>
-      <SectionHeading level="eyebrow" icon={Icon} title={label} className="px-2 py-1.5" />
-      <div className="space-y-0.5">{children}</div>
+      <SectionHeading level="eyebrow" icon={Icon} title={label} className="px-2 pb-1.5 pt-2" />
+      <div className="space-y-1">{children}</div>
     </div>
   )
 }
@@ -1668,7 +1689,11 @@ function RailRow({
         type="button"
         onClick={onClick}
         aria-pressed={selected}
-        className={`flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1.5 text-left ${
+        // ROOM TO SCAN. Two lines of text in `py-1.5` made a rail of twenty
+        // items one dense block; the eye needs a gap to find the boundary
+        // between rows, and the name is doing the work now that it has weight
+        // (Franco, 2026-09-02).
+        className={`flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-2.5 text-left ${
           selected ? 'text-primary' : ''
         }`}
       >
@@ -1685,7 +1710,7 @@ function RailRow({
               list of names with notes attached (Franco, 2026-09-02). */}
           <span className="block truncate text-[15px] font-semibold leading-tight">{name}</span>
           {detail && (
-            <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
+            <span className="mt-1 block truncate text-[11px] leading-tight text-muted-foreground">
               {detail}
             </span>
           )}

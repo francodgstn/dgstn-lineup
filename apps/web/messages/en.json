@@ -1753,7 +1753,7 @@
     "waitlistRequiresCapacity": "Only has an effect on sessions with a participant limit — a session with no limit is never full.",
     "waitlistRequiresPlan": "Available from the {plan} plan.",
     "sectionBookingTitle": "Booking options",
-    "sectionBookingSubtitle": "How a booking is handled once someone makes it — and, for appointments, the lengths you offer. Prices and who can book live in the catalogue.",
+    "sectionBookingSubtitle": "How a booking is handled once someone makes it. Prices and who can book are under Access & pricing.",
     "moreOptionsLabel": "More options",
     "moreOptionsHint": "Colour, level, and the details shown on your public page",
     "viewSchedule": "View schedule",
@@ -1779,7 +1779,11 @@
     "tagsMax": "{max} labels is the maximum.",
     "tagRemove": "Remove {tag}",
     "accessSubscriptionPlansValidation": "Choose at least one subscription that can book this activity.",
-    "planLinksUnsaved": "The plans above have unsaved changes — save them in that box first, or this Save will discard them."
+    "planLinksUnsaved": "The plans above have unsaved changes — save them in that box first, or this Save will discard them.",
+    "sectionAppearanceTitle": "Appearance",
+    "sectionAppearanceHint": "Colour and labels shown on your public page.",
+    "sectionVisitorTitle": "What a visitor sees",
+    "sectionVisitorHint": "The words and questions someone meets on the way to booking. Every field is optional."
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -7534,10 +7538,11 @@
     "newPlan": "New plan",
     "newCourse": "New course",
     "newProduct": "New product",
-    "paneTabBooking": "Booking & pricing",
+    "paneTabBooking": "Booking",
     "paneTabDetails": "Details",
     "fullEditCourses": "Course content, lessons and media — on the Online courses page",
-    "fullEditProducts": "Images, variants and collections — on the Products page"
+    "fullEditProducts": "Images, variants and collections — on the Products page",
+    "paneTabAccess": "Access & pricing"
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

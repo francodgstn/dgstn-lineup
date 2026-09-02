@@ -1753,7 +1753,7 @@
     "waitlistRequiresCapacity": "Wirkt nur bei Einheiten mit Teilnehmerlimit — eine Einheit ohne Limit ist nie ausgebucht.",
     "waitlistRequiresPlan": "Verfügbar ab dem Tarif {plan}.",
     "sectionBookingTitle": "Buchungsoptionen",
-    "sectionBookingSubtitle": "Wie eine Buchung nach dem Absenden behandelt wird — und bei Terminen die angebotenen Längen. Preise und Zugang stehen im Katalog.",
+    "sectionBookingSubtitle": "Wie eine Buchung nach dem Absenden behandelt wird. Preise und Zugang stehen unter Zugang & Preise.",
     "moreOptionsLabel": "Weitere Optionen",
     "moreOptionsHint": "Farbe, Niveau und die Angaben auf deiner öffentlichen Seite",
     "viewSchedule": "Zeitplan ansehen",
@@ -1779,7 +1779,11 @@
     "tagsMax": "Maximal {max} Bezeichnungen.",
     "tagRemove": "{tag} entfernen",
     "accessSubscriptionPlansValidation": "Wähle mindestens ein Abo aus, mit dem diese Aktivität gebucht werden kann.",
-    "planLinksUnsaved": "Die Abo-Auswahl oben ist noch nicht gespeichert — zuerst dort speichern, sonst geht sie mit diesem Speichern verloren."
+    "planLinksUnsaved": "Die Abo-Auswahl oben ist noch nicht gespeichert — zuerst dort speichern, sonst geht sie mit diesem Speichern verloren.",
+    "sectionAppearanceTitle": "Darstellung",
+    "sectionAppearanceHint": "Farbe und Labels auf Ihrer öffentlichen Seite.",
+    "sectionVisitorTitle": "Was Besucher sehen",
+    "sectionVisitorHint": "Die Texte und Fragen auf dem Weg zur Buchung. Alle Felder sind optional."
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -7534,10 +7538,11 @@
     "newPlan": "Neuer Plan",
     "newCourse": "Neuer Kurs",
     "newProduct": "Neues Produkt",
-    "paneTabBooking": "Buchung & Preise",
+    "paneTabBooking": "Buchung",
     "paneTabDetails": "Details",
     "fullEditCourses": "Kursinhalte, Lektionen und Medien — auf der Seite Onlinekurse",
-    "fullEditProducts": "Bilder, Varianten und Kollektionen — auf der Seite Produkte"
+    "fullEditProducts": "Bilder, Varianten und Kollektionen — auf der Seite Produkte",
+    "paneTabAccess": "Zugang & Preise"
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",
