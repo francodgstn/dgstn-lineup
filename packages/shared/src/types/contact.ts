@@ -114,6 +114,29 @@ export interface EmergencyContact {
 // `email`). Shared by the admin editor + the login callable.
 export const MAX_CONTACT_LOGIN_EMAILS = 5
 
+/**
+ * Telemetry the mobile (Expo) app writes to ITS OWN contact document on
+ * foreground — app + OTA runtime versions, so a studio/operator can tell what
+ * a contact is actually running without a support round-trip. Written by
+ * nobody else; read by nobody yet (a future support/diagnostics surface).
+ *
+ * Self-writable under `firestore.rules`' contact self-update arm, alongside
+ * `weight`/`last_seen_at` — see that rule for the exact field list this must
+ * stay in sync with.
+ */
+export interface MobileAppTelemetry {
+  /** App version (e.g. from `expo-application`). */
+  version?: string
+  /** Expo Updates runtime version. */
+  ota_runtime_version?: string | null
+  /** Expo Updates release channel. */
+  ota_channel?: string | null
+  /** True when running the build's embedded update (no OTA has applied yet). */
+  ota_is_embedded?: boolean | null
+  /** The applied Expo Updates update id, when not embedded. */
+  ota_update_id?: string | null
+}
+
 export interface Contact {
   id: string
   teamId: string
@@ -335,6 +358,10 @@ export interface Contact {
 
   // Activity tracking
   last_seen_at?: Timestamp
+
+  // Mobile app telemetry — see MobileAppTelemetry's doc comment. Self-writable,
+  // same rules arm as last_seen_at above.
+  mobile_app?: MobileAppTelemetry
 
   // Alerts (denormalized count)
   alerts_count?: number
@@ -754,6 +781,12 @@ export interface ContactAlert {
   schedule_value: number | Timestamp | null
   message: string
   show_in_app?: boolean
+  /** Freeform origin tag, read by the mobile AlertsCard to pick an icon — NOT
+   *  narrowed by a shared union: writers pick their own string ('automation',
+   *  'booking' today — see automationEngine.ts and booking/index.ts) and a
+   *  reader with no icon for an unrecognised value just shows the default.
+   *  Absent on alerts written before this field existed. */
+  alert_type?: string
   /** Set = dismissed. The only end an `always` alert has, and the reason
    *  `trackContactAlerts` counts non-archived rows only. */
   archived_at?: Timestamp | null

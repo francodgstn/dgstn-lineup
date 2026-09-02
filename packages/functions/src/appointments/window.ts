@@ -37,6 +37,10 @@ import {
   type ActivityMemberBenefit,
   type Availability,
   type Benefit,
+  type ListAvailabilityResult,
+  type ListAvailabilityCoach,
+  type ListAvailabilityActivity,
+  type ListAvailabilityDay,
   localizedPublicUrl,
 } from '@linyup/shared'
 import {
@@ -179,7 +183,7 @@ function accumulateCandidates(
 
 // ─── listAvailability (public) ─────────────────────────────────────────────────
 
-export const listAvailability = onCall(async (request) => {
+export const listAvailability = onCall(async (request): Promise<ListAvailabilityResult> => {
   await checkoutRateLimit(request.rawRequest?.ip, 'availability', AVAILABILITY_RATE_LIMIT_PER_HOUR)
   const data = request.data as {
     teamId?: string
@@ -274,7 +278,7 @@ export const listAvailability = onCall(async (request) => {
     daysMap: Map<number, Record<string, Set<number>>>
   }
 
-  const coaches: unknown[] = []
+  const coaches: ListAvailabilityCoach[] = []
   for (const [providerId, providerTemplates] of byProvider) {
     // Busy = this provider's slot-blocking sessions overlapping the range —
     // EXPIRED paid-booking holds don't block (lazy release, see
@@ -337,9 +341,9 @@ export const listAvailability = onCall(async (request) => {
       }
     }
 
-    const activities: unknown[] = []
+    const activities: ListAvailabilityActivity[] = []
     for (const acc of activityAcc.values()) {
-      const days = [...acc.daysMap.entries()]
+      const days: ListAvailabilityDay[] = [...acc.daysMap.entries()]
         .map(([dayMs, byDur]) => ({
           dayMs,
           slotsByDuration: Object.fromEntries(

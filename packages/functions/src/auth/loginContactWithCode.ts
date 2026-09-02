@@ -5,7 +5,7 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import { CONTACTS_COLLECTION, TEAMS_COLLECTION, type SaasPlan } from '@linyup/shared'
+import { CONTACTS_COLLECTION, TEAMS_COLLECTION, planHasFeature, type SaasPlan } from '@linyup/shared'
 import { buildContactSession } from '../utils/contactSession'
 import { canCreateContact } from '../utils/contactCap'
 import { bucketRateLimit } from '../utils/rateLimit'
@@ -18,6 +18,115 @@ const PROVISIONAL_TTL_MS = 7 * 24 * 60 * 60 * 1000
 // Anti-flooding: at most this many NEW shop registrations per team per day.
 const REGISTRATIONS_PER_TEAM_PER_DAY = 20
 
+// ─── The member-app plan gate (mobile client only) ─────────────────────────────
+//
+// `member_app` (packages/shared/src/types/plan.ts, renamed from `student_app`)
+// is declared on Coach+ but was enforced nowhere — a contact on a Free-plan
+// team could sign into the mobile app exactly as if the team had never been
+// gated at all. The WEB Space has no equivalent gate (its whole point is to be
+// the surface every plan gets), so this only ever runs for `client: 'mobile'`.
+//
+// Same "effective plan" rule `utils/plan.ts`'s `requirePlan` uses: a trial (or
+// any status other than `past_due`/`cancelled`) reads as active, so a trialing
+// team is never refused here for a billing reason it hasn't actually reached
+// yet — only a genuinely inactive subscription, or a tier below Coach, closes
+// the door.
+export function memberAppAccessForPlan(
+  plan: SaasPlan | null | undefined,
+  planStatus?: string | null
+): boolean {
+  const effectivePlan: SaasPlan = plan ?? 'free'
+  const status = planStatus ?? 'trial'
+  if (status === 'past_due' || status === 'cancelled') return false
+  return planHasFeature(effectivePlan, 'member_app')
+}
+
+/** The minimal shape `filterCandidatesForMemberApp` needs from a matched contact —
+ *  deliberately narrower than the Firestore doc so it is trivial to fake in a test. */
+export interface MemberAppCandidate {
+  id: string
+  teamId: string
+  firstname?: string | null
+  lastname?: string | null
+}
+
+/** What `filterCandidatesForMemberApp` needs from a candidate's team — the plan
+ *  gate's inputs, plus the display fields the `appNotIncluded` result carries so
+ *  the app can name the studio it was refused by. */
+export interface MemberAppTeamInfo {
+  plan?: SaasPlan | null
+  plan_status?: string | null
+  name?: string | null
+  slug?: string | null
+}
+
+export interface MemberAppTeamRef {
+  teamId: string
+  teamName: string | null
+  slug: string | null
+}
+
+export interface MemberAppFilterResult {
+  /** The candidates whose team offers the member app — unmodified otherwise. */
+  eligible: MemberAppCandidate[]
+  /** Every DISTINCT team a candidate was dropped for, in first-seen order. */
+  droppedTeams: MemberAppTeamRef[]
+}
+
+/**
+ * Drops every candidate whose team's plan lacks `member_app` — the pure
+ * decision, injected-loader shape (same DI pattern as `createTeamNotification`
+ * in `utils/teamNotifications.ts`: the caller supplies a real Firestore read,
+ * a test supplies a map) so it is unit-testable without an emulator.
+ *
+ * `loadTeam` is called at most once per DISTINCT teamId among the candidates.
+ */
+export async function filterCandidatesForMemberApp(
+  candidates: MemberAppCandidate[],
+  loadTeam: (teamId: string) => Promise<MemberAppTeamInfo | null>
+): Promise<MemberAppFilterResult> {
+  const teamCache = new Map<string, MemberAppTeamInfo | null>()
+  async function team(teamId: string): Promise<MemberAppTeamInfo | null> {
+    if (!teamCache.has(teamId)) teamCache.set(teamId, await loadTeam(teamId))
+    return teamCache.get(teamId) ?? null
+  }
+
+  const eligible: MemberAppCandidate[] = []
+  const droppedTeams: MemberAppTeamRef[] = []
+  const droppedTeamIds = new Set<string>()
+
+  for (const candidate of candidates) {
+    const info = await team(candidate.teamId)
+    if (info && memberAppAccessForPlan(info.plan, info.plan_status)) {
+      eligible.push(candidate)
+      continue
+    }
+    if (!droppedTeamIds.has(candidate.teamId)) {
+      droppedTeamIds.add(candidate.teamId)
+      droppedTeams.push({
+        teamId: candidate.teamId,
+        teamName: info?.name ?? null,
+        slug: info?.slug ?? null,
+      })
+    }
+  }
+
+  return { eligible, droppedTeams }
+}
+
+/** The real `loadTeam` the callable uses — reads `teams/{teamId}` once. */
+async function loadTeamForMemberAppGate(teamId: string): Promise<MemberAppTeamInfo | null> {
+  const snap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
+  if (!snap.exists) return null
+  const data = snap.data()!
+  return {
+    plan: (data.plan as SaasPlan | undefined) ?? null,
+    plan_status: (data.plan_status as string | undefined) ?? null,
+    name: (data.name as string | undefined) ?? null,
+    slug: (data.slug as string | undefined) ?? null,
+  }
+}
+
 export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_MOBILE }, async (request) => {
   monitorAppCheck(request, 'loginContactWithCode')
   const data = request.data as {
@@ -28,6 +137,10 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_
     // create a minimal provisional one with these names and log it in. Ignored
     // whenever matches exist (a stolen code must not inject duplicates).
     newContact?: { firstname?: string; lastname?: string }
+    // Set by the Expo app ONLY. The web flow never sends this field, so its
+    // absence is what keeps the web login byte-for-byte unaffected by the gate
+    // below — see memberAppAccessForPlan's header.
+    client?: 'mobile'
   }
 
   if (!data?.codeId || !data?.code) {
@@ -81,7 +194,31 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_
     if (d.archived_at != null || d.deleted_at != null) continue
     byId.set(doc.id, doc)
   }
-  const activeContacts = [...byId.values()]
+  let activeContacts = [...byId.values()]
+
+  // ── The member-app plan gate (mobile client only) ─────────────────────────
+  // Drop every match whose team's plan lacks `member_app` BEFORE the
+  // single-vs-multiple-contact branching below, so both the "which contact?"
+  // list and the final chosen contact are already gated. Only when the ONLY
+  // matches are dropped do we tell the app why, rather than falling through to
+  // `requiresSignup` (which would be a confusing "no account" message for a
+  // real account behind a plan wall).
+  if (data.client === 'mobile' && activeContacts.length > 0) {
+    const { eligible, droppedTeams } = await filterCandidatesForMemberApp(
+      activeContacts.map((doc) => ({
+        id: doc.id,
+        teamId: doc.data().teamId as string,
+        firstname: doc.data().firstname ?? null,
+        lastname: doc.data().lastname ?? null,
+      })),
+      loadTeamForMemberAppGate
+    )
+    if (eligible.length === 0) {
+      return { verified: true, appNotIncluded: true, teams: droppedTeams }
+    }
+    const eligibleIds = new Set(eligible.map((c) => c.id))
+    activeContacts = activeContacts.filter((doc) => eligibleIds.has(doc.id))
+  }
 
   if (activeContacts.length === 0) {
     const firstname = (data.newContact?.firstname ?? '').trim().slice(0, 100)
