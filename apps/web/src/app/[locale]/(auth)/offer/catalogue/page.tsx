@@ -342,6 +342,9 @@ export default function CataloguePage() {
    */
   const deckRef = useRef<HTMLDivElement>(null)
   const [deckH, setDeckH] = useState(0)
+  /** Whether anything has scrolled under the deck yet — the shadow's only job
+   *  is to say "there is more above", so at the top there is nothing to say. */
+  const [deckScrolled, setDeckScrolled] = useState(false)
   useEffect(() => {
     const el = deckRef.current
     if (!el) return
@@ -349,6 +352,16 @@ export default function CataloguePage() {
     ro.observe(el)
     setDeckH(el.offsetHeight)
     return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    // Cheap in the same way the sidebar's is: React bails out when the boolean
+    // is unchanged, so this costs a render on the two frames that cross the
+    // boundary, not on every scroll event.
+    const onScroll = () => setDeckScrolled(window.scrollY > 0)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
   // NULL until the studio picks a tab, so a deep link (`?sel=plan:x`, which the
   // pricing warnings and both editors produce) opens on the tab that HOLDS the
@@ -1065,10 +1078,22 @@ export default function CataloguePage() {
 
       {/* The same gradient the sidebar's scroll edge uses, so a pinned surface
           reads the same way in both places. It hangs BELOW the deck's box, which
-          is why the deck is `relative`. */}
+          is why the deck is `relative`.
+
+          DRAWN ONLY WHEN SOMETHING IS UNDER IT. The shadow's whole job is to say
+          "there is more above"; at the top of the page that is false, and a
+          permanent one turns into a decorative rule that reads as a border
+          (Franco, 2026-09-02). Same fade the sidebar uses, for the same reason.
+
+          FADED AT BOTH ENDS. Full-bleed, it stopped dead against the page
+          margins — a hard vertical edge where a shadow should have none. The
+          mask takes it to nothing over the last 2rem, so it reads as light
+          falling off rather than as a bar that was cut. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-black/10 to-transparent dark:from-black/40 lg:block"
+        className={`pointer-events-none absolute inset-x-0 top-full hidden h-3 bg-gradient-to-b from-black/10 to-transparent transition-opacity duration-200 dark:from-black/40 lg:block [mask-image:linear-gradient(to_right,transparent,#000_2rem,#000_calc(100%-2rem),transparent)] [-webkit-mask-image:linear-gradient(to_right,transparent,#000_2rem,#000_calc(100%-2rem),transparent)] ${
+          deckScrolled ? 'opacity-100' : 'opacity-0'
+        }`}
       />
       </div>
 
