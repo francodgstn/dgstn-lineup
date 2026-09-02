@@ -234,6 +234,7 @@ import {
   type BookingAction,
 } from '@/hooks/useBookingActions'
 import { useContactBookedSessions, type SessionInfo } from '@/hooks/useBookingsWindow'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -1135,21 +1136,24 @@ function HeaderActionButton({
   count?: number
   onClick: () => void
 }) {
+  // The count badge is a NUMBER, not a label: it says how many notes there are,
+  // never what pressing this does. Icon-only in the sense that matters.
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-    >
-      <Icon className="h-4 w-4" />
-      {count > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-          {count}
-        </span>
-      )}
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <Icon className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+    </Tip>
   )
 }
 
@@ -1260,15 +1264,16 @@ function AlertsGlance({
             <span className="text-xs text-muted-foreground">({alerts.length})</span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={t('addAlert')}
-          title={t('addAlert')}
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <Tip label={t('addAlert')}>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={t('addAlert')}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   >
+            <Plus className="h-4 w-4" />
+          </button>
+        </Tip>
       </div>
 
       {isLoading ? (
@@ -1343,15 +1348,16 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
             <span className="text-xs text-muted-foreground">({notes.length})</span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={t('notesAddNote')}
-          title={t('notesAddNote')}
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <Tip label={t('notesAddNote')}>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={t('notesAddNote')}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+   >
+            <Plus className="h-4 w-4" />
+          </button>
+        </Tip>
       </div>
 
       {isLoading ? (
@@ -4812,42 +4818,50 @@ function AffiliationsTab({
                 <div className="flex items-center gap-1 shrink-0">
                   {/* Approve action for pending/requested affiliations */}
                   {!membershipFieldLocked && isRequested && (
-                    <button
-                      onClick={() => handleApprove(aff.id)}
-                      disabled={isApproving}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-green-600 disabled:opacity-50"
-                      title={t('approveButton')}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('approveButton')}>
+                      <button
+                        onClick={() => handleApprove(aff.id)}
+                        disabled={isApproving}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-green-600 disabled:opacity-50"
+                        aria-label={t('approveButton')}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {canRenew && (
-                    <button
-                      onClick={() => setRenewTarget(aff)}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
-                      title={t('renewButton')}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('renewButton')}>
+                      <button
+                        onClick={() => setRenewTarget(aff)}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                        aria-label={t('renewButton')}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {!membershipFieldLocked && (
-                    <button
-                      onClick={() => { setEditing(aff); setDialogOpen(true) }}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                      title={t('colType')}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('colType')}>
+                      <button
+                        onClick={() => { setEditing(aff); setDialogOpen(true) }}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        aria-label={t('colType')}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {!membershipFieldLocked && (
-                    <button
-                      onClick={() => handleRemove(aff.id)}
-                      disabled={isRemoving}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      title={t('removeTitle')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('removeTitle')}>
+                      <button
+                        onClick={() => handleRemove(aff.id)}
+                        disabled={isRemoving}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        aria-label={t('removeTitle')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                 </div>
               </div>
@@ -5266,14 +5280,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     contact a link to update their own details" — rather than
                     describing them like the status and contact lines below. */}
                 {team?.slug && !contact.archived_at && !contact.deleted_at && (
-                  <button
-                    onClick={handleCopyUpdateLink}
-                    className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    title={t('copyUpdateLink')}
-                  >
-                    <Link2 className="h-3.5 w-3.5 shrink-0" />
-                    {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
-                  </button>
+                  <Tip label={t('copyUpdateLink')}>
+                    <button
+                      onClick={handleCopyUpdateLink}
+                      className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={t('copyUpdateLink')}
+                    >
+                      <Link2 className="h-3.5 w-3.5 shrink-0" />
+                      {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
+                    </button>
+                  </Tip>
                 )}
               </div>
             </div>
@@ -5322,19 +5338,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <span className="group/email flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Mail className="h-3 w-3 shrink-0" />
                     <span className="truncate">{contact.email}</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyEmail}
-                      title={emailCopied ? t('emailCopied') : t('copyEmail')}
-                      aria-label={emailCopied ? t('emailCopied') : t('copyEmail')}
-                      className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      {emailCopied ? (
-                        <Check className="h-3 w-3 text-green-600" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
-                    </button>
+                    <Tip label={emailCopied ? t('emailCopied') : t('copyEmail')}>
+                      <button
+                        type="button"
+                        onClick={handleCopyEmail}
+                        aria-label={emailCopied ? t('emailCopied') : t('copyEmail')}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+   >
+                        {emailCopied ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </button>
+                    </Tip>
                   </span>
                 )}
                 {contact.phone && (
@@ -5530,19 +5547,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </div>
                 {/* Edit-mode toggle — secondary action */}
-                <button
-                  type="button"
-                  onClick={() => setEditingTabs((v) => !v)}
-                  title={editingTabs ? t('tabReorderDone') : t('tabReorder')}
-                  aria-label={editingTabs ? t('tabReorderDone') : t('tabReorder')}
-                  className={`mb-1 flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-lg border transition-colors ${
-                    editingTabs
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {editingTabs ? <Check className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
-                </button>
+                <Tip label={editingTabs ? t('tabReorderDone') : t('tabReorder')}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTabs((v) => !v)}
+                    aria-label={editingTabs ? t('tabReorderDone') : t('tabReorder')}
+                    className={`mb-1 flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-lg border transition-colors ${
+                      editingTabs
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+   >
+                    {editingTabs ? <Check className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
+                  </button>
+                </Tip>
               </div>
             )
           })()}
