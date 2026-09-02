@@ -1013,7 +1013,22 @@
     "bulkCustomFieldPicker": "Feld",
     "bulkClearCustomField": "Wert entfernen",
     "subscriptionExpiresOn": "Zugang bis {date}",
-    "subscriptionExpired": "Zugang endete am {date}"
+    "subscriptionExpired": "Zugang endete am {date}",
+    "goalFormStartDate": "Startdatum",
+    "goalFormNoStartDate": "Kein Startdatum",
+    "goalFormNoTargetDate": "Kein Zieldatum",
+    "goalStartDate": "Start",
+    "goalSortLabel": "Aufgaben sortieren nach",
+    "goalSortManual": "Manuell",
+    "goalSortStart": "Start",
+    "goalSortTarget": "Ziel",
+    "goalReorderTask": "Zum Sortieren ziehen",
+    "goalCollapseCard": "Ziel einklappen",
+    "goalExpandCard": "Ziel ausklappen",
+    "goalArchive": "Ziel archivieren",
+    "goalUnarchive": "Ziel wiederherstellen",
+    "goalArchivedBadge": "Archiviert",
+    "goalShowArchived": "Archivierte"
   },
   "TeamAffiliations": {
     "title": "Affiliationen",

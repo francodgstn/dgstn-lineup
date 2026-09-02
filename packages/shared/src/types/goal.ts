@@ -159,7 +159,37 @@ export interface Goal {
   created_by: GoalCreatedBy
   created_at: Timestamp
   target_date?: Timestamp | null
+  /**
+   * When the work is meant to BEGIN — informational only.
+   *
+   * Deliberately inert: it does not feed `goalIsOverdue`, the daily
+   * `stampOverdueGoals` job, the contact's coaching counters or the
+   * `task_overdue` automation, all of which run off `target_date` alone. A
+   * start date that silenced an overdue check would be a scheduling state
+   * ("not started yet") with consequences in three more places; this is a date
+   * a coach writes down and can sort by, nothing more.
+   */
+  start_date?: Timestamp | null
   completed_at?: Timestamp | null  // set when task is marked done (status → 'achieved')
+
+  /**
+   * Filed away: hidden from every surface, kept in full.
+   *
+   * ORTHOGONAL TO `status`, which records the OUTCOME — an achieved goal is the
+   * common thing to archive, and folding this into the status enum would have
+   * forced 'abandoned' onto goals that were in fact completed. Un-archiving is
+   * writing null; nothing else about the document changes, which is why there
+   * is no separate restore path.
+   *
+   * Archived goals leave `coaching_open_count`/`coaching_overdue_count` and stop
+   * being stamped overdue, so filing one away also stops its automations.
+   *
+   * ⚠ ABSENT on every goal written before 2026-09-01, so readers must test
+   * `!goal.archived_at` in memory — `where('archived_at','==',null)` matches
+   * only documents where the field EXISTS and is null, i.e. none of them. The
+   * same trap is documented on `overdue_at` in `stampOverdueGoals`.
+   */
+  archived_at?: Timestamp | null
 
   /**
    * The check-in axis this goal was created FROM, when it was created from a
@@ -186,6 +216,17 @@ export interface Goal {
    * Always null on `type: 'goal'`. Goals do not nest.
    */
   parent_goal_id?: string | null
+
+  /**
+   * Manual position within its list — a goal's steps, or the virtual "General"
+   * bucket. TASKS ONLY; goals keep their query order.
+   *
+   * SPARSE, like `SiteSection.order`: unset entries sort after the configured
+   * ones and keep their natural (query) order among themselves, so turning a
+   * list manual costs no backfill and a task created later simply lands at the
+   * end. Compare with `order ?? Number.MAX_SAFE_INTEGER` — `sortSteps` does.
+   */
+  order?: number
 
   /**
    * Denormalized from the newest evaluation, written ONLY by the `onGoalWrite`
@@ -225,6 +266,36 @@ export function goalIsOverdue(goal: Pick<Goal, 'status' | 'target_date'>, nowMs 
   if (goal.status === 'achieved' || goal.status === 'abandoned') return false
   const due = toMillis(goal.target_date)
   return due !== null && due < nowMs
+}
+
+/** Filed away by a coach. THE predicate — every surface (admin, Space, mobile)
+ *  and both coaching triggers ask this, in memory, never as a query filter. See
+ *  the warning on `archived_at`. */
+export function goalIsArchived(goal: Pick<Goal, 'archived_at'>): boolean {
+  return !!goal.archived_at
+}
+
+/** How a task list is ordered. `manual` is the drag-and-drop order; the two date
+ *  modes are what a coach reaches for when the list has got long. */
+export type StepSortMode = 'manual' | 'start_date' | 'target_date'
+
+/**
+ * Order a task list for display. Pure, and NOT applied inside
+ * `groupGoalsWithSteps` — that helper's contract is to preserve input order, and
+ * it is mirrored byte-for-byte in the mobile app.
+ *
+ * Unset sorts LAST in every mode: a task with no `order` has not been placed,
+ * and a task with no date has not been scheduled — neither belongs at the top.
+ * The sort is stable (ES2019), so ties keep the caller's incoming order, which
+ * is the `created_at desc` every surface already queries. That is what makes
+ * manual mode a no-op until somebody actually drags something.
+ */
+export function sortSteps(steps: Goal[], mode: StepSortMode = 'manual'): Goal[] {
+  const key = (g: Goal): number => {
+    if (mode === 'manual') return g.order ?? Number.MAX_SAFE_INTEGER
+    return toMillis(mode === 'start_date' ? g.start_date : g.target_date) ?? Number.MAX_SAFE_INTEGER
+  }
+  return [...steps].sort((a, b) => key(a) - key(b))
 }
 
 /**

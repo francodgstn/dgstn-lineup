@@ -37,6 +37,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import {
   CONTACTS_COLLECTION,
   CONTACT_GOALS_SUBCOLLECTION,
+  goalIsArchived,
   goalIsOverdue,
   type Goal,
   type ActivityEventType,
@@ -97,6 +98,11 @@ export const trackGoals = onDocumentWritten(
       let overdue = 0
       for (const doc of goalsSnap.docs) {
         const g = doc.data() as Goal
+        // Filed away — out of the counters, which is half of what archiving is
+        // FOR: a goal nobody is working on should stop showing up as an open
+        // one on the contact list. Tested in memory because `archived_at` is
+        // absent on pre-2026-09 goals (see the field's own note).
+        if (goalIsArchived(g)) continue
         if (GOAL_OPEN_STATUSES.has(g.status)) {
           open++
           if (g.overdue_at) overdue++
