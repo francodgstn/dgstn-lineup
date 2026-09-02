@@ -227,10 +227,10 @@ Legend: ✅ done · ⏳ in progress · ❌ not started · ~~skipped~~ (out of sc
 
 ---
 
-## apps/mobile (Student App)
+## apps/mobile (Member app)
 
 - ✅ Full port of hmd-lineup student-app with Linyup branding
-- ✅ Auth (membership token, `student_auth_tokens`)
+- ✅ Auth — passwordless contact session: `sendContactVerificationCode` → `loginContactWithCode` → `signInWithCustomToken` (the HMD `student_auth_tokens` mechanism was never ported; see `docs/mobile-roadmap-2026-09.md`)
 - ✅ Home screen / welcome messages
 - ✅ Session check-in (QR scan + self check-in)
 - ✅ Profile screen
