@@ -297,15 +297,6 @@ const NAV_SECTIONS: NavSection[] = [
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow },
-      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
-      // preference: it is read by the session/event forms' place picker and by the
-      // website's places section, and it is edited when the schedule needs a room
-      // that doesn't exist yet. It sat in Settings → Scheduling, which meant
-      // leaving the calendar entirely to add one (UX-67). LAST in Run: everything
-      // above it is opened during a working day, this is opened while setting one
-      // up. The page is a sibling of the calendar at /schedule/places, beside
-      // /schedule/availability.
-      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
     ],
   },
   {
@@ -328,6 +319,19 @@ const NAV_SECTIONS: NavSection[] = [
       // LEAD of Offer: it is the section's MAP, and a map that sorts into the
       // middle of the things it maps is just another row.
       { id: 'catalogue', href: '/offer/catalogue', labelKey: 'catalogue', icon: Library, lead: true },
+      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
+      // preference: it is read by the session/event forms' place picker and by
+      // the website's places section, and it is edited when the schedule needs a
+      // room that doesn't exist yet. It sat in Settings → Scheduling, which meant
+      // leaving the calendar entirely to add one (UX-67).
+      //
+      // It fits BOTH sections — a place is where the schedule happens and it is
+      // also part of what a studio offers — so the tie is broken on load: Run had
+      // grown long enough that its own leads were getting lost in it, and this is
+      // the row in it opened least often per working day (Franco, 2026-09-02).
+      // The page stays at /schedule/places, a sibling of the calendar beside
+      // /schedule/availability; only the nav home moved.
+      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
       // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
       // second tab held the affiliation TYPES while the roster below had no nav
       // item at all; the roster now owns both, so the umbrella is gone and the
@@ -1096,6 +1100,12 @@ type PluginNavEntry = {
 const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
   operations: 'sectionRun',
   engage: 'sectionGrow',
+  // 'grow' renders in the same place as 'engage' and means something different:
+  // NOT an engagement surface, just not daily business either. Finance and the
+  // asset register are the two — periodic, not operational — and filing them
+  // under 'engage' to reach the same section would have made the manifest say
+  // something untrue about them (Franco, 2026-09-02).
+  grow: 'sectionGrow',
 }
 
 // Suggestion (muted nudge) dismissals, persisted in the browser only. Affects

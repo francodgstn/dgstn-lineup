@@ -58,8 +58,15 @@ export interface PluginAutomationAction {
   configFields?: PluginAutomationActionField[]
 }
 
-/** Built-in sidebar sections a plugin nav item can render into. */
-export type PluginNavSection = 'operations' | 'engage' | 'configure' | 'team'
+/**
+ * Built-in sidebar sections a plugin nav item can render into.
+ *
+ * 'engage' and 'grow' both render under Grow and mean different things:
+ * 'engage' is an engagement SURFACE (forms, gamification, kiosk, website),
+ * 'grow' is merely not daily business (finance, the asset register). They are
+ * kept apart so a manifest never has to claim to be one to reach the other.
+ */
+export type PluginNavSection = 'operations' | 'engage' | 'grow' | 'configure' | 'team'
 
 export interface PluginNavContribution {
   href: string // relative to /(auth)/ — e.g. '/plugins/online-courses'
