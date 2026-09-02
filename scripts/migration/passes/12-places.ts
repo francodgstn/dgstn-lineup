@@ -22,7 +22,7 @@ export async function pass12Places(cfg: MigrationConfig, teamIds: string[]): Pro
       const tgtRef = tgt.collection('teams').doc(teamId).collection('team_places').doc(d.id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) {
+        if (existing.exists && !cfg.overwrite) {
           bw.skip()
           continue
         }

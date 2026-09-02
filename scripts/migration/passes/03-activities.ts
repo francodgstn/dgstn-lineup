@@ -25,7 +25,7 @@ export async function pass03Activities(
       const tgtRef = tgt.collection('activities').doc(d.id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
+        if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
       }
       bw.set(tgtRef, data)
     }
