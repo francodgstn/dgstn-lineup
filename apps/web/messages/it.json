@@ -7767,5 +7767,19 @@
   "PublicShop": {
     "alreadyPurchased": "Già acquistato",
     "purchaseLimitReached": "Hai già utilizzato questa offerta."
+  },
+  "Heatmap": {
+    "title": "Mappa delle presenze",
+    "sourceCheckins": "Check-in",
+    "sourceNewBookings": "Nuove prenotazioni di prova",
+    "bySessionTime": "per orario della sessione",
+    "byBookingTime": "per orario di prenotazione",
+    "current": "Attuale",
+    "comparePrevYear": "anno scorso",
+    "comparePrevPeriod": "periodo prec.",
+    "hoursShowAll": "Solo ore con dati — clicca per mostrarle tutte",
+    "hoursAdapt": "Adatta le ore ai dati",
+    "nParticipants": "{n, plural, one {# partecipante} other {# partecipanti}}",
+    "nNewBookings": "{n, plural, one {# nuova prenotazione} other {# nuove prenotazioni}}"
   }
 }

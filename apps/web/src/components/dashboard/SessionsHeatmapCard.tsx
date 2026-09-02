@@ -11,10 +11,24 @@ import {
 } from '@/components/ui/select'
 import { ChevronsUpDown } from 'lucide-react'
 import { getDay, getHours } from 'date-fns'
+import { useTranslations, useLocale } from 'next-intl'
 import type { SessionDoc, BookingDoc } from '@/hooks/useDashboardData'
 import { Tip } from '@/components/ui/tip'
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+/**
+ * Weekday initials from the VIEWER'S LOCALE, not from the message files.
+ *
+ * A translated list would have to be maintained in four places and would still
+ * be wrong for anyone whose browser is set to a fifth. `Intl` already knows
+ * them, and the rest of the app formats dates the same way (see the i18n note
+ * in CLAUDE.md). Anchored to a known Monday so the order is fixed regardless of
+ * where the locale starts its week.
+ */
+function weekdayLabels(locale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' })
+  // 2024-01-01 was a Monday.
+  return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(Date.UTC(2024, 0, 1 + i))))
+}
 // JS getDay: 0=Sun,1=Mon,...,6=Sat → col 0=Mon...6=Sun
 const JS_DAY_TO_COL = [6, 0, 1, 2, 3, 4, 5]
 const HOUR_START = 0
@@ -24,11 +38,9 @@ const CELL_SIZE = 18 // px — row height
 const COMPARISON_COLOR = '#F59E0B'
 const PRIMARY_COLOR = '#6366F1'
 
-const SOURCE_OPTIONS = [
-  { value: 'participants', label: 'Check-ins', sublabel: 'by session time' },
-  { value: 'new_bookings_session', label: 'New trial bookings', sublabel: 'by session time' },
-  { value: 'new_bookings_booked', label: 'New trial bookings', sublabel: 'by booking time' },
-]
+/** The metric values, in order. Their LABELS are translated in the component —
+ *  a module-level constant cannot call a hook. */
+const SOURCE_VALUES = ['participants', 'new_bookings_session', 'new_bookings_booked'] as const
 
 type Grid = number[][]
 
@@ -86,7 +98,17 @@ export function SessionsHeatmapCard({
   comparisonNewContactBookings = [],
   title,
 }: Props) {
-  const [source, setSource] = useState('participants')
+  const t = useTranslations('Heatmap')
+  const locale = useLocale()
+  const DAYS = useMemo(() => weekdayLabels(locale), [locale])
+  // Four literal keys per group rather than `t(`source_${v}`)`: `i18n:check`
+  // counts computed keys and never fails them.
+  const sourceOptions = [
+    { value: 'participants', label: t('sourceCheckins'), sublabel: t('bySessionTime') },
+    { value: 'new_bookings_session', label: t('sourceNewBookings'), sublabel: t('bySessionTime') },
+    { value: 'new_bookings_booked', label: t('sourceNewBookings'), sublabel: t('byBookingTime') },
+  ]
+  const [source, setSource] = useState<string>(SOURCE_VALUES[0])
   // Adapt to data by default — show only the hours with activity; the heading
   // toggle expands to the full 24-hour grid.
   const [autoHours, setAutoHours] = useState(true)
@@ -127,8 +149,18 @@ export function SessionsHeatmapCard({
     return Array.from({ length: maxRow! - minRow + 1 }, (_, i) => minRow! + i)
   }, [autoHours, grid, compGrid, numHours])
 
-  const tooltipLabel = source === 'participants' ? 'participant' : 'new booking'
-  const comparePeriodLabel = compareWith === 'last_year' ? 'last year' : 'prev. period'
+  const comparePeriodLabel =
+    compareWith === 'last_year' ? t('comparePrevYear') : t('comparePrevPeriod')
+  /**
+   * ICU PLURALS, not `+ 's'`.
+   *
+   * The count was pluralised by appending an English "s", which is a grammar
+   * rule this card had no business knowing — German and Italian do not form a
+   * plural that way at all, and French agrees differently. The message file
+   * owns it now, one key per metric so each language can decline its own noun.
+   */
+  const countLabel = (n: number) =>
+    source === 'participants' ? t('nParticipants', { n }) : t('nNewBookings', { n })
 
   const getDotDiameter = (val: number, compVal: number) => {
     const dominant = isComparing ? Math.max(val, compVal) : val
@@ -150,14 +182,14 @@ export function SessionsHeatmapCard({
     <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CardTitle className="flex-1">{title || 'Attendance heatmap'}</CardTitle>
+          <CardTitle className="flex-1">{title || t('title')}</CardTitle>
           <Tip label={
-              autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'
+              autoHours ? t('hoursShowAll') : t('hoursAdapt')
             }>
             <button
               onClick={() => setAutoHours((v) => !v)}
               aria-label={
-                autoHours ? 'Showing hours with data — click to show all' : 'Adapt hours to data'
+                autoHours ? t('hoursShowAll') : t('hoursAdapt')
               }
               className={`p-1 rounded transition-colors ${autoHours ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
             >
@@ -174,7 +206,7 @@ export function SessionsHeatmapCard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SOURCE_OPTIONS.map((o) => (
+              {sourceOptions.map((o) => (
                 <SelectItem key={o.value} value={o.value} label={o.label}>
                   {o.sublabel}
                 </SelectItem>
@@ -222,9 +254,9 @@ export function SessionsHeatmapCard({
 
                   const tooltipContent =
                     isComparing && hasData
-                      ? `Current: ${val} ${tooltipLabel}${val !== 1 ? 's' : ''} · ${comparePeriodLabel}: ${compVal} ${tooltipLabel}${compVal !== 1 ? 's' : ''}`
+                      ? `${t('current')}: ${countLabel(val)} · ${comparePeriodLabel}: ${countLabel(compVal)}`
                       : val > 0
-                        ? `${val} ${tooltipLabel}${val !== 1 ? 's' : ''}`
+                        ? countLabel(val)
                         : ''
 
                   return (

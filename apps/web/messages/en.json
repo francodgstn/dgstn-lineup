@@ -7767,5 +7767,19 @@
   "PublicShop": {
     "alreadyPurchased": "Already purchased",
     "purchaseLimitReached": "You have already used this offer."
+  },
+  "Heatmap": {
+    "title": "Attendance heatmap",
+    "sourceCheckins": "Check-ins",
+    "sourceNewBookings": "New trial bookings",
+    "bySessionTime": "by session time",
+    "byBookingTime": "by booking time",
+    "current": "Current",
+    "comparePrevYear": "last year",
+    "comparePrevPeriod": "prev. period",
+    "hoursShowAll": "Showing hours with data — click to show all",
+    "hoursAdapt": "Adapt hours to data",
+    "nParticipants": "{n, plural, one {# participant} other {# participants}}",
+    "nNewBookings": "{n, plural, one {# new booking} other {# new bookings}}"
   }
 }

@@ -7767,5 +7767,19 @@
   "PublicShop": {
     "alreadyPurchased": "Bereits gekauft",
     "purchaseLimitReached": "Du hast dieses Angebot bereits genutzt."
+  },
+  "Heatmap": {
+    "title": "Anwesenheits-Heatmap",
+    "sourceCheckins": "Check-ins",
+    "sourceNewBookings": "Neue Probebuchungen",
+    "bySessionTime": "nach Kurszeit",
+    "byBookingTime": "nach Buchungszeit",
+    "current": "Aktuell",
+    "comparePrevYear": "letztes Jahr",
+    "comparePrevPeriod": "Vorperiode",
+    "hoursShowAll": "Nur Stunden mit Daten — klicken, um alle zu zeigen",
+    "hoursAdapt": "Stunden an Daten anpassen",
+    "nParticipants": "{n, plural, one {# Teilnehmer} other {# Teilnehmer}}",
+    "nNewBookings": "{n, plural, one {# neue Buchung} other {# neue Buchungen}}"
   }
 }

@@ -7767,5 +7767,19 @@
   "PublicShop": {
     "alreadyPurchased": "Déjà acheté",
     "purchaseLimitReached": "Vous avez déjà utilisé cette offre."
+  },
+  "Heatmap": {
+    "title": "Carte de fréquentation",
+    "sourceCheckins": "Arrivées",
+    "sourceNewBookings": "Nouvelles réservations d'essai",
+    "bySessionTime": "par heure de séance",
+    "byBookingTime": "par heure de réservation",
+    "current": "Actuel",
+    "comparePrevYear": "l'an dernier",
+    "comparePrevPeriod": "période préc.",
+    "hoursShowAll": "Heures avec données — cliquez pour tout afficher",
+    "hoursAdapt": "Adapter les heures aux données",
+    "nParticipants": "{n, plural, one {# participant} other {# participants}}",
+    "nNewBookings": "{n, plural, one {# nouvelle réservation} other {# nouvelles réservations}}"
   }
 }
