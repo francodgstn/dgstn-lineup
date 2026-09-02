@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
 import { coachLabel, type CoachOption } from '@/hooks/useCoaches'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useAuth } from '@/contexts/AuthContext'
@@ -444,7 +445,7 @@ function TemplateDialog({
         order: activities.length,
         created_at: serverTimestamp(),
       })
-      await qc.invalidateQueries({ queryKey: ['activities'] })
+      refreshQueries(qc, ['activities'])
       setValue('activityIds', [ref.id])
     } finally {
       setCreatingActivity(false)

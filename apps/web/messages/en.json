@@ -2076,7 +2076,11 @@
     "subTypeMaxPurchases": "Purchases per person",
     "subTypeMaxPurchasesSuffix": "× / person",
     "subTypeMaxPurchasesUnlimited": "Any",
-    "subTypeMaxPurchasesHelp": "Leave empty for no limit. Only applies when members buy it themselves."
+    "subTypeMaxPurchasesHelp": "Leave empty for no limit. Only applies when members buy it themselves.",
+    "subTypeNoPrices": "No price yet — this plan tracks a name only.",
+    "subTypeIntroSummary": "{amount} for the first {periods, plural, one {period} other {# periods}}",
+    "subTypeLimitSummary": "Up to {count, plural, one {# class} other {# classes}} {per, select, day {per day} week {per week} month {per month} other {per month}}",
+    "subTypeNoLimit": "No booking limit."
   },
   "Bookings": {
     "title": "Bookings",
@@ -7566,7 +7570,9 @@
     "fullEditProducts": "Open the Products page",
     "paneTabAccess": "Access & pricing",
     "createNew": "Create",
-    "paneTabAutomations": "Automations"
+    "paneTabAutomations": "Automations",
+    "editPrices": "Edit prices",
+    "savePrices": "Save prices"
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

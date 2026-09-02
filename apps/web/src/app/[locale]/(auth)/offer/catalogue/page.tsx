@@ -88,6 +88,7 @@ import {
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
 import { deleteProduct } from '@/plugins/products/hooks'
 import {
   AlertDialog,
@@ -113,6 +114,10 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tip'
+import {
+  PaneDirtyProvider,
+  usePaneDirtyState,
+} from '@/components/offer/paneDirty'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -661,7 +666,7 @@ export default function CataloguePage() {
     const { kind, id } = confirming
     if (kind === 'activity') {
       await updateDoc(doc(db, ACTIVITIES_COLLECTION, id), { isActive: false })
-      await qc.invalidateQueries({ queryKey: ['activities'] })
+      refreshQueries(qc, ['activities'])
     } else if (kind === 'plan') {
       await deleteDoc(doc(db, TEAMS_COLLECTION, currentTeamId, SUBSCRIPTION_TYPES_SUBCOLLECTION, id))
       await qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
@@ -697,7 +702,7 @@ export default function CataloguePage() {
       if (a.order !== i) batch.update(doc(db, ACTIVITIES_COLLECTION, a.id), { order: i })
     })
     await batch.commit()
-    await qc.invalidateQueries({ queryKey: ['activities'] })
+    refreshQueries(qc, ['activities'])
   }
 
   async function reorderPlans(from: number, to: number) {
@@ -817,77 +822,86 @@ export default function CataloguePage() {
           minimum is what lets the pane shrink BELOW its content instead of
           shoving, which is also what makes its own overflow scrolling work
           (Franco, 2026-09-01). */}
+      {/* THE TAB STRIP LIVES ABOVE BOTH PANELS, not inside the rail.
+          It governs the whole screen — switching tabs changes the rail AND
+          clears a selection belonging to another tab, so the pane changes with
+          it. A control that governs both halves reads as secondary while it
+          sits inside one of them, and it was spending the top of a 340px column
+          that filters will want later (Franco, 2026-09-02).
+
+          LEFT-ALIGNED AT NATURAL WIDTH, deliberately: stretched across ~1000px
+          these four short words end up further apart than they are related, and
+          a segmented control that wide reads as one that lost its content. */}
+      <div className="mb-4 space-y-2">
+        <div
+          className="inline-flex gap-0.5 rounded-lg bg-muted/50 p-0.5"
+          role="tablist"
+          aria-label={t('title')}
+        >
+          {tabs.map((tab) => {
+            const on = tab.key === activeTab
+            const dead = onlyDeadEnds ? (deadEndsPerTab[tab.key] ?? 0) : 0
+            const TabIcon = tab.icon
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                // SWITCHING TABS CLEARS A SELECTION FROM ANOTHER ONE. The rail
+                // and the pane are one screen making one statement, and a rail
+                // of plans beside a pane of activity pricing is two (Franco,
+                // 2026-09-02). A selection that BELONGS to the tab being opened
+                // survives — going Plans → Activities → Plans should not lose
+                // your place.
+                onClick={() => {
+                  setPickedTab(tab.key)
+                  if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
+                }}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  on
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <TabIcon className="h-4 w-4 shrink-0" />
+                <span>{tab.label}</span>
+                {/* Inline now that the tabs are no longer four equal targets —
+                    there is nothing left for a wider one to unbalance. */}
+                {dead > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] leading-tight text-amber-700">
+                    {dead}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ONE LINE PER TAB, printed. It briefly lived behind an info mark to
+            save the height; the mark cost more than the lines did — a studio had
+            to know there was something to hover before it could tell them
+            anything, which is the wrong trade for a sentence that orients
+            somebody who has just arrived (Franco, 2026-09-01).
+
+            Written as four literal keys rather than `t(`hint_${activeTab}`)`:
+            `i18n:check` counts computed keys and never fails them, so a typo in
+            one would ship silently. */}
+        <p className="text-xs leading-snug text-muted-foreground">
+          {
+            {
+              activities: t('hintActivities'),
+              plans: t('hintPlans'),
+              courses: t('hintCourses'),
+              products: t('hintProducts'),
+            }[activeTab]
+          }
+        </p>
+      </div>
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* ── the rail ── */}
         <div className="space-y-3 rounded-xl border bg-card p-2">
-          {/* THE TAB STRIP. Wraps rather than scrolls: there are at most four,
-              and a horizontally scrolling strip hides the very tab a studio is
-              looking for on the width where it matters most. */}
-          <div className="flex gap-0.5 rounded-lg bg-muted/50 p-0.5" role="tablist" aria-label={t('title')}>
-            {tabs.map((tab) => {
-              const on = tab.key === activeTab
-              const dead = onlyDeadEnds ? (deadEndsPerTab[tab.key] ?? 0) : 0
-              const TabIcon = tab.icon
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  // SWITCHING TABS CLEARS A SELECTION FROM ANOTHER ONE. The
-                  // rail and the pane are one screen making one statement, and
-                  // a rail of plans beside a pane of activity pricing is two
-                  // (Franco, 2026-09-02). A selection that BELONGS to the tab
-                  // being opened survives — going Plans → Activities → Plans
-                  // should not lose your place.
-                  onClick={() => {
-                    setPickedTab(tab.key)
-                    if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
-                  }}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium leading-none transition-colors ${
-                    on
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  <TabIcon className="h-4 w-4" />
-                  <span className="truncate">{tab.label}</span>
-                  {/* The dead-end count rides in the CORNER rather than in the
-                      flow: inline it would widen one tab and unbalance a strip
-                      whose whole job is four equal targets. */}
-                  {dead > 0 && (
-                    <span
-                      className={`absolute right-1 top-1 rounded-full px-1 text-[9px] leading-tight ${
-                        on ? 'bg-primary-foreground/20' : 'bg-amber-500/20 text-amber-700'
-                      }`}
-                    >
-                      {dead}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* ONE LINE PER TAB, printed. It briefly lived behind an info mark to
-              save the height; the mark cost more than the lines did — a studio
-              had to know there was something to hover before it could tell them
-              anything, which is the wrong trade for a sentence that orients
-              somebody who has just arrived (Franco, 2026-09-01).
-
-              Written as four literal keys rather than `t(`hint_${activeTab}`)`:
-              `i18n:check` counts computed keys and never fails them, so a typo
-              in one would ship silently. */}
-          <p className="px-2 text-xs leading-snug text-muted-foreground">
-            {
-              {
-                activities: t('hintActivities'),
-                plans: t('hintPlans'),
-                courses: t('hintCourses'),
-                products: t('hintProducts'),
-              }[activeTab]
-            }
-          </p>
 
           {/* THE WAY OUT, on the two tabs that need one. A course and a product
               are only PRICED here — their content, media, variants and
@@ -1481,6 +1495,7 @@ function PaneBody({
   children?: React.ReactNode
 }) {
   const t = useTranslations('OfferCatalogue')
+  const { dirty, report } = usePaneDirtyState()
 
   return (
     <div className="space-y-4">
@@ -1492,6 +1507,14 @@ function PaneBody({
               <Badge variant="outline" className="text-xs font-normal">
                 {badge}
               </Badge>
+            )}
+            {/* Beside the NAME, because that is what a studio is looking at
+                when they wonder whether they still owe a save — the button is
+                a scroll away past the plan table. */}
+            {dirty && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                {t('unsaved')}
+              </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground">{summary}</p>
@@ -1570,11 +1593,13 @@ function PaneBody({
           thing IS — while everything below the line is what it CONNECTS to. */}
       {facts && <OfferFacts {...facts} />}
 
-      {extraTabs?.length ? (
-        <PaneTabs main={children} extra={extraTabs} />
-      ) : (
-        children && <div className="border-t pt-4">{children}</div>
-      )}
+      <PaneDirtyProvider report={report}>
+        {extraTabs?.length ? (
+          <PaneTabs main={children} extra={extraTabs} />
+        ) : (
+          children && <div className="border-t pt-4">{children}</div>
+        )}
+      </PaneDirtyProvider>
     </div>
   )
 }

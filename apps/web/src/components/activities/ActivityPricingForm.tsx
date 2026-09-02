@@ -50,6 +50,8 @@ import {
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
+import { useReportPaneDirty } from '@/components/offer/paneDirty'
 import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -161,6 +163,7 @@ export function ActivityPricingForm({
   const dirty = !same(draft, stored)
   /** EITHER half being touched arms the one button. */
   const anyDirty = dirty || !!links?.dirty
+  useReportPaneDirty('activity-pricing', anyDirty)
 
   async function save() {
     if (invalid || !anyDirty || links?.blocked) return
@@ -188,7 +191,7 @@ export function ActivityPricingForm({
         trialPriceAmount:
           draft.trialPrice && draft.accessTier !== 'open' ? parsePrice(draft.trialPrice) : null,
       })
-      await qc.invalidateQueries({ queryKey: ['activities'] })
+      refreshQueries(qc, ['activities'])
       // "Set a price" is a derived setup step keyed on `dropIn.enabled`.
       void invalidateSetupChecklist()
       if (links?.dirty) await links.run()
@@ -370,7 +373,7 @@ export function ActivityPricingForm({
               'accessRule.type': draft.accessTier,
               isFreeTrial: draft.accessTier === 'open',
             })
-            await qc.invalidateQueries({ queryKey: ['activities'] })
+            refreshQueries(qc, ['activities'])
           }}
           saveHandle={setLinks}
         />

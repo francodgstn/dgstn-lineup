@@ -47,7 +47,7 @@ import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { doc, updateDoc, deleteField } from 'firebase/firestore'
 import { toast } from 'sonner'
-import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, Pencil } from 'lucide-react'
 import {
   TEAMS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -64,6 +64,8 @@ import {
   type IntroOfferProblem,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
+import { formatCurrency } from '@/lib/format'
+import { useReportPaneDirty } from '@/components/offer/paneDirty'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -305,9 +307,16 @@ export function PlanPricingForm({
   const t = useTranslations('TeamSettings')
   const tCat = useTranslations('OfferCatalogue')
   const tc = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   const [showIntroError, setShowIntroError] = useState(false)
   const [saving, setSaving] = useState(false)
+  /** Read by default; typing is a deliberate step. */
+  const [editing, setEditing] = useState(false)
+  // Read straight off the STORED plan — the read view shows what is saved, not
+  // what a draft would become.
+  const limit = resolveUsageLimit(plan)
+  const introByPrice = new Map(introOffersOf(plan).map((o) => [o.priceId, o]))
   const [linksHandle, setLinksHandle] = useState<{
     run: () => Promise<void>
     dirty: boolean
@@ -436,6 +445,9 @@ export function PlanPricingForm({
       await qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
       reset(defaultsOf({ ...plan, prices }))
       if (linksHandle?.dirty) await linksHandle.run()
+      // Back to reading — the change is made, and staying in a form of inputs
+      // says it is not.
+      setEditing(false)
       toast.success(t('saved'))
     } finally {
       setSaving(false)
@@ -443,249 +455,356 @@ export function PlanPricingForm({
   }
 
   const anyDirty = isDirty || !!linksHandle?.dirty
+  useReportPaneDirty('plan-pricing', anyDirty)
+
+  /** The matcher alone, from the read view where no form surrounds it. */
+  async function runLinksOnly() {
+    if (!linksHandle?.dirty) return
+    setSaving(true)
+    try {
+      await linksHandle.run()
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <fieldset disabled={!canEdit} className="space-y-4">
-        <FormSection
-          title={t('subTypePricing')}
-          description={t('subTypePricingDesc')}
-          action={
+      {/*
+       * TWO MODES, because the two jobs are not the same job.
+       *
+       * Reading a plan — "what does this cost, what does it include" — is the
+       * common one and wants a sentence per price. Changing one is rarer and wants
+       * every control. Rendering the edit form always meant the common job was
+       * done through a stack of inputs, selects and outlined boxes that exist for
+       * the rare one (Franco, 2026-09-02).
+       *
+       * The cost is a click before a change, which is why the read view is not a
+       * summary that hides things: every price, every intro offer and the usage
+       * limit are all on it. Nothing is behind the button except the ABILITY TO
+       * TYPE.
+       */}
+      {editing ? (
+        <fieldset disabled={!canEdit} className="space-y-4">
+          <FormSection
+            title={t('subTypePricing')}
+            description={t('subTypePricingDesc')}
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  append({
+                    id: crypto.randomUUID(),
+                    amount: 0,
+                    recurrence: 'monthly',
+                    label: '',
+                    active: true,
+                  })
+                }
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                {t('subTypeAddPrice')}
+              </Button>
+            }
+          >
+            {fields.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {fields.map((field, i) => (
+                  <div key={field.id} className="rounded-md border bg-card p-2.5 space-y-2">
+                    {/* WRAPS, and the amount field may SHRINK. This row is an
+                        amount, a recurrence select (130px) and sometimes a
+                        second 130px input — a min-content width the dialog
+                        cannot always give it. `DialogBody` is `overflow-y-auto`,
+                        and CSS promotes overflow-x to `auto` alongside it, so a
+                        child one pixel too wide put a horizontal scrollbar under
+                        the whole form. Fixed by letting the row wrap and the
+                        flexible child shrink — never by clipping the body,
+                        which would hide a control instead of moving it. */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative min-w-[8rem] flex-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          {...register(`prices.${i}.amount`)}
+                          className="pr-12"
+                          placeholder="0.00"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                          {currency}
+                        </span>
+                      </div>
+                      <Select
+                        value={watch(`prices.${i}.recurrence`)}
+                        onValueChange={(v) =>
+                          setValue(
+                            `prices.${i}.recurrence`,
+                            v as (typeof RECURRENCES)[number]
+                          )
+                        }
+                      >
+                        <SelectTrigger className="w-[130px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RECURRENCES.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {tc(`recurrence_${r}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* THE UNIT STAYS ON SCREEN once a value is typed. These
+                          used to carry their meaning in the PLACEHOLDER, which
+                          vanishes at the first keystroke and leaves a bare
+                          number nobody can read back — is "2" two months, two
+                          credits, or two of something else? Same suffix
+                          treatment as the currency on the amount field beside
+                          it, so the row reads as a sentence either way. */}
+                      {watch(`prices.${i}.recurrence`) === 'one_time' && (
+                        <SuffixInput
+                          suffix={t('subTypeIncludedMonthsSuffix')}
+                          type="number"
+                          step="1"
+                          min="1"
+                          className="w-[150px]"
+                          aria-label={t('subTypeIncludedMonths')}
+                          {...register(`prices.${i}.included_months`)}
+                        />
+                      )}
+                    </div>
+                    {watch(`prices.${i}.recurrence`) === 'one_time' && (
+                      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                        <div className="space-y-1">
+                          <SuffixInput
+                            suffix={t('subTypeCreditsSuffix')}
+                            type="number"
+                            step="1"
+                            min="1"
+                            className="w-[170px] h-8 text-sm"
+                            aria-label={t('subTypeCreditsPlaceholder')}
+                            {...register(`prices.${i}.credits`)}
+                          />
+                          <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
+                        </div>
+                        {/* How many times ONE person may buy this — the "our
+                            2-month intro is once per customer" rule. Blank =
+                            unlimited, which is why it is a plain optional
+                            field and not a switch with a number behind it. */}
+                        <div className="space-y-1">
+                          <SuffixInput
+                            suffix={t('subTypeMaxPurchasesSuffix')}
+                            type="number"
+                            step="1"
+                            min="1"
+                            className="w-[170px] h-8 text-sm"
+                            placeholder={t('subTypeMaxPurchasesUnlimited')}
+                            aria-label={t('subTypeMaxPurchases')}
+                            {...register(`prices.${i}.maxPurchasesPerContact`)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {t('subTypeMaxPurchasesHelp')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {/* This price's own intro offer. It sits INSIDE the row
+                        because it is a fact about this price — a plan may open
+                        its monthly and its annual price differently, and when
+                        the offer lived at plan level only one of them could
+                        have one. */}
+                    <IntroOfferRow
+                      index={i}
+                      state={introRowState(i)}
+                      currency={currency}
+                      showError={showIntroError}
+                      register={register}
+                      setValue={setValue}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        {...register(`prices.${i}.label`)}
+                        placeholder={t('subTypePriceLabelPlaceholder')}
+                        className="flex-1 h-8 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => move(i, i - 1)}
+                        disabled={i === 0}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
+                        aria-label={t('subTypePriceMoveUp')}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => move(i, i + 1)}
+                        disabled={i === fields.length - 1}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
+                        aria-label={t('subTypePriceMoveDown')}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      <Switch
+                        checked={watch(`prices.${i}.active`) ?? true}
+                        onCheckedChange={(v) => setValue(`prices.${i}.active`, v)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => remove(i)}
+                        className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-destructive"
+                        aria-label={t('subTypePriceRemove')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </FormSection>
+  
+          {/* Usage limit — caps CLASS bookings covered by this subscription
+              per calendar day/week/month. Once spent, the drop-in price still
+              applies (member rate); credits and appointments are unaffected. */}
+          <FormSection
+            title={t('subTypeUsageLimit')}
+            description={t('subTypeUsageLimitDesc')}
+            action={
+              <Switch
+                checked={limitEnabled}
+                onCheckedChange={(v) => setValue('limitEnabled', v)}
+              />
+            }
+          >
+            {limitEnabled && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="number"
+                  step="1"
+                  min="1"
+                  {...register('limitCount')}
+                  className="w-24"
+                  placeholder="3"
+                />
+                <Select
+                  value={limitPer}
+                  onValueChange={(v) => setValue('limitPer', v as 'day' | 'week' | 'month')}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">{t('subTypeLimitPeriodDay')}</SelectItem>
+                    <SelectItem value="week">{t('subTypeLimitPeriodWeek')}</SelectItem>
+                    <SelectItem value="month">{t('subTypeLimitPeriodMonth')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </FormSection>
+
+        {/* ONE BUTTON THAT FLIPS. In the read view it says "Edit prices"; here
+            it is the same control saying "Save prices", and it closes the
+            editor on success. Two buttons in two places for the two halves of
+            one toggle made the way back something to hunt for (Franco,
+            2026-09-02).
+
+            It saves the PRICES. The plan table below keeps its own Save — the
+            labels say which is which, so neither can be mistaken for the
+            other's scope. */}
+        {canEdit && (
+          <div className="flex items-center gap-2 pt-1">
+            <Button type="submit" size="sm" disabled={saving || hasIntroProblem}>
+              {saving ? tCat('saving') : tCat('savePrices')}
+            </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() =>
-                append({
-                  id: crypto.randomUUID(),
-                  amount: 0,
-                  recurrence: 'monthly',
-                  label: '',
-                  active: true,
-                })
-              }
+              disabled={saving}
+              onClick={() => {
+                reset(defaultsOf(plan))
+                setEditing(false)
+              }}
             >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              {t('subTypeAddPrice')}
+              {tCommon('cancel')}
             </Button>
-          }
-        >
-          {fields.length > 0 && (
-            <div className="space-y-2 pt-1">
-              {fields.map((field, i) => (
-                <div key={field.id} className="rounded-md border bg-card p-2.5 space-y-2">
-                  {/* WRAPS, and the amount field may SHRINK. This row is an
-                      amount, a recurrence select (130px) and sometimes a
-                      second 130px input — a min-content width the dialog
-                      cannot always give it. `DialogBody` is `overflow-y-auto`,
-                      and CSS promotes overflow-x to `auto` alongside it, so a
-                      child one pixel too wide put a horizontal scrollbar under
-                      the whole form. Fixed by letting the row wrap and the
-                      flexible child shrink — never by clipping the body,
-                      which would hide a control instead of moving it. */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[8rem] flex-1">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...register(`prices.${i}.amount`)}
-                        className="pr-12"
-                        placeholder="0.00"
-                      />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
-                        {currency}
+          </div>
+        )}
+        </fieldset>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            {(plan.prices ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('subTypeNoPrices')}</p>
+            ) : (
+              (plan.prices ?? []).map((price) => {
+                const offer = introByPrice.get(price.id)
+                return (
+                  <div key={price.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+                    <span className="font-medium">{formatCurrency(price.amount, currency)}</span>
+                    <span className="text-muted-foreground">
+                      {tc(`recurrence_${price.recurrence}` as 'recurrence_monthly')}
+                    </span>
+                    {price.label && (
+                      <span className="text-muted-foreground">· {price.label}</span>
+                    )}
+                    {price.active === false && (
+                      <span className="text-xs text-amber-600">· {t('subTypeInactive')}</span>
+                    )}
+                    {!!price.credits && (
+                      <span className="text-xs text-muted-foreground">
+                        · {t('subTypeCreditsBadge', { count: price.credits })}
                       </span>
-                    </div>
-                    <Select
-                      value={watch(`prices.${i}.recurrence`)}
-                      onValueChange={(v) =>
-                        setValue(
-                          `prices.${i}.recurrence`,
-                          v as (typeof RECURRENCES)[number]
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-[130px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RECURRENCES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {tc(`recurrence_${r}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* THE UNIT STAYS ON SCREEN once a value is typed. These
-                        used to carry their meaning in the PLACEHOLDER, which
-                        vanishes at the first keystroke and leaves a bare
-                        number nobody can read back — is "2" two months, two
-                        credits, or two of something else? Same suffix
-                        treatment as the currency on the amount field beside
-                        it, so the row reads as a sentence either way. */}
-                    {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                      <SuffixInput
-                        suffix={t('subTypeIncludedMonthsSuffix')}
-                        type="number"
-                        step="1"
-                        min="1"
-                        className="w-[150px]"
-                        aria-label={t('subTypeIncludedMonths')}
-                        {...register(`prices.${i}.included_months`)}
-                      />
+                    )}
+                    {offer && (
+                      <span className="text-xs text-muted-foreground">
+                        · {t('subTypeIntroSummary', {
+                          amount: formatCurrency(offer.amount, currency),
+                          periods: offer.periods,
+                        })}
+                      </span>
                     )}
                   </div>
-                  {watch(`prices.${i}.recurrence`) === 'one_time' && (
-                    <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                      <div className="space-y-1">
-                        <SuffixInput
-                          suffix={t('subTypeCreditsSuffix')}
-                          type="number"
-                          step="1"
-                          min="1"
-                          className="w-[170px] h-8 text-sm"
-                          aria-label={t('subTypeCreditsPlaceholder')}
-                          {...register(`prices.${i}.credits`)}
-                        />
-                        <p className="text-xs text-muted-foreground">{t('subTypeCreditsHelp')}</p>
-                      </div>
-                      {/* How many times ONE person may buy this — the "our
-                          2-month intro is once per customer" rule. Blank =
-                          unlimited, which is why it is a plain optional
-                          field and not a switch with a number behind it. */}
-                      <div className="space-y-1">
-                        <SuffixInput
-                          suffix={t('subTypeMaxPurchasesSuffix')}
-                          type="number"
-                          step="1"
-                          min="1"
-                          className="w-[170px] h-8 text-sm"
-                          placeholder={t('subTypeMaxPurchasesUnlimited')}
-                          aria-label={t('subTypeMaxPurchases')}
-                          {...register(`prices.${i}.maxPurchasesPerContact`)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {t('subTypeMaxPurchasesHelp')}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {/* This price's own intro offer. It sits INSIDE the row
-                      because it is a fact about this price — a plan may open
-                      its monthly and its annual price differently, and when
-                      the offer lived at plan level only one of them could
-                      have one. */}
-                  <IntroOfferRow
-                    index={i}
-                    state={introRowState(i)}
-                    currency={currency}
-                    showError={showIntroError}
-                    register={register}
-                    setValue={setValue}
-                  />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      {...register(`prices.${i}.label`)}
-                      placeholder={t('subTypePriceLabelPlaceholder')}
-                      className="flex-1 h-8 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => move(i, i - 1)}
-                      disabled={i === 0}
-                      className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
-                      aria-label={t('subTypePriceMoveUp')}
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(i, i + 1)}
-                      disabled={i === fields.length - 1}
-                      className="p-1 rounded text-muted-foreground hover:bg-muted disabled:opacity-30"
-                      aria-label={t('subTypePriceMoveDown')}
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                    <Switch
-                      checked={watch(`prices.${i}.active`) ?? true}
-                      onCheckedChange={(v) => setValue(`prices.${i}.active`, v)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => remove(i)}
-                      className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-destructive"
-                      aria-label={t('subTypePriceRemove')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                )
+              })
+            )}
+          </div>
+  
+          <p className="text-sm text-muted-foreground">
+            {limit
+              ? t('subTypeLimitSummary', { count: limit.count, per: limit.per })
+              : t('subTypeNoLimit')}
+          </p>
+  
+          {canEdit && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              {tCat('editPrices')}
+            </Button>
           )}
-        </FormSection>
-
-        {/* Usage limit — caps CLASS bookings covered by this subscription
-            per calendar day/week/month. Once spent, the drop-in price still
-            applies (member rate); credits and appointments are unaffected. */}
-        <FormSection
-          title={t('subTypeUsageLimit')}
-          description={t('subTypeUsageLimitDesc')}
-          action={
-            <Switch
-              checked={limitEnabled}
-              onCheckedChange={(v) => setValue('limitEnabled', v)}
-            />
-          }
-        >
-          {limitEnabled && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                {...register('limitCount')}
-                className="w-24"
-                placeholder="3"
-              />
-              <Select
-                value={limitPer}
-                onValueChange={(v) => setValue('limitPer', v as 'day' | 'week' | 'month')}
-              >
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">{t('subTypeLimitPeriodDay')}</SelectItem>
-                  <SelectItem value="week">{t('subTypeLimitPeriodWeek')}</SelectItem>
-                  <SelectItem value="month">{t('subTypeLimitPeriodMonth')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </FormSection>
-      </fieldset>
+        </div>
+      )}
 
       {/* No rule above the matcher — see ActivityPricingForm. */}
       {links ? (
         <div className="pt-2">{links({ hostedInForm: true, saveHandle: setLinksHandle })}</div>
       ) : null}
 
-      {/* ONE BUTTON FOR THE TAB, below everything it saves. */}
-      {canEdit && (
+      {/* THE PLAN TABLE'S OWN SAVE, below the table it saves. The prices
+          above carry their own flip button, so this row appears only when the
+          table is the thing holding an edit. */}
+      {canEdit && linksHandle?.dirty && (
         <div className="flex items-center justify-end gap-3 border-t pt-3">
-          {linksHandle?.blocked ? (
+          {linksHandle.blocked ? (
             <span className="text-xs text-destructive">{linksHandle.blocked}</span>
           ) : (
-            anyDirty && <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>
+            <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>
           )}
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!anyDirty || saving || !!linksHandle?.blocked}
-          >
+          <Button type="submit" size="sm" disabled={saving || !!linksHandle.blocked}>
             {saving ? tCat('saving') : tCat('save')}
           </Button>
         </div>

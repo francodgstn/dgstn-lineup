@@ -61,6 +61,7 @@ import {
   type SubscriptionType,
 } from '@linyup/shared'
 import { db } from '@/lib/firebase'
+import { refreshQueries } from '@/lib/queryRefresh'
 import { Link } from '@/i18n/navigation'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -409,14 +410,11 @@ export function ActivityPlanLinks({
       })
       setDrafts({})
       setShowErrors(false)
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['activities'] }),
-        qc.invalidateQueries({ queryKey: ['courses'] }),
-        // AND the single-course query, which is a DIFFERENT key: 'course' does
-        // not prefix-match 'courses'. The course settings page reads that one,
-        // so without this it never saw the gate this editor had just written.
-        qc.invalidateQueries({ queryKey: ['course'] }),
-      ])
+      // Marked stale, not awaited — see `refreshQueries`. The third key is
+      // NOT redundant: 'course' does not prefix-match 'courses', and the course
+      // settings page reads that single-course query, so without it the page
+      // never saw the gate this editor had just written.
+      refreshQueries(qc, ['activities'], ['courses'], ['course'])
     } finally {
       setSaving(false)
     }
