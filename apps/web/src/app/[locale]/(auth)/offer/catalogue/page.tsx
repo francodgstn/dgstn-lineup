@@ -104,12 +104,7 @@ import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button, buttonVariants } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from '@/components/ui/tooltip'
+import { Tip } from '@/components/ui/tip'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { computePricingHealth, type PricingWarning } from '@/lib/pricingSurface'
@@ -182,42 +177,6 @@ type PaneAction = PaneActionRun & {
   icon: LucideIcon
   label: string
   danger?: boolean
-}
-
-/**
- * A STYLED tooltip on an element that already exists.
- *
- * `title=` is the browser's: ~1s delay, unstyleable, invisible to touch and to
- * a keyboard, and it cannot hold two lines. That is acceptable on something
- * already labelled — a truncated name, a date — where the tooltip only repeats
- * or extends what is on screen. It is NOT acceptable on an icon-only control,
- * where the label is the only way to know what the button does.
- *
- * `render` composes rather than wraps, so the trigger IS the button or link
- * passed in — no extra element, no interactive node nested inside another.
- */
-function Tip({
-  label,
-  children,
-  side = 'top',
-}: {
-  label: string
-  children: React.ReactElement
-  side?: 'top' | 'right' | 'bottom' | 'left'
-}) {
-  // NO PROVIDER HERE — one wraps the page. A provider per tooltip works, but
-  // the rail renders a pencil per row, and thirty providers is thirty copies of
-  // a shared delay timer whose whole purpose is to be shared: hovering a second
-  // control after a first should show instantly, which only happens when both
-  // read the same provider.
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipContent side={side} className="max-w-64">
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 /** The rail's tabs. `activities` holds classes AND appointments — see the header. */
@@ -698,10 +657,6 @@ export default function CataloguePage() {
   const backToPlans = selection?.kind === 'plan'
 
   return (
-    /* ONE PROVIDER for the whole page — see `Tip`. Delay 300ms so a
-       pointer crossing the rail does not trail popups behind it, but
-       instant on the second control once the first has opened. */
-    <TooltipProvider delay={300}>
     <div className="space-y-6">
       <PageHeader
         title={t('title')}
@@ -1250,7 +1205,6 @@ export default function CataloguePage() {
         />
       )}
     </div>
-    </TooltipProvider>
   )
 }
 
