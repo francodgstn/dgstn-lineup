@@ -1004,6 +1004,24 @@ export default function CataloguePage() {
                 description: selectedActivity.description,
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
+              details={
+                currentTeamId && user ? (
+                  <ActivityDialog
+                    // Keyed by the record so switching rows remounts the form
+                    // rather than leaving the previous one's draft in it.
+                    key={`details-${selectedActivity.id}`}
+                    inline
+                    open
+                    onClose={() => {}}
+                    teamId={currentTeamId}
+                    userId={user.uid}
+                    editing={selectedActivity}
+                    duplicating={null}
+                    nextOrder={activities.length}
+                    currency={currency}
+                  />
+                ) : undefined
+              }
             >
               {/* ALWAYS MOUNTED, and the guard that used to sit here was a dead
                   end. It hid this whole form for an OPEN class, which is the
@@ -1043,6 +1061,25 @@ export default function CataloguePage() {
                 description: selectedPlan.description,
               }}
               actions={paneActionsFor('plan', selectedPlan.id)}
+              details={
+                currentTeamId ? (
+                  <SubTypeDialog
+                    key={`details-${selectedPlan.id}`}
+                    inline
+                    open
+                    onOpenChange={() => {}}
+                    teamId={currentTeamId}
+                    editing={selectedPlan}
+                    duplicating={null}
+                    currency={currency}
+                    nextOrder={plans.length}
+                    onSaved={() => {
+                      void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+                      void qc.invalidateQueries({ queryKey: ['activities'] })
+                    }}
+                  />
+                ) : undefined
+              }
             >
               {/* PRICES FIRST, then what they open. A plan is a price and a
                   promise, and the promise means nothing until the price is
@@ -1320,6 +1357,7 @@ function PaneBody({
   summary,
   facts,
   actions,
+  details,
   children,
 }: {
   title: string
@@ -1329,6 +1367,14 @@ function PaneBody({
   facts?: OfferFactsProps
   /** The icon row. Empty for a reader who cannot edit — see PaneAction. */
   actions?: PaneAction[]
+  /**
+   * The "Details" half — the record's own fields, shown under a second tab.
+   *
+   * ABSENT MEANS NO TABS: a course and a product are edited on their own page,
+   * so their pane has one thing in it and a strip of one tab would be a lie
+   * about there being a choice.
+   */
+  details?: React.ReactNode
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
@@ -1393,9 +1439,12 @@ function PaneBody({
                   )
                 })}
             </div>
-            {actions
-              .filter((a) => a.key === 'edit')
-              .map((a) =>
+            {/* Edit stays a BUTTON only where the editor is somewhere else — a
+                course and a product are edited on their own page. Where the
+                fields are right here under a tab, a button labelled "Edit"
+                beside them said the visible fields were not editing, which was
+                false, and gave no hint of what it hid (Franco, 2026-09-02). */}
+            {(details ? [] : actions.filter((a) => a.key === 'edit')).map((a) =>
                 'href' in a ? (
                   <Link
                     key={a.key}
@@ -1420,7 +1469,50 @@ function PaneBody({
           thing IS — while everything below the line is what it CONNECTS to. */}
       {facts && <OfferFacts {...facts} />}
 
-      {children && <div className="border-t pt-4">{children}</div>}
+      {details ? (
+        <PaneTabs main={children} details={details} />
+      ) : (
+        children && <div className="border-t pt-4">{children}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * TWO TABS, NOT MORE.
+ *
+ * The pane holds two different questions — what this costs and who it is for,
+ * and what the thing itself is. Splitting the second further would trade one
+ * hunt for another: a name, a colour, the prose and the session lengths are all
+ * "what this is", and a studio reads them together.
+ *
+ * Booking and pricing leads because it is the one asked most often, and it is
+ * where the plan matcher lives.
+ */
+function PaneTabs({ main, details }: { main?: React.ReactNode; details: React.ReactNode }) {
+  const t = useTranslations('OfferCatalogue')
+  const [tab, setTab] = useState<'main' | 'details'>('main')
+  const tabCls = (on: boolean) =>
+    `rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+      on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+    }`
+  return (
+    <div className="border-t pt-3">
+      <div className="mb-3 flex gap-0.5 rounded-lg bg-muted/50 p-0.5" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'main'}
+          onClick={() => setTab('main')} className={tabCls(tab === 'main')}>
+          {t('paneTabBooking')}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'details'}
+          onClick={() => setTab('details')} className={tabCls(tab === 'details')}>
+          {t('paneTabDetails')}
+        </button>
+      </div>
+      {/* BOTH STAY MOUNTED. Each half is a form holding unsaved input, and
+          unmounting the one you tabbed away from would throw it away without
+          saying so. */}
+      <div className={tab === 'main' ? '' : 'hidden'}>{main}</div>
+      <div className={tab === 'details' ? '' : 'hidden'}>{details}</div>
     </div>
   )
 }

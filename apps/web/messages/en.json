@@ -7533,7 +7533,9 @@
     "newActivity": "New activity",
     "newPlan": "New plan",
     "newCourse": "New course",
-    "newProduct": "New product"
+    "newProduct": "New product",
+    "paneTabBooking": "Booking & pricing",
+    "paneTabDetails": "Details"
   },
   "VerifyEmail": {
     "title": "Confirm {email}",
