@@ -64,6 +64,7 @@ import {
   Archive,
   CalendarDays,
   Copy,
+  ExternalLink,
   Plus,
   Trash2,
   type LucideIcon,
@@ -853,6 +854,26 @@ export default function CataloguePage() {
               }[activeTab]
             }
           </p>
+
+          {/* THE WAY OUT, on the two tabs that need one. A course and a product
+              are only PRICED here — their content, media, variants and
+              collections live on their own page, and the pane's Edit button is
+              easy to miss when you have not selected a row yet. So the rail
+              says where the rest of the job is, before the list rather than
+              after it (Franco, 2026-09-02).
+              Absent on activities and plans: nothing about either is edited
+              anywhere else any more. */}
+          {(activeTab === 'courses' || activeTab === 'products') && (
+            <Link
+              href={(activeTab === 'courses' ? '/offer/online-courses' : '/offer/products') as Route}
+              className="mx-2 flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-solid hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <span className="min-w-0 flex-1">
+                {activeTab === 'courses' ? t('fullEditCourses') : t('fullEditProducts')}
+              </span>
+            </Link>
+          )}
 
 
           {loading && (

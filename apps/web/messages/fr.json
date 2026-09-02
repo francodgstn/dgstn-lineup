@@ -7535,7 +7535,9 @@
     "newCourse": "Nouveau cours",
     "newProduct": "Nouveau produit",
     "paneTabBooking": "Réservation et tarifs",
-    "paneTabDetails": "Détails"
+    "paneTabDetails": "Détails",
+    "fullEditCourses": "Contenu, leçons et médias du cours — sur la page Cours en ligne",
+    "fullEditProducts": "Images, variantes et collections — sur la page Produits"
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",
