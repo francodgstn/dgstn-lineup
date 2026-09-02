@@ -76,6 +76,33 @@ deliberately no standalone template editor; the event page already is one.
 A studio that applies an **org** template and saves it back produces its own
 **team** template — the rules refuse a club write to the organisation's copy.
 
+### Starter library + cloning
+
+A studio need not build the first programme from a blank agenda. Two shortcuts
+produce a full template without authoring one on an event first:
+
+- **A built-in starter library** — `STARTER_PROGRAM_TEMPLATES`
+  (`packages/shared/src/data/programTemplates.ts`), a handful of ready-made
+  programmes (half-day workshop, weekend seminar, five-day camp, one-day
+  competition, grading day). Each entry **is** a `ProgramTemplate` body, so it
+  flows through `materialiseTemplate` and the save hook **unchanged** — no
+  special-casing in the engine. A starter can be **applied straight onto an
+  event** (it appears in the Apply-template picker, badged *Starter*) or
+  **added to the studio's own list** ("Add" in the settings manager, which just
+  saves the body as a new team/org template).
+- **Clone** — any template row (in the settings manager) clones into the
+  current scope: an owned one becomes a `… (copy)`, and an **inherited org**
+  template clones **down** into an editable **team** copy. Cloning is a plain
+  create through the same save hook and counts against `MAX_PROGRAM_TEMPLATES`.
+
+Starter *content* (day titles, item titles, `note`) is authoring-language free
+text like every other programme field — see the "Never translated" list in
+`docs/site-translations.md`. The surrounding UI chrome is translated; the
+library entries are seeded in the source language and renamed on clone. Their
+well-formedness (valid times, tracks that exist, complete day coverage, clean
+materialise + round-trip) is pinned by `STARTER_PROGRAM_TEMPLATES` tests in
+`packages/functions/src/events/programTime.test.ts`.
+
 ## Org events
 
 Org-scoped events (`scope: 'org'`, `teamId` null, `orgId` set) are first-class.
