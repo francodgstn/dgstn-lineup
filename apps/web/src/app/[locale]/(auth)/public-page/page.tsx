@@ -11,7 +11,7 @@
 //
 //   bio-link       → /team/bio-link
 //   website        → /plugins/website          (set up via /settings/plugins)
-//   shop           → /public-page/shop
+//   shop           → /offer/catalogue (what the shop sells)
 //   space          → /public-page/space
 //   booking        → /settings/booking
 //   └ appointments → /schedule/availability    (switched on in /settings/booking)
@@ -253,7 +253,11 @@ export default function PublicPageHub() {
       key: 'shop', icon: ShoppingBag, title: t('surfaceShop'),
       desc: flags.paymentsEnabled ? t('shopDesc') : t('shopDescPriceList'),
       live: flags.shopLive, previewUrl: publicUrl('shop'),
-      action: <ManageLink href={'/public-page/shop' as Route} label={t('manage')} />,
+      // Manage a shop = manage what it sells. There was a /public-page/shop
+      // settings page here until 2026-09-01; it wrote nothing and only signposted
+      // /offer/* and the payment settings, so this row (live dot, preview, and
+      // the price-list distinction above) replaced it outright.
+      action: <ManageLink href={'/offer/catalogue' as Route} label={t('manage')} />,
     },
     {
       key: 'space', icon: GraduationCap, title: t('surfaceSpace'), desc: t('spaceDesc'),

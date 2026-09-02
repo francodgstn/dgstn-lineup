@@ -6,11 +6,11 @@
 // It lives in components/ rather than in the /settings route folder because it is
 // used by TWO layouts: (auth)/settings/layout.tsx, and (auth)/public-page/layout.tsx.
 // "Public pages" is a settings section whose route is /public-page — bookmarked,
-// and sibling to /public-page/shop and /public-page/space, so the path cannot
-// move — and it was the one section that rendered as a bare full page instead of
-// a settings panel (UX-61). Sharing the shell is what makes it look like the
-// others without moving a route. Its two surface sections now share it too; see
-// the note on that layout for why they were excluded at first.
+// and sibling to /public-page/space, so the path cannot move — and it was the one
+// section that rendered as a bare full page instead of a settings panel (UX-61).
+// Sharing the shell is what makes it look like the others without moving a route.
+// Its surface section shares it too; see the note on that layout for why it was
+// excluded at first.
 //
 // Behaviour:
 //   desktop → rail (left) + detail (right), always both; /settings shows an overview.

@@ -18,7 +18,6 @@ import {
   Puzzle,
   Settings,
   ShieldCheck,
-  ShoppingBag,
   Target,
   UserCog,
   Wallet,
@@ -30,7 +29,6 @@ export type SettingsGroupKey =
   | 'studio'
   | 'scheduling'
   | 'communication'
-  | 'publicSurfaces'
 
 // Runtime visibility gate for items that only apply on certain plans/plugins/roles.
 // The rail resolves these (plugin via useInstalledPlugins, role via
@@ -43,11 +41,7 @@ export type SettingsGroupKey =
 // only look at is not worth a row. The controls behind them are still disabled +
 // annotated for an owner-less arrival by deep link — hiding the row is
 // navigation, never enforcement.
-//
-// `shop` — the storefront only means anything once there is something to sell or
-// a way to charge (the products or online-courses plugin, or a payment channel).
-// Same condition the main nav used while the row lived there.
-export type SettingsGate = 'ownerOnly' | 'customFields' | 'shop'
+export type SettingsGate = 'ownerOnly' | 'customFields'
 
 export interface SettingsNavItem {
   id: string // stable id used in the pin set + as React key
@@ -109,6 +103,26 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // The plugins marketplace renders in the detail pane; its per-plugin editor
   // sub-routes open full-screen at /plugins/*.
   { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
+  // The public-surface overview hub — the map of everything the world can see
+  // (public URL, default landing, per-surface live status). Individual surfaces
+  // are reachable from their own sections (Space → Grow); this ties them
+  // together.
+  //
+  // The route stays at /public-page — it is bookmarked, and its sibling
+  // /public-page/space is linked from the main nav — but it RENDERS inside the
+  // settings shell (rail + detail pane) via a route-group layout at
+  // (auth)/public-page/layout.tsx, so it reads like every other settings section
+  // instead of dumping the reader onto a bare full page (UX-61). That shell also
+  // covers /public-page/space. It is ALSO listed in the main nav's Grow section
+  // under the same id, so the map is reachable from where public surfaces are
+  // worked on (UX-28) — one destination, one shortcut star, listed twice.
+  //
+  // IN STUDIO, AND NOT A GROUP OF ITS OWN (2026-09-01). It used to lead a
+  // "Public pages" group whose only other row was the Shop settings page; when
+  // that page was deleted the group was a header with nothing to head — the
+  // exact failure the Scheduling note below warns about. It carries no `lead`
+  // either: it led that group only because Shop was a part of its whole.
+  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
 
   // ── Scheduling — how sessions and bookings work.
   //
@@ -149,58 +163,36 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // message goes out and somebody reads it.
   { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'communication', gate: 'ownerOnly' },
 
-  // ── Public pages — what the world sees.
-  //
-  // The public-surface overview hub — the map of everything the world can see
-  // (public URL, default landing, per-surface live status). Individual surfaces
-  // are reachable from their own sections (Space → Grow, Shop → just below); this
-  // is the settings/overview that ties them together.
-  //
-  // The route stays at /public-page — it is bookmarked, and its sibling
-  // /public-page/space is linked from the main nav — but it RENDERS inside the
-  // settings shell (rail + detail pane) via a route-group layout at
-  // (auth)/public-page/layout.tsx, so it reads like every other settings section
-  // instead of dumping the reader onto a bare full page (UX-61). That shell now
-  // covers /public-page/shop and /public-page/space too — they are sections of
-  // this one, and drawn full-width they read as unfinished pages. It is ALSO
-  // listed in the main nav's Grow section under the same id, so the map is
-  // reachable from where public surfaces are worked on (UX-28) — one
-  // destination, one shortcut star, listed twice.
-  // LEAD of Public pages: Shop below is a SECTION of this hub, so the hub coming
-  // second would put a part before its whole.
-  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'publicSurfaces', exact: true, lead: true },
-  // The public storefront that aggregates subscriptions, products and courses.
-  // It renders in this shell and is a SECTION of the public-page hub above, so
-  // the row belongs beside it — it spent a while in the main nav's Offer section
-  // instead, which put a settings destination in the middle of the things a
-  // studio actually sells.
-  { id: 'shop', href: '/public-page/shop', labelKey: 'shop', icon: ShoppingBag, group: 'publicSurfaces', gate: 'shop' },
 ]
 
 /**
  * Group order + their `Nav` namespace label keys (rendered in the rail). Account
  * on top per product direction.
  *
- * ── WHY FIVE GROUPS AND NOT THREE (2026-08-31) ──────────────────────────────
+ * ── WHY FOUR GROUPS (2026-08-31, revised 2026-09-01) ────────────────────────
  * "Studio" had eleven rows and every other group had two or three, which made
  * it the place a reader ended up by elimination rather than by expectation —
  * and eleven rows is past the point where a group heading helps you skip past
- * what you do not want. Two coherent subjects came out of it:
+ * what you do not want. One coherent subject came out of it:
  *
  *  • COMMUNICATION — Emails, Email templates, Alerts. One subject already: two
  *    of them share the `EmailSettings` i18n namespace, and all three answer
  *    "what do we send, and how does it read". Somebody hunting for a reminder's
  *    wording looks for that word, not for "Studio".
- *  • PUBLIC PAGES — the public-surface hub and the Shop, which is a section of
- *    it. Both are about what the WORLD sees; the rest of Studio is about what
- *    the studio is.
  *
- * What stayed in Studio is what is genuinely the studio's own configuration:
- * identity, how it takes money, ranks, custom fields, coaching axes, plugins.
+ * A PUBLIC PAGES group briefly held the public-surface hub and the Shop settings
+ * page. Shop was deleted on 2026-09-01 — it wrote nothing, and every destination
+ * on it was already reachable from /offer/* and the payment settings — which
+ * left a group of one, a header with nothing to head. The hub moved back into
+ * Studio (see its row above).
+ *
+ * What is in Studio is what is genuinely the studio's own configuration:
+ * identity, how it takes money, ranks, custom fields, coaching axes, plugins,
+ * and the map of what the world sees.
  *
  * GROUP ORDER is by how often a settings visit lands there: Account, then Studio
- * — General is the single most-opened settings page — then the three topic
- * groups. That is a ranking of FIVE things that changes once a year, which is
+ * — General is the single most-opened settings page — then the two topic
+ * groups. That is a ranking of FOUR things that changes once a year, which is
  * exactly the case where a considered order is worth keeping; the rows INSIDE
  * each group are the case where it is not, and they sort alphabetically
  * (`lib/navSort.ts`).
@@ -210,7 +202,6 @@ export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'studio', labelKey: 'groupStudio' },
   { key: 'scheduling', labelKey: 'groupScheduling' },
   { key: 'communication', labelKey: 'groupCommunication' },
-  { key: 'publicSurfaces', labelKey: 'groupPublicSurfaces' },
 ]
 
 /**

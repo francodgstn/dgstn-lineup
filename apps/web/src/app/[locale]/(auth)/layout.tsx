@@ -2701,9 +2701,6 @@ function SidebarContent({
   const connectOn =
     (!!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false) ||
     hasByoGateway
-  // A public shop makes sense once there's something to sell OR a way to charge:
-  // the products/online-courses plugin, or a payment channel (Connect/BYO).
-  const shopAvailable = isInstalled('products') || isInstalled('online-courses') || connectOn
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.
@@ -2730,7 +2727,6 @@ function SidebarContent({
   const settingsItemVisible = (item: SettingsNavItem) => {
     if (item.gate === 'ownerOnly') return canEditTeamSettings
     if (item.gate === 'customFields') return isInstalled('custom-fields')
-    if (item.gate === 'shop') return shopAvailable
     return true
   }
 
