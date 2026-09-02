@@ -64,6 +64,7 @@ import {
   Archive,
   CalendarDays,
   Copy,
+  Plus,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -179,6 +180,41 @@ type PaneAction = PaneActionRun & {
   danger?: boolean
 }
 
+function CreateAction({
+  tab,
+  onOpen,
+}: {
+  tab: TabKey
+  onOpen: (kind: 'activity' | 'plan') => void
+}) {
+  const t = useTranslations('OfferCatalogue')
+  if (tab === 'activities') {
+    return (
+      <Button onClick={() => onOpen('activity')}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        {t('newActivity')}
+      </Button>
+    )
+  }
+  if (tab === 'plans') {
+    return (
+      <Button onClick={() => onOpen('plan')}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        {t('newPlan')}
+      </Button>
+    )
+  }
+  const href = (tab === 'courses'
+    ? '/offer/online-courses?new=1'
+    : '/offer/products?new=1') as Route
+  return (
+    <Link href={href} className={buttonVariants()}>
+      <Plus className="mr-1.5 h-4 w-4" />
+      {tab === 'courses' ? t('newCourse') : t('newProduct')}
+    </Link>
+  )
+}
+
 /** The rail's tabs. `activities` holds classes AND appointments — see the header. */
 type TabKey = 'activities' | 'plans' | 'courses' | 'products'
 
@@ -259,6 +295,9 @@ export default function CataloguePage() {
   // state and not a flag on the edit target — both dialogs already know it.
   const [duplicatingActivity, setDuplicatingActivity] = useState<Activity | null>(null)
   const [duplicatingPlan, setDuplicatingPlan] = useState<SubscriptionType | null>(null)
+  /** Which kind is being CREATED, if any. Separate from the edit and duplicate
+   *  targets because all three drive the same dialog and only one can be true. */
+  const [creating, setCreating] = useState<'activity' | 'plan' | null>(null)
   const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
   const [confirming, setConfirming] = useState<Confirming>(null)
 
@@ -683,6 +722,17 @@ export default function CataloguePage() {
           { href: '/schedule' as Route, label: t('toSchedule') },
           { href: '/payments?tab=giftCards' as Route, label: t('toGiftCards') },
         ]}
+        // CREATE BELONGS TO THE ACTIVE TAB. One button that makes whatever the
+        // rail is currently listing — the catalogue could not make anything at
+        // all before, which was the one thing its own pages still had to be
+        // opened for (Franco, 2026-09-02).
+        //
+        // Activities and plans open their dialog HERE, because this page
+        // already mounts it for edit and duplicate. Courses and products link
+        // to their own page instead: both gate creation on a per-plan cap and
+        // own a bespoke first-step form, and a second copy of either is how the
+        // two drift apart.
+        action={canEdit ? <CreateAction tab={activeTab} onOpen={setCreating} /> : undefined}
       />
 
       {/* The banner counts dead ends, and clicking it FILTERS THE RAIL rather
@@ -1097,6 +1147,38 @@ export default function CataloguePage() {
           remounts the form rather than leaving the previous draft in it — the
           same key both list pages use. `currentTeamId` and `user` gate the
           activity form because it writes with both. */}
+      {currentTeamId && user && creating === 'activity' && (
+        <ActivityDialog
+          key="new-activity"
+          open
+          onClose={() => setCreating(null)}
+          teamId={currentTeamId}
+          userId={user.uid}
+          editing={null}
+          duplicating={null}
+          nextOrder={activities.length}
+          currency={currency}
+          onCreated={(id) => select({ kind: 'activity', id })}
+        />
+      )}
+
+      {currentTeamId && creating === 'plan' && (
+        <SubTypeDialog
+          key="new-plan"
+          open
+          onOpenChange={(v) => !v && setCreating(null)}
+          teamId={currentTeamId}
+          editing={null}
+          duplicating={null}
+          currency={currency}
+          nextOrder={plans.length}
+          onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+            void qc.invalidateQueries({ queryKey: ['activities'] })
+          }}
+        />
+      )}
+
       {currentTeamId && user && duplicatingActivity && (
         <ActivityDialog
           key={`dup-${duplicatingActivity.id}`}

@@ -147,6 +147,10 @@ export default function ProductsPage() {
   // The catalogue's pane links here to duplicate, because the copy has to land
   // in THIS page's create dialog — under the same per-plan catalogue cap.
   const duplicateParam = searchParams.get('duplicate')
+  // The catalogue's "New product" links here rather than carrying a second copy
+  // of this dialog: creation is gated on a per-plan cap this page already
+  // knows, and two first-step forms is how the two drift apart.
+  const newParam = searchParams.get('new')
   const limits = getProductLimits(team?.plan ?? null)
   const atCap = products.length >= limits.maxProductsPerTeam
 
@@ -266,6 +270,16 @@ export default function ProductsPage() {
     if (target) openEdit(target)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editParam, products])
+
+  // Needs no data, so it runs on mount — unlike `edit`/`duplicate`, which have
+  // to wait for the row they name to exist.
+  const consumedNewParam = useRef(false)
+  useEffect(() => {
+    if (consumedNewParam.current || !newParam) return
+    consumedNewParam.current = true
+    if (!atCap) openCreate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newParam, atCap])
 
   // Same one-shot shape as `edit` above, for the same reason.
   const consumedDuplicateParam = useRef(false)
