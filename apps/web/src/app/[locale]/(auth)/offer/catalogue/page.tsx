@@ -1536,13 +1536,19 @@ function PaneBody({
 function PaneTabs({ main, details }: { main?: React.ReactNode; details: React.ReactNode }) {
   const t = useTranslations('OfferCatalogue')
   const [tab, setTab] = useState<'main' | 'details'>('main')
+  // AN UNDERLINE, not pills — the same shape the contact detail page uses for
+  // its tabs. The rail above already spends a filled pill strip on choosing
+  // WHAT you are looking at, and a second filled strip choosing which half of
+  // it read as two controls of equal weight competing on one screen.
   const tabCls = (on: boolean) =>
-    `rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-      on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+    `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+      on
+        ? 'border-primary text-foreground'
+        : 'border-transparent text-muted-foreground hover:text-foreground'
     }`
   return (
     <div className="border-t pt-3">
-      <div className="mb-3 flex gap-0.5 rounded-lg bg-muted/50 p-0.5" role="tablist">
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'main'}
           onClick={() => setTab('main')} className={tabCls(tab === 'main')}>
           {t('paneTabBooking')}
