@@ -28,10 +28,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { FormSection } from '@/components/ui/form-section'
 import { Switch } from '@/components/ui/switch'
 import { Globe } from 'lucide-react'
-import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
 
 /**
  * THE SUBSCRIPTION-TYPE EDITOR, as a component rather than a fixture of the
@@ -177,6 +175,7 @@ export function SubTypeDialog({
 }) {
   const t = useTranslations('TeamSettings')
   const tCommon = useTranslations('Common')
+  const tCat = useTranslations('OfferCatalogue')
 
   const initialValues = () =>
     duplicating
@@ -381,18 +380,19 @@ export function SubTypeDialog({
               being deleted, so there is still exactly ONE writer of the edge
               and it is still `ActivityPlanLinks`. */}
 
-          {/* Automations referencing this subscription + a quick create shortcut */}
-          {editing && (
-            <FormSection>
-              <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />
-            </FormSection>
-          )}
+          {/* AUTOMATIONS ARE NOT A FIELD OF THIS FORM. They are other records
+              that happen to reference this plan, and they save themselves —
+              sitting under a Save button that does not write them said
+              otherwise. The catalogue gives them their own tab; the dialog
+              omits them, because a plan being created has none to show
+              (Franco, 2026-09-02). */}
     </>
   )
 
+  // ONE LABEL, ONE SIZE, on every tab — the same words the pricing tab uses.
   const save = (
-    <Button type="submit" disabled={isSubmitting}>
-      {isSubmitting ? t('saving') : t('save')}
+    <Button type="submit" size={inline ? 'sm' : undefined} disabled={isSubmitting}>
+      {isSubmitting ? (inline ? tCat('saving') : t('saving')) : inline ? tCat('save') : t('save')}
     </Button>
   )
 

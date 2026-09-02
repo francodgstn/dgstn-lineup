@@ -112,6 +112,13 @@ export function ActivityPricingForm({
   const stored = draftOf(activity)
   const [draft, setDraft] = useState<Draft>(stored)
   const [saving, setSaving] = useState(false)
+  /** The matcher's save, handed up so this tab has ONE button — see its
+   *  `saveHandle` prop. */
+  const [links, setLinks] = useState<{
+    run: () => Promise<void>
+    dirty: boolean
+    blocked: string | null
+  } | null>(null)
   // Re-seed when the selection changes, or when the stored document changes
   // under us (the matcher writes it, and a save here refetches it).
   useEffect(() => {
@@ -152,11 +159,19 @@ export function ActivityPricingForm({
     draft.trialPrice.trim() !== '' && !(parsePrice(draft.trialPrice) >= 0.5)
   const invalid = dropInPriceInvalid || trialPriceInvalid
   const dirty = !same(draft, stored)
+  /** EITHER half being touched arms the one button. */
+  const anyDirty = dirty || !!links?.dirty
 
   async function save() {
-    if (invalid || !dirty) return
+    if (invalid || !anyDirty || links?.blocked) return
     setSaving(true)
     try {
+      // The tier has to land before the matcher's transaction reads it — the
+      // same ordering `onBeforeSave` enforced when the two had separate buttons.
+      if (!dirty && links?.dirty) {
+        await links.run()
+        return
+      }
       await updateDoc(doc(db, ACTIVITIES_COLLECTION, activity.id), {
         // A FIELD PATH, not the whole map: `accessRule.subscriptionTypeIds` is
         // the matcher's and must survive every save from here.
@@ -176,6 +191,7 @@ export function ActivityPricingForm({
       await qc.invalidateQueries({ queryKey: ['activities'] })
       // "Set a price" is a derived setup step keyed on `dropIn.enabled`.
       void invalidateSetupChecklist()
+      if (links?.dirty) await links.run()
       toast.success(t('savedToast'))
     } finally {
       setSaving(false)
@@ -315,16 +331,6 @@ export function ActivityPricingForm({
             </div>
           </div>
 
-          {canEdit && (
-            <div className="flex items-center justify-end gap-3">
-              {dirty && (
-                <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>
-              )}
-              <Button size="sm" disabled={!dirty || invalid || saving} onClick={() => void save()}>
-                {saving ? tCat('saving') : tCat('save')}
-              </Button>
-            </div>
-          )}
         </>
       )}
 
@@ -337,7 +343,10 @@ export function ActivityPricingForm({
           {tCat('openNoPlanEdge')}
         </p>
       ) : (
-      <div className={isAppointment ? '' : 'border-t pt-4'}>
+        // NO RULE ABOVE THE MATCHER. The tab is one continuous answer to "who
+        // can book this and what does it cost", and a line across the middle of
+        // it proposed a boundary that is not there.
+        <div className={isAppointment ? '' : 'pt-2'}>
         <ActivityPlanLinks
           direction="from-offering"
           offering={{
@@ -363,8 +372,27 @@ export function ActivityPricingForm({
             })
             await qc.invalidateQueries({ queryKey: ['activities'] })
           }}
+          saveHandle={setLinks}
         />
       </div>
+      )}
+
+      {/* ONE BUTTON FOR THE TAB, at its foot, below everything it saves. */}
+      {canEdit && (
+        <div className="flex items-center justify-end gap-3 border-t pt-3">
+          {links?.blocked ? (
+            <span className="text-xs text-destructive">{links.blocked}</span>
+          ) : (
+            anyDirty && <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>
+          )}
+          <Button
+            size="sm"
+            disabled={!anyDirty || invalid || saving || !!links?.blocked}
+            onClick={() => void save()}
+          >
+            {saving ? tCat('saving') : tCat('save')}
+          </Button>
+        </div>
       )}
     </div>
   )

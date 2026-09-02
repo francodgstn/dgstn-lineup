@@ -282,12 +282,25 @@ export function PlanPricingForm({
   teamId,
   currency,
   canEdit,
+  links,
 }: {
   /** The LIVE document from the plans query. */
   plan: SubscriptionType
   teamId: string
   currency: string
   canEdit: boolean
+  /**
+   * The activity matcher, rendered inside this form so the tab has ONE Save.
+   *
+   * A RENDER PROP rather than an element to clone: cloning would inject props
+   * the element's type does not declare, which typechecks only by widening it
+   * to `any` — and the whole point of the handle is that the host knows exactly
+   * what it is receiving.
+   */
+  links?: (props: {
+    hostedInForm: true
+    saveHandle: (h: { run: () => Promise<void>; dirty: boolean; blocked: string | null }) => void
+  }) => React.ReactNode
 }) {
   const t = useTranslations('TeamSettings')
   const tCat = useTranslations('OfferCatalogue')
@@ -295,6 +308,11 @@ export function PlanPricingForm({
   const qc = useQueryClient()
   const [showIntroError, setShowIntroError] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [linksHandle, setLinksHandle] = useState<{
+    run: () => Promise<void>
+    dirty: boolean
+    blocked: string | null
+  } | null>(null)
 
   const {
     register,
@@ -356,6 +374,18 @@ export function PlanPricingForm({
   const hasIntroProblem = watchedPrices.some((_, i) => introRowState(i).problem)
 
   async function onSubmit(data: PricingData) {
+    // Only the matcher touched? Run it and stop — there is nothing of this
+    // form's to write, and writing it anyway would stamp `updated_at` for no
+    // reason.
+    if (!isDirty && linksHandle?.dirty) {
+      setSaving(true)
+      try {
+        await linksHandle.run()
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     // Refuse the save and name the rule on the row that broke it.
     if (hasIntroProblem) {
       setShowIntroError(true)
@@ -405,11 +435,14 @@ export function PlanPricingForm({
       })
       await qc.invalidateQueries({ queryKey: ['subscription-types', teamId] })
       reset(defaultsOf({ ...plan, prices }))
+      if (linksHandle?.dirty) await linksHandle.run()
       toast.success(t('saved'))
     } finally {
       setSaving(false)
     }
   }
+
+  const anyDirty = isDirty || !!linksHandle?.dirty
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -635,10 +668,24 @@ export function PlanPricingForm({
         </FormSection>
       </fieldset>
 
+      {/* No rule above the matcher — see ActivityPricingForm. */}
+      {links ? (
+        <div className="pt-2">{links({ hostedInForm: true, saveHandle: setLinksHandle })}</div>
+      ) : null}
+
+      {/* ONE BUTTON FOR THE TAB, below everything it saves. */}
       {canEdit && (
-        <div className="flex items-center justify-end gap-3">
-          {isDirty && <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>}
-          <Button type="submit" size="sm" disabled={!isDirty || saving}>
+        <div className="flex items-center justify-end gap-3 border-t pt-3">
+          {linksHandle?.blocked ? (
+            <span className="text-xs text-destructive">{linksHandle.blocked}</span>
+          ) : (
+            anyDirty && <span className="text-xs text-muted-foreground">{tCat('unsaved')}</span>
+          )}
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!anyDirty || saving || !!linksHandle?.blocked}
+          >
             {saving ? tCat('saving') : tCat('save')}
           </Button>
         </div>

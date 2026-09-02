@@ -106,6 +106,12 @@ import { useCapabilities } from '@/hooks/useCapabilities'
 import { Link, useRouter } from '@/i18n/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button, buttonVariants } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tip'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -123,6 +129,7 @@ import { ActivityDialog } from '@/components/activities/ActivityDialog'
 import { ActivityPricingForm } from '@/components/activities/ActivityPricingForm'
 import { PlanPricingForm } from '@/components/subscriptions/PlanPricingForm'
 import { SubTypeDialog } from '@/components/subscriptions/SubscriptionTypeDialog'
+import { SubscriptionAutomationsSection } from '@/components/subscriptions/SubscriptionAutomationsSection'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { SectionHeading } from '@/components/layout/SectionHeading'
 
@@ -181,38 +188,65 @@ type PaneAction = PaneActionRun & {
   danger?: boolean
 }
 
+/**
+ * ONE BUTTON, and it asks what you are making.
+ *
+ * It used to relabel itself per tab — "New activity" on one, "New product" on
+ * the next — which made a control that never moves look like four different
+ * ones, and meant creating a plan while reading the Courses tab took a detour
+ * through the tab strip (Franco, 2026-09-02).
+ *
+ * The menu offers only what this team HAS: a studio without the courses plugin
+ * is not shown a course it cannot make. Activities and plans open the dialog
+ * this page already mounts; courses and products link to their own page, which
+ * owns the per-plan cap and the first-step form — see `?new=1` there.
+ */
 function CreateAction({
-  tab,
+  tabs,
   onOpen,
 }: {
-  tab: TabKey
+  tabs: { key: TabKey }[]
   onOpen: (kind: 'activity' | 'plan') => void
 }) {
   const t = useTranslations('OfferCatalogue')
-  if (tab === 'activities') {
-    return (
-      <Button onClick={() => onOpen('activity')}>
-        <Plus className="mr-1.5 h-4 w-4" />
-        {t('newActivity')}
-      </Button>
-    )
-  }
-  if (tab === 'plans') {
-    return (
-      <Button onClick={() => onOpen('plan')}>
-        <Plus className="mr-1.5 h-4 w-4" />
-        {t('newPlan')}
-      </Button>
-    )
-  }
-  const href = (tab === 'courses'
-    ? '/offer/online-courses?new=1'
-    : '/offer/products?new=1') as Route
+  const has = (k: TabKey) => tabs.some((x) => x.key === k)
   return (
-    <Link href={href} className={buttonVariants()}>
-      <Plus className="mr-1.5 h-4 w-4" />
-      {tab === 'courses' ? t('newCourse') : t('newProduct')}
-    </Link>
+    <DropdownMenu>
+      {/* The trigger IS the button — `render={<Button/>}` did not wire the
+          click, and every other menu in the app styles the trigger directly. */}
+      <DropdownMenuTrigger className={buttonVariants()}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        {t('createNew')}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {has('activities') && (
+          <DropdownMenuItem onClick={() => onOpen('activity')}>
+            <Zap className="mr-2 h-4 w-4" />
+            {t('newActivity')}
+          </DropdownMenuItem>
+        )}
+        {has('plans') && (
+          <DropdownMenuItem onClick={() => onOpen('plan')}>
+            <IdCard className="mr-2 h-4 w-4" />
+            {t('newPlan')}
+          </DropdownMenuItem>
+        )}
+        {has('courses') && (
+          <DropdownMenuItem
+            render={<Link href={'/offer/online-courses?new=1' as Route} />}
+          >
+            <GraduationCap className="mr-2 h-4 w-4" />
+            {t('newCourse')}
+          </DropdownMenuItem>
+        )}
+        {has('products') && (
+          <DropdownMenuItem render={<Link href={'/offer/products?new=1' as Route} />}>
+            <Package className="mr-2 h-4 w-4" />
+            {t('newProduct')}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -747,7 +781,7 @@ export default function CataloguePage() {
         // to their own page instead: both gate creation on a per-plan cap and
         // own a bespoke first-step form, and a second copy of either is how the
         // two drift apart.
-        action={canEdit ? <CreateAction tab={activeTab} onOpen={setCreating} /> : undefined}
+        action={canEdit ? <CreateAction tabs={tabs} onOpen={setCreating} /> : undefined}
       />
 
       {/* The banner counts dead ends, and clicking it FILTERS THE RAIL rather
@@ -1131,7 +1165,17 @@ export default function CataloguePage() {
                       void qc.invalidateQueries({ queryKey: ['activities'] })
                     }}
                   />
-                ) }]
+                ) },
+                     {
+                       key: 'automations',
+                       label: t('paneTabAutomations'),
+                       content: (
+                         <SubscriptionAutomationsSection
+                           teamId={currentTeamId}
+                           subscriptionType={selectedPlan}
+                         />
+                       ),
+                     }]
                   : undefined
               }
             >
@@ -1145,18 +1189,22 @@ export default function CataloguePage() {
                   teamId={currentTeamId}
                   currency={currency}
                   canEdit={canEdit}
+                  // The matcher goes INSIDE the form, as it does on an
+                  // activity, so the tab has one Save rather than two — see
+                  // `saveHandle` on ActivityPlanLinks.
+                  links={(p) => (
+                    <ActivityPlanLinks
+                      direction="from-plan"
+                      plan={selectedPlan}
+                      offerings={allOfferings}
+                      plans={plans}
+                      currency={currency}
+                      canEdit={canEdit}
+                      {...p}
+                    />
+                  )}
                 />
               )}
-              <div className="border-t pt-4">
-                <ActivityPlanLinks
-                  direction="from-plan"
-                  plan={selectedPlan}
-                  offerings={allOfferings}
-                  plans={plans}
-                  currency={currency}
-                  canEdit={canEdit}
-                />
-              </div>
             </PaneBody>
           )}
 
@@ -1562,7 +1610,10 @@ function PaneTabs({
         : 'border-transparent text-muted-foreground hover:text-foreground'
     }`
   return (
-    <div className="border-t pt-3">
+    <div className="pt-1">
+      {/* NO RULE ABOVE THE STRIP. The tabs' own underline is already a
+          horizontal line; a second one two pixels above it drew a box around
+          nothing. */}
       <div className="mb-3 flex gap-1 overflow-x-auto border-b" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'main'}
           onClick={() => setTab('main')} className={tabCls(tab === 'main')}>
