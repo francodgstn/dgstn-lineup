@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { FormSection } from '@/components/ui/form-section'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ACTIVITIES_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
 import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
@@ -291,6 +290,7 @@ export function ActivityDialog({
 }) {
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
+  const tCat = useTranslations('OfferCatalogue')
   const qc = useQueryClient()
   // A saved activity can move TWO derived setup steps: "add an activity" on its
   // existence, and "set a price" on `dropIn.enabled`. Beside the list
@@ -801,12 +801,11 @@ export function ActivityDialog({
         </>
       )}
 
+      {/* NO SECTION HEADINGS. Each tab now holds a handful of fields about one
+          thing, and a heading over four rows names what the tab already names
+          — chrome restating its own container (Franco, 2026-09-02). */}
       {section === 'booking' && (
-        <FormSection
-          title={t('sectionBookingTitle')}
-          description={t('sectionBookingSubtitle')}
-        >
-          <div className="divide-y rounded-lg border">
+        <div className="divide-y rounded-lg border">
               {/* A field, not implied by type: either kind may require a review step. */}
               <Controller
                 name="autoConfirm"
@@ -862,8 +861,7 @@ export function ActivityDialog({
               )}
 
 
-          </div>
-        </FormSection>
+        </div>
       )}
 
       {section === 'details' && (
@@ -999,8 +997,7 @@ export function ActivityDialog({
       )}
 
       {section === 'details' && (
-        <FormSection title={t('sectionAppearanceTitle')} description={t('sectionAppearanceHint')}>
-          <div className="divide-y rounded-lg border">
+        <div className="divide-y rounded-lg border">
             <div className="flex items-center justify-between gap-4 p-3">
               <Label htmlFor="act-color" className="font-medium">{t('fieldColor')}</Label>
               <Controller
@@ -1031,94 +1028,28 @@ export function ActivityDialog({
                 )}
               />
             </div>
-          </div>
-        </FormSection>
+        </div>
       )}
 
       {section === 'booking' && (
-        <FormSection title={t('sectionVisitorTitle')} description={t('sectionVisitorHint')}>
+        <div className="space-y-4">
 
           {/* Secondary prose — side by side when the dialog is wide */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
-              <textarea
-                id="act-prereq"
-                {...register('prerequisites')}
-                rows={3}
-                placeholder={t('prerequisitesPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
-              />
-              <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
-            </div>
+          {/* THE SHORT CONTROL FIRST, THEN THE FORM, THEN THE PROSE — and the
+              prose runs FULL WIDTH, one field per row.
 
-            <div className="space-y-1.5">
-              <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
-              <textarea
-                id="act-confirm-instructions"
-                {...register('confirmationInstructions')}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
-            </div>
-
-            {/* Rich detail shown on the public booking page before a visitor
-                books — everything the item page in a mature booking tool
-                answers up front so it never becomes a support email. */}
-            <div className="space-y-1.5">
+              Two columns halved every textarea, so six paragraphs of public
+              copy were written in boxes narrower than the sentences going into
+              them; and a one-line input sat among them, putting a small control
+              after a tall one so the two columns never lined up (Franco,
+              2026-09-02). */}
+<div className="space-y-1.5">
               <Label htmlFor="act-meeting-point">{t('fieldMeetingPoint')}</Label>
               <Input
                 id="act-meeting-point"
                 {...register('meetingPoint')}
                 placeholder={t('meetingPointPlaceholder')}
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
-              <textarea
-                id="act-whats-included"
-                {...register('whatsIncluded')}
-                rows={3}
-                placeholder={t('whatsIncludedPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
-              <textarea
-                id="act-whats-not-included"
-                {...register('whatsNotIncluded')}
-                rows={3}
-                placeholder={t('whatsIncludedPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
-              <textarea
-                id="act-faq"
-                {...register('faq')}
-                rows={4}
-                placeholder={t('faqPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
-              <textarea
-                id="act-cancellation-policy"
-                {...register('cancellationPolicy')}
-                rows={3}
-                placeholder={t('cancellationPolicyPlaceholder')}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
-              />
-              <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
             </div>
 
             <Controller
@@ -1146,8 +1077,73 @@ export function ActivityDialog({
                 />
               )}
             />
+
+          <div className="space-y-4">
+<div className="space-y-1.5">
+              <Label htmlFor="act-prereq">{t('fieldPrerequisites')}</Label>
+              <textarea
+                id="act-prereq"
+                {...register('prerequisites')}
+                rows={3}
+                placeholder={t('prerequisitesPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-none"
+              />
+              <p className="text-xs text-muted-foreground">{t('prerequisitesHelp')}</p>
+            </div>
+<div className="space-y-1.5">
+              <Label htmlFor="act-confirm-instructions">{t('fieldConfirmationInstructions')}</Label>
+              <textarea
+                id="act-confirm-instructions"
+                {...register('confirmationInstructions')}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('confirmationInstructionsHelp')}</p>
+            </div>
+<div className="space-y-1.5">
+              <Label htmlFor="act-whats-included">{t('fieldWhatsIncluded')}</Label>
+              <textarea
+                id="act-whats-included"
+                {...register('whatsIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('whatsIncludedHelp')}</p>
+            </div>
+<div className="space-y-1.5">
+              <Label htmlFor="act-whats-not-included">{t('fieldWhatsNotIncluded')}</Label>
+              <textarea
+                id="act-whats-not-included"
+                {...register('whatsNotIncluded')}
+                rows={3}
+                placeholder={t('whatsIncludedPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+<div className="space-y-1.5">
+              <Label htmlFor="act-faq">{t('fieldFaq')}</Label>
+              <textarea
+                id="act-faq"
+                {...register('faq')}
+                rows={4}
+                placeholder={t('faqPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+            </div>
+<div className="space-y-1.5">
+              <Label htmlFor="act-cancellation-policy">{t('fieldCancellationPolicy')}</Label>
+              <textarea
+                id="act-cancellation-policy"
+                {...register('cancellationPolicy')}
+                rows={3}
+                placeholder={t('cancellationPolicyPlaceholder')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{t('cancellationPolicyHelp')}</p>
+            </div>
           </div>
-        </FormSection>
+        </div>
       )}
     </>
   )
@@ -1161,9 +1157,20 @@ export function ActivityDialog({
     </>
   )
 
+  // ONE LABEL, ONE SIZE, on every tab — the pricing tab's button says the same
+  // word, so a studio moving between them is pressing the same control.
+  // The DIALOG keeps its own wording: there, "Create activity" is the outcome.
   const submit = (
-    <Button type="submit" disabled={isSubmitting}>
-      {isSubmitting ? t('saving') : editing ? t('saveChanges') : t('createActivity')}
+    <Button type="submit" size={inline ? 'sm' : undefined} disabled={isSubmitting}>
+      {inline
+        ? isSubmitting
+          ? tCat('saving')
+          : tCat('save')
+        : isSubmitting
+          ? t('saving')
+          : editing
+            ? t('saveChanges')
+            : t('createActivity')}
     </Button>
   )
 

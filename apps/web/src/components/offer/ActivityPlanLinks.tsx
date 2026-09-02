@@ -233,6 +233,7 @@ export function ActivityPlanLinks({
   hostedInForm,
   onBeforeSave,
   saveBlocked,
+  saveHandle,
   onDirtyChange,
 }: {
   direction: EdgeDirection
@@ -266,6 +267,16 @@ export function ActivityPlanLinks({
   /** Why the host cannot accept a save right now — shown, and the button is
    *  disabled. Null/absent when it can. */
   saveBlocked?: string | null
+  /**
+   * Hand this editor's save to the host, and HIDE ITS OWN BUTTON.
+   *
+   * A pane tab with two Save buttons asks a studio which one their change
+   * belongs to — a question they should never have to answer, because the two
+   * write different fields of the same record and both are "save this"
+   * (Franco, 2026-09-02). The host calls `run()` after its own write; `dirty`
+   * lets it enable one button for either half being touched.
+   */
+  saveHandle?: (h: { run: () => Promise<void>; dirty: boolean; blocked: string | null }) => void
   /** Called whenever this editor gains or loses unsaved ticks, so a host with
    *  its own Save can say that pressing it will not write them. Pass a STABLE
    *  function (a setState updater) — it is an effect dependency. */
@@ -329,6 +340,13 @@ export function ActivityPlanLinks({
     onDirtyChange?.(dirty)
     return () => onDirtyChange?.(false)
   }, [dirty, onDirtyChange])
+  // Reported upward on every change, so the host's one button tracks this
+  // editor's state without owning it.
+  useEffect(() => {
+    saveHandle?.({ run: save, dirty, blocked: saveBlocked ?? null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, saveBlocked, saving, JSON.stringify(drafts)])
+
   const errors = rows
     .map((r) => {
       const d = draftFor(r.key, r.off, r.plan.id)
@@ -885,7 +903,7 @@ export function ActivityPlanLinks({
       </div>
       </div>
 
-      {canEdit && (
+      {canEdit && !saveHandle && (
         <div className="flex items-center justify-end gap-3 border-t pt-3">
           {saveBlocked ? (
             <span className="text-xs text-destructive">{saveBlocked}</span>

@@ -7540,9 +7540,11 @@
     "newProduct": "New product",
     "paneTabBooking": "Booking",
     "paneTabDetails": "Details",
-    "fullEditCourses": "Course content, lessons and media — on the Online courses page",
-    "fullEditProducts": "Images, variants and collections — on the Products page",
-    "paneTabAccess": "Access & pricing"
+    "fullEditCourses": "Open the Online courses page",
+    "fullEditProducts": "Open the Products page",
+    "paneTabAccess": "Access & pricing",
+    "createNew": "Create",
+    "paneTabAutomations": "Automations"
   },
   "VerifyEmail": {
     "title": "Confirm {email}",
