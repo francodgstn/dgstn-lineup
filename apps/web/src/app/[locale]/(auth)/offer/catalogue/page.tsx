@@ -64,6 +64,8 @@ import {
   Archive,
   CalendarDays,
   Copy,
+  ExternalLink,
+  Plus,
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
@@ -179,6 +181,41 @@ type PaneAction = PaneActionRun & {
   danger?: boolean
 }
 
+function CreateAction({
+  tab,
+  onOpen,
+}: {
+  tab: TabKey
+  onOpen: (kind: 'activity' | 'plan') => void
+}) {
+  const t = useTranslations('OfferCatalogue')
+  if (tab === 'activities') {
+    return (
+      <Button onClick={() => onOpen('activity')}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        {t('newActivity')}
+      </Button>
+    )
+  }
+  if (tab === 'plans') {
+    return (
+      <Button onClick={() => onOpen('plan')}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        {t('newPlan')}
+      </Button>
+    )
+  }
+  const href = (tab === 'courses'
+    ? '/offer/online-courses?new=1'
+    : '/offer/products?new=1') as Route
+  return (
+    <Link href={href} className={buttonVariants()}>
+      <Plus className="mr-1.5 h-4 w-4" />
+      {tab === 'courses' ? t('newCourse') : t('newProduct')}
+    </Link>
+  )
+}
+
 /** The rail's tabs. `activities` holds classes AND appointments — see the header. */
 type TabKey = 'activities' | 'plans' | 'courses' | 'products'
 
@@ -235,6 +272,20 @@ export default function CataloguePage() {
   const qc = useQueryClient()
 
   const selection = parseSelection(params.get('sel'))
+  /**
+   * `?tab=` — which list to open on, when no `?sel=` names a row.
+   *
+   * The retired activities and plans pages redirect here through it, so a
+   * bookmark of either lands on the list it used to show rather than on
+   * whichever tab this page would have picked. Ignored when it names a tab the
+   * team has not installed; `activeTab` already guards that.
+   */
+  const tabParam = params.get('tab')
+  const requestedTab: TabKey | null =
+    tabParam === 'activities' || tabParam === 'plans' || tabParam === 'courses' ||
+    tabParam === 'products'
+      ? tabParam
+      : null
   const [onlyDeadEnds, setOnlyDeadEnds] = useState(false)
   // NULL until the studio picks a tab, so a deep link (`?sel=plan:x`, which the
   // pricing warnings and both editors produce) opens on the tab that HOLDS the
@@ -259,6 +310,9 @@ export default function CataloguePage() {
   // state and not a flag on the edit target — both dialogs already know it.
   const [duplicatingActivity, setDuplicatingActivity] = useState<Activity | null>(null)
   const [duplicatingPlan, setDuplicatingPlan] = useState<SubscriptionType | null>(null)
+  /** Which kind is being CREATED, if any. Separate from the edit and duplicate
+   *  targets because all three drive the same dialog and only one can be true. */
+  const [creating, setCreating] = useState<'activity' | 'plan' | null>(null)
   const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
   const [confirming, setConfirming] = useState<Confirming>(null)
 
@@ -349,8 +403,8 @@ export default function CataloguePage() {
   // A tab can vanish under a stored choice: uninstall the products plugin with
   // that tab open and `pickedTab` names a tab that is not rendered, which would
   // show an empty rail with nothing selected in the strip.
-  const activeTab = tabs.some((x) => x.key === (pickedTab ?? fallbackTab))
-    ? (pickedTab ?? fallbackTab)
+  const activeTab = tabs.some((x) => x.key === (pickedTab ?? requestedTab ?? fallbackTab))
+    ? (pickedTab ?? requestedTab ?? fallbackTab)
     : 'activities'
 
   /** How many dead ends each tab holds — shown on the strip while the filter is
@@ -683,6 +737,17 @@ export default function CataloguePage() {
           { href: '/schedule' as Route, label: t('toSchedule') },
           { href: '/payments?tab=giftCards' as Route, label: t('toGiftCards') },
         ]}
+        // CREATE BELONGS TO THE ACTIVE TAB. One button that makes whatever the
+        // rail is currently listing — the catalogue could not make anything at
+        // all before, which was the one thing its own pages still had to be
+        // opened for (Franco, 2026-09-02).
+        //
+        // Activities and plans open their dialog HERE, because this page
+        // already mounts it for edit and duplicate. Courses and products link
+        // to their own page instead: both gate creation on a per-plan cap and
+        // own a bespoke first-step form, and a second copy of either is how the
+        // two drift apart.
+        action={canEdit ? <CreateAction tab={activeTab} onOpen={setCreating} /> : undefined}
       />
 
       {/* The banner counts dead ends, and clicking it FILTERS THE RAIL rather
@@ -735,7 +800,16 @@ export default function CataloguePage() {
                   type="button"
                   role="tab"
                   aria-selected={on}
-                  onClick={() => setPickedTab(tab.key)}
+                  // SWITCHING TABS CLEARS A SELECTION FROM ANOTHER ONE. The
+                  // rail and the pane are one screen making one statement, and
+                  // a rail of plans beside a pane of activity pricing is two
+                  // (Franco, 2026-09-02). A selection that BELONGS to the tab
+                  // being opened survives — going Plans → Activities → Plans
+                  // should not lose your place.
+                  onClick={() => {
+                    setPickedTab(tab.key)
+                    if (selection && TAB_FOR_KIND[selection.kind] !== tab.key) select(null)
+                  }}
                   className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium leading-none transition-colors ${
                     on
                       ? 'bg-primary text-primary-foreground'
@@ -780,6 +854,26 @@ export default function CataloguePage() {
               }[activeTab]
             }
           </p>
+
+          {/* THE WAY OUT, on the two tabs that need one. A course and a product
+              are only PRICED here — their content, media, variants and
+              collections live on their own page, and the pane's Edit button is
+              easy to miss when you have not selected a row yet. So the rail
+              says where the rest of the job is, before the list rather than
+              after it (Franco, 2026-09-02).
+              Absent on activities and plans: nothing about either is edited
+              anywhere else any more. */}
+          {(activeTab === 'courses' || activeTab === 'products') && (
+            <Link
+              href={(activeTab === 'courses' ? '/offer/online-courses' : '/offer/products') as Route}
+              className="mx-2 flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-solid hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <span className="min-w-0 flex-1">
+                {activeTab === 'courses' ? t('fullEditCourses') : t('fullEditProducts')}
+              </span>
+            </Link>
+          )}
 
 
           {loading && (
@@ -954,6 +1048,24 @@ export default function CataloguePage() {
                 description: selectedActivity.description,
               }}
               actions={paneActionsFor('activity', selectedActivity.id)}
+              details={
+                currentTeamId && user ? (
+                  <ActivityDialog
+                    // Keyed by the record so switching rows remounts the form
+                    // rather than leaving the previous one's draft in it.
+                    key={`details-${selectedActivity.id}`}
+                    inline
+                    open
+                    onClose={() => {}}
+                    teamId={currentTeamId}
+                    userId={user.uid}
+                    editing={selectedActivity}
+                    duplicating={null}
+                    nextOrder={activities.length}
+                    currency={currency}
+                  />
+                ) : undefined
+              }
             >
               {/* ALWAYS MOUNTED, and the guard that used to sit here was a dead
                   end. It hid this whole form for an OPEN class, which is the
@@ -993,6 +1105,25 @@ export default function CataloguePage() {
                 description: selectedPlan.description,
               }}
               actions={paneActionsFor('plan', selectedPlan.id)}
+              details={
+                currentTeamId ? (
+                  <SubTypeDialog
+                    key={`details-${selectedPlan.id}`}
+                    inline
+                    open
+                    onOpenChange={() => {}}
+                    teamId={currentTeamId}
+                    editing={selectedPlan}
+                    duplicating={null}
+                    currency={currency}
+                    nextOrder={plans.length}
+                    onSaved={() => {
+                      void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+                      void qc.invalidateQueries({ queryKey: ['activities'] })
+                    }}
+                  />
+                ) : undefined
+              }
             >
               {/* PRICES FIRST, then what they open. A plan is a price and a
                   promise, and the promise means nothing until the price is
@@ -1097,6 +1228,38 @@ export default function CataloguePage() {
           remounts the form rather than leaving the previous draft in it — the
           same key both list pages use. `currentTeamId` and `user` gate the
           activity form because it writes with both. */}
+      {currentTeamId && user && creating === 'activity' && (
+        <ActivityDialog
+          key="new-activity"
+          open
+          onClose={() => setCreating(null)}
+          teamId={currentTeamId}
+          userId={user.uid}
+          editing={null}
+          duplicating={null}
+          nextOrder={activities.length}
+          currency={currency}
+          onCreated={(id) => select({ kind: 'activity', id })}
+        />
+      )}
+
+      {currentTeamId && creating === 'plan' && (
+        <SubTypeDialog
+          key="new-plan"
+          open
+          onOpenChange={(v) => !v && setCreating(null)}
+          teamId={currentTeamId}
+          editing={null}
+          duplicating={null}
+          currency={currency}
+          nextOrder={plans.length}
+          onSaved={() => {
+            void qc.invalidateQueries({ queryKey: ['subscription-types', currentTeamId] })
+            void qc.invalidateQueries({ queryKey: ['activities'] })
+          }}
+        />
+      )}
+
       {currentTeamId && user && duplicatingActivity && (
         <ActivityDialog
           key={`dup-${duplicatingActivity.id}`}
@@ -1238,6 +1401,7 @@ function PaneBody({
   summary,
   facts,
   actions,
+  details,
   children,
 }: {
   title: string
@@ -1247,6 +1411,14 @@ function PaneBody({
   facts?: OfferFactsProps
   /** The icon row. Empty for a reader who cannot edit — see PaneAction. */
   actions?: PaneAction[]
+  /**
+   * The "Details" half — the record's own fields, shown under a second tab.
+   *
+   * ABSENT MEANS NO TABS: a course and a product are edited on their own page,
+   * so their pane has one thing in it and a strip of one tab would be a lie
+   * about there being a choice.
+   */
+  details?: React.ReactNode
   /** The edge editor. ABSENT for a product, which has no edge — the facts block
    *  says so in its `note` rather than leaving a gap that reads as a bug. */
   children?: React.ReactNode
@@ -1311,9 +1483,12 @@ function PaneBody({
                   )
                 })}
             </div>
-            {actions
-              .filter((a) => a.key === 'edit')
-              .map((a) =>
+            {/* Edit stays a BUTTON only where the editor is somewhere else — a
+                course and a product are edited on their own page. Where the
+                fields are right here under a tab, a button labelled "Edit"
+                beside them said the visible fields were not editing, which was
+                false, and gave no hint of what it hid (Franco, 2026-09-02). */}
+            {(details ? [] : actions.filter((a) => a.key === 'edit')).map((a) =>
                 'href' in a ? (
                   <Link
                     key={a.key}
@@ -1338,7 +1513,56 @@ function PaneBody({
           thing IS — while everything below the line is what it CONNECTS to. */}
       {facts && <OfferFacts {...facts} />}
 
-      {children && <div className="border-t pt-4">{children}</div>}
+      {details ? (
+        <PaneTabs main={children} details={details} />
+      ) : (
+        children && <div className="border-t pt-4">{children}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * TWO TABS, NOT MORE.
+ *
+ * The pane holds two different questions — what this costs and who it is for,
+ * and what the thing itself is. Splitting the second further would trade one
+ * hunt for another: a name, a colour, the prose and the session lengths are all
+ * "what this is", and a studio reads them together.
+ *
+ * Booking and pricing leads because it is the one asked most often, and it is
+ * where the plan matcher lives.
+ */
+function PaneTabs({ main, details }: { main?: React.ReactNode; details: React.ReactNode }) {
+  const t = useTranslations('OfferCatalogue')
+  const [tab, setTab] = useState<'main' | 'details'>('main')
+  // AN UNDERLINE, not pills — the same shape the contact detail page uses for
+  // its tabs. The rail above already spends a filled pill strip on choosing
+  // WHAT you are looking at, and a second filled strip choosing which half of
+  // it read as two controls of equal weight competing on one screen.
+  const tabCls = (on: boolean) =>
+    `-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+      on
+        ? 'border-primary text-foreground'
+        : 'border-transparent text-muted-foreground hover:text-foreground'
+    }`
+  return (
+    <div className="border-t pt-3">
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'main'}
+          onClick={() => setTab('main')} className={tabCls(tab === 'main')}>
+          {t('paneTabBooking')}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'details'}
+          onClick={() => setTab('details')} className={tabCls(tab === 'details')}>
+          {t('paneTabDetails')}
+        </button>
+      </div>
+      {/* BOTH STAY MOUNTED. Each half is a form holding unsaved input, and
+          unmounting the one you tabbed away from would throw it away without
+          saying so. */}
+      <div className={tab === 'main' ? '' : 'hidden'}>{main}</div>
+      <div className={tab === 'details' ? '' : 'hidden'}>{details}</div>
     </div>
   )
 }

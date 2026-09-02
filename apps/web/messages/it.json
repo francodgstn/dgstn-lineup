@@ -7551,7 +7551,15 @@
     "hintProducts": "Cosa vendi oltre alla tua offerta. Modifica l'intero catalogo nella pagina Prodotti.",
     "summaryClassOpen": "Aperto a tutti — non serve alcun piano per prenotare.",
     "openNoPlanEdge": "Chiunque può prenotare gratuitamente, quindi non c'è nulla che un piano possa aprire o scontare. Scegli «Qualsiasi membro» o «Abbonamenti specifici» qui sopra per collegare i piani.",
-    "editDetails": "Modifica dettagli"
+    "editDetails": "Modifica dettagli",
+    "newActivity": "Nuova attività",
+    "newPlan": "Nuovo piano",
+    "newCourse": "Nuovo corso",
+    "newProduct": "Nuovo prodotto",
+    "paneTabBooking": "Prenotazione e prezzi",
+    "paneTabDetails": "Dettagli",
+    "fullEditCourses": "Contenuti, lezioni e media del corso — nella pagina Corsi online",
+    "fullEditProducts": "Immagini, varianti e collezioni — nella pagina Prodotti"
   },
   "VerifyEmail": {
     "title": "Conferma {email}",

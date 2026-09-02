@@ -7551,7 +7551,15 @@
     "hintProducts": "Ce que vous vendez en plus de votre offre. Modifiez tout le catalogue sur la page Produits.",
     "summaryClassOpen": "Ouvert à tous — aucune formule n'est nécessaire pour réserver.",
     "openNoPlanEdge": "N'importe qui peut réserver gratuitement : il n'y a donc rien qu'une formule puisse ouvrir ou réduire. Choisissez « Tout membre » ou « Abonnements spécifiques » ci-dessus pour lier des formules.",
-    "editDetails": "Modifier les détails"
+    "editDetails": "Modifier les détails",
+    "newActivity": "Nouvelle activité",
+    "newPlan": "Nouvelle formule",
+    "newCourse": "Nouveau cours",
+    "newProduct": "Nouveau produit",
+    "paneTabBooking": "Réservation et tarifs",
+    "paneTabDetails": "Détails",
+    "fullEditCourses": "Contenu, leçons et médias du cours — sur la page Cours en ligne",
+    "fullEditProducts": "Images, variantes et collections — sur la page Produits"
   },
   "VerifyEmail": {
     "title": "Confirmez {email}",

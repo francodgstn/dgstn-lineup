@@ -233,6 +233,7 @@ export function ActivityDialog({
   nextOrder,
   currency,
   onCreated,
+  inline = false,
 }: {
   open: boolean
   onClose: () => void
@@ -268,6 +269,21 @@ export function ActivityDialog({
    * and then have to go and find it to finish the job (Franco, 2026-09-01).
    */
   onCreated?: (activityId: string) => void
+  /**
+   * Render the FORM ONLY, with no dialog around it.
+   *
+   * The catalogue's pane shows this under a "Details" tab beside the pricing
+   * one, because a pane full of editable fields plus a button labelled "Edit"
+   * told a studio the visible fields were not editing — which was false, and
+   * the button gave no hint of what it hid (Franco, 2026-09-02).
+   *
+   * The form is not extracted into its own component for this: it is ~500 lines
+   * of hooks over one `useForm`, and splitting them from the JSX they serve
+   * would buy a boundary nobody crosses. `open` is ignored inline; there is no
+   * dialog to open. Creating and duplicating still use the dialog — those are
+   * "make a new thing", which is what a modal is for.
+   */
+  inline?: boolean
 }) {
   const t = useTranslations('Activities')
   const tCommon = useTranslations('Common')
@@ -646,21 +662,8 @@ export function ActivityDialog({
     onClose()
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      {/* Field-rich form (name/description/prereqs/instructions/type/durations/
-          access/drop-in/media) — give it room on bigger screens. The fields
-          scroll inside DialogBody so Save stays pinned; see THE SCROLL RULE in
-          components/ui/dialog.tsx. */}
-      <DialogContent className="sm:max-w-lg lg:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {editing ? t('editActivity') : duplicating ? tCommon('duplicate') : t('newActivity')}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
-          <DialogBody className="space-y-4 py-2">
+  const fields = (
+    <>
           <div className="space-y-1.5">
             <Label htmlFor="act-name">{t('fieldName')}</Label>
             <Input id="act-name" {...register('name')} autoFocus />
@@ -1121,17 +1124,46 @@ export function ActivityDialog({
             />
           </div>
           </FormSection>
-          </DialogBody>
 
+    </>
+  )
+
+  const submit = (
+    <Button type="submit" disabled={isSubmitting}>
+      {isSubmitting ? t('saving') : editing ? t('saveChanges') : t('createActivity')}
+    </Button>
+  )
+
+  if (inline) {
+    return (
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {fields}
+        <div className="flex justify-end border-t pt-3">{submit}</div>
+      </form>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
+      {/* Field-rich form — give it room on bigger screens. The fields scroll
+          inside DialogBody so Save stays pinned; see THE SCROLL RULE in
+          components/ui/dialog.tsx. */}
+      <DialogContent className="sm:max-w-lg lg:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {editing ? t('editActivity') : duplicating ? tCommon('duplicate') : t('newActivity')}
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="space-y-4 py-2">
+            {fields}
+          </DialogBody>
           {/* The warning that stood here — "the plan editor has unsaved ticks
               and this Save will lose them" — went with the plan editor itself.
               This form no longer writes any field that editor writes, so its
               Save cannot lose anything of theirs. */}
-          <DialogFooter>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? t('saving') : editing ? t('saveChanges') : t('createActivity')}
-            </Button>
-          </DialogFooter>
+          <DialogFooter>{submit}</DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

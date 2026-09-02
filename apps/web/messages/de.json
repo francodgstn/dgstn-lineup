@@ -7551,7 +7551,15 @@
     "hintProducts": "Was Sie zusätzlich zu Ihrem Angebot verkaufen. Den ganzen Katalog bearbeiten Sie unter Produkte.",
     "summaryClassOpen": "Für alle offen — für die Buchung ist kein Plan nötig.",
     "openNoPlanEdge": "Alle können dies kostenlos buchen, es gibt also nichts, was ein Plan öffnen oder vergünstigen könnte. Wählen Sie oben „Alle Mitglieder“ oder „Bestimmte Abos“, um Pläne zu verknüpfen.",
-    "editDetails": "Details bearbeiten"
+    "editDetails": "Details bearbeiten",
+    "newActivity": "Neue Aktivität",
+    "newPlan": "Neuer Plan",
+    "newCourse": "Neuer Kurs",
+    "newProduct": "Neues Produkt",
+    "paneTabBooking": "Buchung & Preise",
+    "paneTabDetails": "Details",
+    "fullEditCourses": "Kursinhalte, Lektionen und Medien — auf der Seite Onlinekurse",
+    "fullEditProducts": "Bilder, Varianten und Kollektionen — auf der Seite Produkte"
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",
