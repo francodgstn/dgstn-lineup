@@ -26,11 +26,20 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ACTIVITIES_COLLECTION, resolveAutoConfirm } from '@linyup/shared'
-import { resolveDurationSale, resolveBookingContactFields } from '@linyup/shared'
-import { activityRateChoiceOf, ratedPlanIds } from '@linyup/shared'
+import { resolveBookingContactFields } from '@linyup/shared'
+import { benefitOpensDoorAt } from '@linyup/shared'
 import { MAX_ACTIVITY_TAGS, normalizeActivityTags, normalizeBookingQuestions } from '@linyup/shared'
-import type { Activity, ActivityDuration, ActivityType, DurationSaleMode, SaasPlan, FormField, BookingContactField } from '@linyup/shared'
+import type { Activity, ActivityType, SaasPlan, FormField, BookingContactField } from '@linyup/shared'
 
+// Session lengths and their prices are ONE control and they live on Access &
+// pricing now — this dialog renders the editor only while CREATING, where the
+// pane's tabs do not exist yet. See the module doc there.
+import {
+  AppointmentDurationsEditor,
+  parsePriceInput,
+  toActivityDurations,
+  toDurationFormValues,
+} from '@/components/activities/AppointmentDurationsEditor'
 import { BookingQuestionsEditor } from '@/components/activities/BookingQuestionsEditor'
 import { ActivityTagsEditor } from '@/components/activities/ActivityTagsEditor'
 import { BookingContactFieldsEditor } from '@/components/booking/BookingContactFieldsEditor'
@@ -40,7 +49,6 @@ import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { useInvalidateSetupChecklist } from '@/hooks/useSetupChecklist'
 import { usePlanName } from '@/hooks/usePlanName'
 import { ColorPicker, DEFAULT_ACCENT } from '@/components/ui/color-picker'
-import { formatDuration } from '@/components/sessions/SessionFormDialog'
 import { ImageIcon, X } from 'lucide-react'
 /**
  * THE ACTIVITY EDITOR, as a component rather than a page fixture.
@@ -73,66 +81,6 @@ function slugify(name: string): string {
     .slice(0, 50)
 }
 
-// The form keeps price as a STRING per duration ('' unambiguously means "no price
-// yet"), vs. the persisted shape's `priceAmount: number | null`. These two helpers
-// convert between the two: `toDurationFormValues` hydrates the form from a saved
-// activity (edit mode); `toActivityDurations` builds the payload on submit.
-// History: durations also carried a per-duration × per-subscription-type
-// `subscriptionPricing` matrix until 2026-07; member benefit is now ONE rule
-// per activity (see `BenefitFormValue` in components/pricing/BenefitEditor) —
-// see ActivityDuration's doc comment in @linyup/shared.
-
-interface DurationFormValue {
-  minutes: number
-  price: string
-  /** THE FORM holds the tri-state explicitly, the DOCUMENT does not (see
-   *  `ActivityDuration` in @linyup/shared): "priced with the box still empty"
-   *  and "free" are the same stored bytes but different intentions, and only a
-   *  stored mode can tell the validator which one the coach meant. */
-  mode: DurationSaleMode
-}
-
-function toDurationFormValues(durations?: ActivityDuration[] | null): DurationFormValue[] {
-  return (durations ?? []).map((d) => {
-    const sale = resolveDurationSale(d)
-    return {
-      minutes: d.minutes,
-      price: sale.priceAmount != null ? String(sale.priceAmount) : '',
-      mode: sale.mode,
-    }
-  })
-}
-
-/**
- * A price typed by a human, as a number.
- *
- * `Number('10,00')` is NaN, and a comma is the decimal separator on a Swiss,
- * German, French and Italian keyboard — which is every locale this product
- * ships in. Typing the price the way the studio's own currency is written made
- * the field fail validation with a message about a minimum, which is not what
- * was wrong. Parse it the same way the refund dialog already does
- * (`RefundPaymentDialog.minorFromMajorInput`).
- *
- * Used by BOTH the validation and the payload, deliberately: two parsers is how
- * a form validates one number and stores a different one.
- */
-function parsePriceInput(text: string): number {
-  return Number(String(text).trim().replace(',', '.'))
-}
-
-function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[] {
-  return [...durations]
-    .sort((a, b) => a.minutes - b.minutes)
-    .map((d) => ({
-      minutes: d.minutes,
-      // A price is written ONLY in 'priced' mode, so switching a length to
-      // "only with a plan" (or back to free) cannot leave a sellable number
-      // behind it.
-      priceAmount: d.mode === 'priced' && d.price.trim() !== '' ? parsePriceInput(d.price) : null,
-      ...(d.mode === 'benefit_only' ? { benefitOnly: true } : {}),
-    }))
-}
-
 // The one member-benefit rule for the whole activity — see `Benefit` in
 // @linyup/shared. Appointments: applies to every priced duration. Classes:
 // applies to the drop-in price (a member rate), only while drop-in is
@@ -143,15 +91,13 @@ function toActivityDurations(durations: DurationFormValue[]): ActivityDuration[]
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const ACTIVITY_TYPES: ActivityType[] = ['class', 'appointment']
-// APPOINTMENT-ONLY: the bookable session lengths an appointment activity offers.
-const APPOINTMENT_DURATION_PRESETS = [15, 30, 45, 60, 90, 120]
 
 // ─── schema ───────────────────────────────────────────────────────────────────
 
 // Wrapped in a factory so the ≥0.5 price-floor message can be translated — the
 // rest of the messages here are pre-existing tech debt (hardcoded English),
 // unrelated to this change, left as-is.
-function createActivitySchema(t: ReturnType<typeof useTranslations>) {
+function createActivitySchema(t: ReturnType<typeof useTranslations>, creating: boolean) {
   return z.object({
     name: z.string().min(1, 'Required').max(80),
     description: z.string().max(500).optional(),
@@ -202,7 +148,12 @@ function createActivitySchema(t: ReturnType<typeof useTranslations>) {
       })
     ),
   }).superRefine((d, ctx) => {
-    if (d.type === 'appointment' && d.durations.length === 0) {
+    // ASKED ON A CREATE ONLY, because the control is only rendered on a create.
+    // On an edit the lengths belong to Access & pricing, and a legacy
+    // appointment stored with none would otherwise fail Save here against a
+    // field that is nowhere on screen — a dead form with no way to diagnose it,
+    // which is precisely what the rest of this schema is written to avoid.
+    if (creating && d.type === 'appointment' && d.durations.length === 0) {
       ctx.addIssue({ code: 'custom', path: ['durations'], message: t('durationsRequiredValidation') })
     }
     d.durations.forEach((dur, i) => {
@@ -344,7 +295,7 @@ export function ActivityDialog({
   const [imagePreview, setImagePreview] = useState<string | null>(
     (editing ?? duplicating)?.image_url ?? null
   )
-  const activitySchema = useMemo(() => createActivitySchema(t), [t])
+  const activitySchema = useMemo(() => createActivitySchema(t, !editing), [t, editing])
 
   // ONE seed for the form's starting values: the activity being edited, or the
   // one being copied. `editing` alone still decides which BRANCH of onSubmit
@@ -416,42 +367,11 @@ export function ActivityDialog({
   // Read from the SAVED activity, not the form: the rule moved to the catalogue,
   // so this dialog can only report what is stored. A duration whose only way in
   // is a benefit therefore answers against the same document the resolver will.
-  const benefitOpensDoor =
-    !!seed && activityRateChoiceOf(seed).effect === 'included' && ratedPlanIds(seed).length > 0
+  const benefitOpensDoor = (minutes: number) => !!seed && benefitOpensDoorAt(seed, minutes)
 
   // Does the activity being EDITED already carry anything from the "More
   // options" tail? If so the disclosure opens showing it — a field the studio
   // filled in and then cannot find is worse than the long form this replaces.
-
-  function toggleDuration(minutes: number) {
-    setValue(
-      'durations',
-      durations.some((d) => d.minutes === minutes)
-        ? durations.filter((d) => d.minutes !== minutes)
-        : [...durations, { minutes, price: '', mode: 'free' as DurationSaleMode }].sort(
-            (a, b) => a.minutes - b.minutes
-          )
-    )
-  }
-
-  // Set (or clear) a duration's base price — no pre-fill dance any more: member
-  // benefit is ONE rule for the whole activity (see the memberBenefit row),
-  // never derived from a price edit.
-  function updateDurationPrice(minutes: number, price: string) {
-    setValue('durations', durations.map((d) => (d.minutes === minutes ? { ...d, price } : d)))
-  }
-
-  // Switch a length between the three ways it can be sold. Changing mode always
-  // clears the price box: a number left behind a "free" or "only with a plan"
-  // choice is the exact ambiguity this control exists to remove.
-  function updateDurationMode(minutes: number, mode: DurationSaleMode) {
-    setValue(
-      'durations',
-      durations.map((d) =>
-        d.minutes === minutes ? { ...d, mode, price: mode === 'priced' ? d.price : '' } : d
-      )
-    )
-  }
 
   // Re-default autoConfirm when the studio flips the type — but only while the
   // toggle hasn't been touched by hand, so an explicit override survives a type
@@ -535,9 +455,12 @@ export function ActivityDialog({
   // benefit with no priced drop-in to modify is inert data the UI can't show).
   function kindSpecificPayload(data: ActivityFormData): Record<string, unknown> {
     if (data.type === 'appointment') {
-      return {
-        durations: toActivityDurations(data.durations),
-      }
+      // `durations` MOVED to ActivityPricingForm, and an edit here names it for
+      // the same reason it names no other money field: this form is seeded once
+      // when the pane mounts, so writing it back would clobber lengths set on
+      // Access & pricing in the meantime. A CREATE still seeds them — there is
+      // no other writer yet, and an appointment with no length is invalid.
+      return editing ? {} : { durations: toActivityDurations(data.durations) }
     }
     const base: Record<string, unknown> = {
       // Below the tier the stored value is carried through untouched rather than
@@ -867,121 +790,41 @@ export function ActivityDialog({
 
       {section === 'details' && (
         <>
-              {type === 'appointment' && (
-                <div className="p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{t('fieldDurationsMinutes')}</p>
-                      <p className="text-xs text-muted-foreground">{t('durationsMinutesHint')}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                      {APPOINTMENT_DURATION_PRESETS.map((d) => (
-                        <button
-                          key={d}
-                          type="button"
-                          onClick={() => toggleDuration(d)}
-                          className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                            durations.some((x) => x.minutes === d)
-                              ? 'bg-primary text-primary-foreground border-primary'
-                              : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                          }`}
-                        >
-                          {formatDuration(d)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              {/* CREATE ONLY. An appointment is invalid with no length at
+                  all, so the create dialog has to ask — but on an EDIT the
+                  lengths and their prices are one control on Access & pricing,
+                  and asking here too would give `durations` a second writer:
+                  this form is seeded when the pane mounts, so a Save from
+                  Details would put the pre-edit lengths back over the ones just
+                  set next door. Exactly the clobber the field split exists to
+                  prevent. */}
+              {type === 'appointment' && !editing && (
+                <div className="p-3">
+                  <AppointmentDurationsEditor
+                    value={durations}
+                    onChange={(next) => setValue('durations', next)}
+                    currency={currency}
+                    canEdit
+                    benefitOpensDoor={benefitOpensDoor}
+                    errorFor={(i) => errors.durations?.[i]?.price?.message}
+                  />
                   {errors.durations?.message && (
-                    <p className="text-destructive text-xs">{errors.durations.message}</p>
-                  )}
-
-                  {/* One sub-row per SELECTED duration — the coach sells TIME, so
-                      how it is sold is per-length, not one flat activity price.
-                      THREE modes, because an empty price used to mean two things
-                      at once (UX-70): free for anyone · priced · not sold
-                      individually, i.e. only through the member benefit below.
-                      There is still no access rule on an appointment — the third
-                      mode says only that there is no individual price to quote. */}
-                  {durations.length > 0 && (
-                    <div className="space-y-2 rounded-md bg-muted/30 p-2.5">
-                      <p className="text-xs text-muted-foreground">{t('durationPriceHint')}</p>
-                      {[...durations]
-                        .sort((a, b) => a.minutes - b.minutes)
-                        .map((d) => {
-                          const idx = durations.findIndex((x) => x.minutes === d.minutes)
-                          const priceError = errors.durations?.[idx]?.price?.message
-                          const modes: Array<{ value: DurationSaleMode; label: string }> = [
-                            { value: 'free', label: t('durationModeFree') },
-                            { value: 'priced', label: t('durationModePriced') },
-                            { value: 'benefit_only', label: t('durationModeBenefitOnly') },
-                          ]
-                          return (
-                            <div key={d.minutes} className="space-y-1.5 rounded-md border bg-background p-2">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="text-sm font-medium">{formatDuration(d.minutes)}</span>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {modes.map((m) => (
-                                    <button
-                                      key={m.value}
-                                      type="button"
-                                      onClick={() => updateDurationMode(d.minutes, m.value)}
-                                      aria-pressed={d.mode === m.value}
-                                      className={`rounded border px-2 py-1 text-xs font-medium transition-colors ${
-                                        d.mode === m.value
-                                          ? 'bg-primary text-primary-foreground border-primary'
-                                          : 'bg-background text-muted-foreground border-border hover:border-foreground'
-                                      }`}
-                                    >
-                                      {m.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              {d.mode === 'priced' && (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <span className="text-xs text-muted-foreground">{currency}</span>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    value={d.price}
-                                    onChange={(e) => updateDurationPrice(d.minutes, e.target.value)}
-                                    placeholder="0.00"
-                                    className="h-8 w-24 text-sm"
-                                    aria-label={t('durationPriceLabel', { duration: formatDuration(d.minutes) })}
-                                  />
-                                </div>
-                              )}
-                              {/* A pack-only length with nothing that covers it is
-                                  bookable by NOBODY — said here, where it is
-                                  authored, as well as on the pricing health page. */}
-                              {d.mode === 'benefit_only' && (
-                                <p
-                                  className={`text-xs ${
-                                    benefitOpensDoor ? 'text-muted-foreground' : 'text-destructive'
-                                  }`}
-                                >
-                                  {benefitOpensDoor
-                                    ? t('durationBenefitOnlyHint')
-                                    : t('durationBenefitOnlyNoWayIn')}
-                                </p>
-                              )}
-                              {priceError && <p className="text-destructive text-xs">{priceError}</p>}
-                            </div>
-                          )
-                        })}
-                    </div>
+                    <p className="text-destructive text-xs pt-2">{errors.durations.message}</p>
                   )}
                 </div>
               )}
 
-              {/* APPOINTMENT-ONLY: the one member-benefit rule for the whole
-                  activity — every priced duration. It is set in the catalogue,
-                  beside the plans it names, because it is ONE rule shared by all
-                  of them and a change here would silently reprice the rest. */}
+              {/* APPOINTMENT-ONLY: the pointer to where the money is decided —
+                  the session lengths and their prices, and the one
+                  member-benefit rule that applies to every priced one. All of
+                  it is set in Offerings, beside the plans it names, because it
+                  is ONE rule shared by all of them and a change here would
+                  silently reprice the rest. */}
               {type === 'appointment' && (
                 <div className="space-y-2 p-3">
-                  <p className="text-xs text-muted-foreground">{t('benefitInCatalogue')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editing ? t('durationsInCatalogue') : t('benefitInCatalogue')}
+                  </p>
                   <Link
                     href={
                       (editing

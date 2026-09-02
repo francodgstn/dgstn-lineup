@@ -39,8 +39,12 @@
 // `choice` parameter — and name who else is affected, which is what
 // `plansSharingRate` is for.
 
-import type { Activity } from '../types/activity'
-import { resolveActivityAccessRule } from '../types/activity'
+import type { Activity, ActivityDurationBenefit } from '../types/activity'
+import {
+  resolveActivityAccessRule,
+  resolveAppointmentDurations,
+  resolveDurationBenefit,
+} from '../types/activity'
 import type { Benefit, BenefitEffect } from '../types/benefit'
 import { normalizeBenefit } from '../types/benefit'
 // The effect sets the RESOLVER honours — the editor offers exactly these.
@@ -52,8 +56,29 @@ import { APPOINTMENT_EFFECTS, COURSE_EFFECTS, DROP_IN_EFFECTS } from './paymentO
  *  whether a member rate would have any price to reduce (`rateHasAPriceToApplyTo`). */
 export type ActivityEdgeFields = Pick<
   Activity,
-  'type' | 'accessRule' | 'isFreeTrial' | 'memberBenefit' | 'dropIn' | 'durations'
+  | 'type'
+  | 'accessRule'
+  | 'isFreeTrial'
+  | 'memberBenefit'
+  | 'durationBenefits'
+  | 'dropIn'
+  | 'durations'
 >
+
+/**
+ * WHICH RULE AN EDGE IS ABOUT — the appointment case, in one place.
+ *
+ * A class has ONE member rate (on its drop-in price), so every edge function
+ * below takes an activity and a plan and that is the whole address. An
+ * APPOINTMENT has one per session length, so the address needs a third
+ * component, and `minutes` is it.
+ *
+ * `undefined` means "the activity-wide rule" and is what a class always passes.
+ * On an appointment it is the pre-2026-09 reading, kept because two callers
+ * still legitimately ask the activity-wide question: the summary line on the
+ * offer pane ("# plans on the member rate") and the seeds.
+ */
+export type RateAddress = number | undefined
 
 /** One (activity, plan) pair, as two independent facts. */
 export interface ActivityPlanEdge {
@@ -90,22 +115,41 @@ export function gatedPlanIds(a: ActivityEdgeFields): string[] {
  *  `normalizeBenefit`, so a rule stored in the legacy appointment shape is not
  *  mistaken for no rule — reading past it is the bug that made a saved benefit
  *  look unlinked, and an unlinked-looking tick gets wiped on the next save. */
-export function ratedPlanIds(a: Pick<Activity, 'memberBenefit'>): string[] {
-  return normalizeBenefit(a.memberBenefit)?.subscriptionTypeIds ?? []
+export function ratedPlanIds(
+  a: Pick<Activity, 'memberBenefit' | 'durationBenefits'>,
+  minutes?: RateAddress
+): string[] {
+  return normalizeBenefit(rateRuleAt(a, minutes))?.subscriptionTypeIds ?? []
+}
+
+/** The raw rule an address points at — the ONE place the class/appointment
+ *  split is decided, so no reader below has to know about it. */
+function rateRuleAt(
+  a: Pick<Activity, 'memberBenefit' | 'durationBenefits'>,
+  minutes: RateAddress
+) {
+  return minutes === undefined ? (a.memberBenefit ?? null) : resolveDurationBenefit(a, minutes)
 }
 
 /** How one plan stands against one activity right now. */
-export function activityPlanEdge(a: ActivityEdgeFields, subTypeId: string): ActivityPlanEdge {
+export function activityPlanEdge(
+  a: ActivityEdgeFields,
+  subTypeId: string,
+  minutes?: RateAddress
+): ActivityPlanEdge {
   return {
     access: gatedPlanIds(a).includes(subTypeId),
-    rate: ratedPlanIds(a).includes(subTypeId),
+    rate: ratedPlanIds(a, minutes).includes(subTypeId),
   }
 }
 
 /** The rate an activity's rule carries today, or the default for a fresh one:
  *  'included' — right for a credit pack, where a booking spends a credit. */
-export function activityRateChoiceOf(a: Pick<Activity, 'memberBenefit'>): ActivityRateChoice {
-  const n = normalizeBenefit(a.memberBenefit)
+export function activityRateChoiceOf(
+  a: Pick<Activity, 'memberBenefit' | 'durationBenefits'>,
+  minutes?: RateAddress
+): ActivityRateChoice {
+  const n = normalizeBenefit(rateRuleAt(a, minutes))
   if (!n) return { effect: 'included' }
   return {
     // `spend_credits` is a resolver effect no editor offers; show it as the
@@ -144,6 +188,39 @@ function sameRate(a: Benefit | null, b: Benefit | null): boolean {
 }
 
 /**
+ * The whole per-length array after setting ONE length's rule.
+ *
+ * ── WHY IT SEEDS EVERY LENGTH, NOT JUST THE ONE ─────────────────────────────
+ * On the FIRST per-duration write the activity still carries an activity-wide
+ * `memberBenefit` that applies to all of them. Writing only the edited entry
+ * would leave the others reading a field this same update is about to clear —
+ * so every length the activity has is seeded with the rule that was in force
+ * for it a moment ago, and only the addressed one changes. Nothing a member
+ * held yesterday is lost by a studio touching one row.
+ *
+ * Lengths come from `fresh.durations`, plus any the stored array already names
+ * (an orphan is kept rather than silently dropped — re-adding that length
+ * restores its rule), plus the addressed one even when it is neither.
+ */
+function nextDurationBenefits(
+  fresh: ActivityEdgeFields,
+  minutes: number,
+  rule: Benefit | null
+): ActivityDurationBenefit[] {
+  const lengths = new Set<number>([
+    ...(fresh.durations ?? []).map((d) => d.minutes),
+    ...(fresh.durationBenefits ?? []).map((d) => d.minutes),
+    minutes,
+  ])
+  return [...lengths]
+    .sort((a, b) => a - b)
+    .map((m) => ({
+      minutes: m,
+      benefit: m === minutes ? rule : normalizeBenefit(resolveDurationBenefit(fresh, m)),
+    }))
+}
+
+/**
  * The ONE edge write. Returns the Firestore update payload, or **null when
  * nothing would change** — so a caller skips the document rather than writing an
  * identical one. That is not merely a saving: an identical class write would
@@ -164,13 +241,14 @@ export function activityPlanEdgeUpdate(
   fresh: ActivityEdgeFields,
   subTypeId: string,
   next: ActivityPlanEdge,
-  choice?: ActivityRateChoice
+  choice?: ActivityRateChoice,
+  minutes?: RateAddress
 ): Record<string, unknown> | null {
-  const now = activityPlanEdge(fresh, subTypeId)
+  const now = activityPlanEdge(fresh, subTypeId, minutes)
   const update: Record<string, unknown> = {}
 
   // ── the RATE facet, on both kinds ──
-  const rateIds = ratedPlanIds(fresh)
+  const rateIds = ratedPlanIds(fresh, minutes)
   const nextRateIds = next.rate
     ? rateIds.includes(subTypeId)
       ? rateIds
@@ -178,10 +256,25 @@ export function activityPlanEdgeUpdate(
     : rateIds.filter((id) => id !== subTypeId)
   const nextRate = buildRate(
     nextRateIds,
-    next.rate ? (choice ?? activityRateChoiceOf(fresh)) : activityRateChoiceOf(fresh)
+    next.rate
+      ? (choice ?? activityRateChoiceOf(fresh, minutes))
+      : activityRateChoiceOf(fresh, minutes)
   )
-  if (!sameRate(normalizeBenefit(fresh.memberBenefit), nextRate)) {
-    update.memberBenefit = nextRate
+  if (minutes === undefined) {
+    if (!sameRate(normalizeBenefit(fresh.memberBenefit), nextRate)) {
+      update.memberBenefit = nextRate
+    }
+  } else if (!sameRate(normalizeBenefit(resolveDurationBenefit(fresh, minutes)), nextRate)) {
+    // WRITTEN WHOLE, and it has to be: `foldOfferingPlanEdgeUpdates` shallow-
+    // merges these payloads, so a per-length array can only ever be replaced,
+    // never patched at an index.
+    update.durationBenefits = nextDurationBenefits(fresh, minutes, nextRate)
+    // The legacy activity-wide rule is ABSORBED by the write above (see
+    // `nextDurationBenefits`) and cleared here, so there is ONE home going
+    // forward and `resolveDurationBenefit` never has to arbitrate. Same move
+    // the course gate makes with its own legacy spelling — an absorption on
+    // first write rather than a backfill to deploy.
+    if (fresh.memberBenefit) update.memberBenefit = null
   }
 
   // ── the ACCESS facet, classes only ──
@@ -203,6 +296,36 @@ export function activityPlanEdgeUpdate(
 }
 
 /**
+ * EVERY PLAN ON ANY OF THIS ACTIVITY'S RATE RULES — the whole-activity
+ * question, for summaries and counts.
+ *
+ * `ratedPlanIds(a)` with no length answers the ACTIVITY-WIDE field, which on an
+ * appointment is the legacy one and is CLEARED the moment a per-length rule is
+ * written. A summary reading it therefore went from "3 plans on the member
+ * rate" to "no member rate" as a reward for using the new editor. This asks the
+ * union instead, so the count means what it says on both shapes.
+ */
+export function anyRatedPlanIds(a: ActivityEdgeFields): string[] {
+  const lengths = offeringRateLengths({ kind: 'activity', doc: a })
+  if (!lengths.length) return ratedPlanIds(a)
+  return [...new Set(lengths.flatMap((m) => ratedPlanIds(a, m)))]
+}
+
+/**
+ * Can a `benefit_only` length actually be opened by anything? Only an INCLUDED
+ * rule is a way in — a percentage off a price that does not exist opens
+ * nothing, which is what the resolver's appointment arm does with it.
+ *
+ * ASKED PER LENGTH, because the rule is per length: a coach who includes 60 min
+ * in a pack and leaves 90 min unlinked has one bookable length and one dead
+ * one, and a single activity-wide answer would call both fine or both broken.
+ */
+export function benefitOpensDoorAt(a: ActivityEdgeFields, minutes: number): boolean {
+  const choice = activityRateChoiceOf(a, minutes)
+  return choice.effect === 'included' && ratedPlanIds(a, minutes).length > 0
+}
+
+/**
  * Every plan that shares an activity's rate rule, minus the one being edited.
  *
  * The catalogue needs this BEFORE a change lands, not after: the rate is one
@@ -210,8 +333,12 @@ export function activityPlanEdgeUpdate(
  * Gold too, and a warning that names them is the only thing standing between the
  * studio and doing that unknowingly. Returns ids; the caller resolves names.
  */
-export function plansSharingRate(a: Pick<Activity, 'memberBenefit'>, subTypeId: string): string[] {
-  return ratedPlanIds(a).filter((id) => id !== subTypeId)
+export function plansSharingRate(
+  a: Pick<Activity, 'memberBenefit' | 'durationBenefits'>,
+  subTypeId: string,
+  minutes?: RateAddress
+): string[] {
+  return ratedPlanIds(a, minutes).filter((id) => id !== subTypeId)
 }
 
 // ─── COURSES ─────────────────────────────────────────────────────────────────
@@ -413,7 +540,16 @@ export function plansSharingCourseRate(c: Pick<Course, 'benefit'>, subTypeId: st
 // for either would show controls that write nowhere.
 
 export type PlanLinkTarget =
-  | { kind: 'activity'; doc: ActivityEdgeFields }
+  | {
+      kind: 'activity'
+      doc: ActivityEdgeFields
+      /** APPOINTMENT-ONLY: WHICH SESSION LENGTH this target addresses. An
+       *  appointment carries one member rule per length, so a target without
+       *  it addresses the whole activity — which is the legacy reading, and
+       *  correct only for a class. Every editor row on an appointment sets it;
+       *  see `RateAddress`. */
+      minutes?: number
+    }
   | { kind: 'course'; doc: CourseEdgeFields }
 
 export function offeringFacets(t: PlanLinkTarget): OfferingFacets {
@@ -422,12 +558,14 @@ export function offeringFacets(t: PlanLinkTarget): OfferingFacets {
 
 export function offeringPlanEdge(t: PlanLinkTarget, subTypeId: string): ActivityPlanEdge {
   return t.kind === 'activity'
-    ? activityPlanEdge(t.doc, subTypeId)
+    ? activityPlanEdge(t.doc, subTypeId, t.minutes)
     : coursePlanEdge(t.doc, subTypeId)
 }
 
 export function offeringRateChoiceOf(t: PlanLinkTarget): ActivityRateChoice {
-  return t.kind === 'activity' ? activityRateChoiceOf(t.doc) : courseRateChoiceOf(t.doc)
+  return t.kind === 'activity'
+    ? activityRateChoiceOf(t.doc, t.minutes)
+    : courseRateChoiceOf(t.doc)
 }
 
 /**
@@ -456,8 +594,8 @@ export function offeringRateChoiceOf(t: PlanLinkTarget): ActivityRateChoice {
  *
  *   • a CLASS discounts its DROP-IN price — a members-only class that sells no
  *     drop-in has no other price, so "20% off" reduces nothing;
- *   • an APPOINTMENT discounts its priced durations — one with no price is
- *     already free to everyone;
+ *   • an APPOINTMENT discounts THE PRICED LENGTH the row is about — a length
+ *     with no price is already free to everyone, whatever the others cost;
  *   • a PURCHASE-tier course always has a price; that is what the tier means.
  *
  * `included` is exempt and never asks this: making something free does not need
@@ -474,7 +612,14 @@ export function rateHasAPriceToApplyTo(t: PlanLinkTarget): boolean {
     return r?.type === 'purchase' && typeof r.priceAmount === 'number' && r.priceAmount > 0
   }
   if (isAppointmentActivity(t.doc)) {
-    return (t.doc.durations ?? []).some((d) => (d.priceAmount ?? 0) > 0)
+    // ASKED OF THE ADDRESSED LENGTH when there is one. A rule about 90 minutes
+    // is not made applicable by the 30-minute row carrying a price, and dimming
+    // is the only signal the studio gets that a rate would do nothing.
+    const priced = (m: number) =>
+      (t.doc.durations ?? []).some((d) => d.minutes === m && (d.priceAmount ?? 0) > 0)
+    return t.minutes === undefined
+      ? (t.doc.durations ?? []).some((d) => (d.priceAmount ?? 0) > 0)
+      : priced(t.minutes)
   }
   const dropIn = t.doc.dropIn
   return !!dropIn?.enabled && (dropIn.priceAmount ?? 0) > 0
@@ -493,9 +638,23 @@ export function offeringRateEffects(t: PlanLinkTarget): OfferableRateEffect[] {
   return (['included', 'percent_off', 'fixed_price'] as const).filter((e) => allowed.has(e))
 }
 
+/**
+ * THE SESSION LENGTHS AN EDITOR MUST ASK ABOUT SEPARATELY — empty for anything
+ * that carries one rule for the whole offering (a class, a course), and the
+ * appointment's duration menu otherwise.
+ *
+ * Derived from `resolveAppointmentDurations`, so an appointment with no lengths
+ * set yet asks about the same single fallback length everything else assumes,
+ * rather than showing no table at all.
+ */
+export function offeringRateLengths(t: PlanLinkTarget): number[] {
+  if (t.kind !== 'activity' || !isAppointmentActivity(t.doc)) return []
+  return resolveAppointmentDurations(t.doc).map((d) => d.minutes)
+}
+
 export function plansSharingOfferingRate(t: PlanLinkTarget, subTypeId: string): string[] {
   return t.kind === 'activity'
-    ? plansSharingRate(t.doc, subTypeId)
+    ? plansSharingRate(t.doc, subTypeId, t.minutes)
     : plansSharingCourseRate(t.doc, subTypeId)
 }
 
@@ -515,18 +674,38 @@ export function plansSharingOfferingRate(t: PlanLinkTarget, subTypeId: string): 
  * written once.
  *
  * Shallow merge is correct here because every key these updates produce is
- * written WHOLE — `accessRule` is rebuilt by spread, `benefit`/`memberBenefit`
- * are replaced or nulled. Nothing is a partial map.
+ * written WHOLE — `accessRule` is rebuilt by spread, `benefit`/`memberBenefit`/
+ * `durationBenefits` are replaced or nulled. Nothing is a partial map.
+ *
+ * ── AND WHY AN EDIT CARRIES ITS OWN `minutes` ───────────────────────────────
+ * An appointment now shows one plan table PER SESSION LENGTH, so a save can
+ * hold edits addressed at different lengths — of the SAME document, whose
+ * `durationBenefits` array they all rewrite whole. Folding per target would put
+ * the original bug straight back, one fold per length, each blind to the last.
+ * So the address travels with the edit and the target's own `minutes` is only
+ * the default.
  */
 export function foldOfferingPlanEdgeUpdates(
   target: PlanLinkTarget,
-  edits: { subTypeId: string; next: ActivityPlanEdge; choice?: ActivityRateChoice }[]
+  edits: {
+    subTypeId: string
+    next: ActivityPlanEdge
+    choice?: ActivityRateChoice
+    /** APPOINTMENT-ONLY: which session length this edit is about. */
+    minutes?: number
+  }[]
 ): Record<string, unknown> | null {
   let doc = target.doc as Record<string, unknown>
   const acc: Record<string, unknown> = {}
   for (const e of edits) {
     const update = offeringPlanEdgeUpdate(
-      { kind: target.kind, doc } as PlanLinkTarget,
+      {
+        kind: target.kind,
+        doc,
+        ...(target.kind === 'activity'
+          ? { minutes: e.minutes ?? target.minutes }
+          : {}),
+      } as PlanLinkTarget,
       e.subTypeId,
       e.next,
       e.choice
@@ -545,6 +724,6 @@ export function offeringPlanEdgeUpdate(
   choice?: ActivityRateChoice
 ): Record<string, unknown> | null {
   return t.kind === 'activity'
-    ? activityPlanEdgeUpdate(t.doc, subTypeId, next, choice)
+    ? activityPlanEdgeUpdate(t.doc, subTypeId, next, choice, t.minutes)
     : coursePlanEdgeUpdate(t.doc, subTypeId, next, choice)
 }

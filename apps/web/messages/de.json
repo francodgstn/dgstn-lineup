@@ -1779,7 +1779,8 @@
     "sectionAppearanceTitle": "Darstellung",
     "sectionAppearanceHint": "Farbe und Labels auf Ihrer öffentlichen Seite.",
     "sectionVisitorTitle": "Was Besucher sehen",
-    "sectionVisitorHint": "Die Texte und Fragen auf dem Weg zur Buchung. Alle Felder sind optional."
+    "sectionVisitorHint": "Die Texte und Fragen auf dem Weg zur Buchung. Alle Felder sind optional.",
+    "durationsInCatalogue": "Dauern, ihre Preise und der Mitgliederpreis werden unter Zugang & Preise festgelegt, neben den Abos, für die sie gelten."
   },
   "Benefit": {
     "fieldLabel": "Mitgliedervorteil",
@@ -7521,7 +7522,7 @@
     "noneFiltered": "Keine in dieser Gruppe.",
     "noPlans": "Noch keine Abos.",
     "noPlansAction": "Abo erstellen",
-    "noPriceAppointment": "Dieser Termin hat keinen Preis, es gibt also nichts zu reduzieren. Versehen Sie eine Dauer mit einem Preis, damit dies greift.",
+    "noPriceAppointment": "Diese Dauer hat keinen Preis, es gibt also nichts zu reduzieren. Setze oben einen Preis, damit dies greift.",
     "noPriceCourse": "Dieser Kurs ist nicht im Verkauf, es gibt also noch keinen Preis zu reduzieren. Aktivieren Sie „Ohne Plan verkaufen“ in den Kurseinstellungen.",
     "noPriceDropIn": "Diese Klasse verkauft keine Drop-ins, es gibt also noch keinen Preis zu reduzieren. Fügen Sie einen Drop-in-Preis hinzu, damit dies greift.",
     "noProducts": "Noch keine Produkte.",
@@ -7568,7 +7569,10 @@
     "toGiftCards": "Geschenkkarten",
     "toPricing": "Preise",
     "toSchedule": "Kalender",
-    "unsaved": "Nicht gespeicherte Änderungen"
+    "unsaved": "Nicht gespeicherte Änderungen",
+    "lengthGroup": "{minutes} Min.",
+    "lengthRow": "{name} · {minutes} Min.",
+    "durationRulesHint": "Jede Dauer wird einzeln bepreist, also beantwortet jedes Abo sie auch einzeln."
   },
   "VerifyEmail": {
     "title": "Bestätige {email}",

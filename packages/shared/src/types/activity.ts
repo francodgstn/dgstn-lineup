@@ -125,12 +125,15 @@ export function resolveAppointmentDurations(a: {
   return ds.length ? ds : [{ minutes: 60 }]
 }
 
-/** APPOINTMENT-ONLY. The one member-benefit rule for a whole activity — never
- *  per duration (the old per-duration × per-subscription-type matrix is gone,
- *  see `ActivityDuration`'s history note). Holders of any listed subscription
- *  type: `kind: 'included'` books free (a credit-pack type spends a credit),
- *  `kind: 'discount'` pays `discountPercent` off every priced duration.
- *  Absent/empty `subscriptionTypeIds` = no benefit — everyone pays base.
+/** The LEGACY appointment benefit shape — one rule for a whole activity.
+ *  Holders of any listed subscription type: `kind: 'included'` books free (a
+ *  credit-pack type spends a credit), `kind: 'discount'` pays
+ *  `discountPercent` off every priced duration. Absent/empty
+ *  `subscriptionTypeIds` = no benefit — everyone pays base.
+ *
+ *  On an appointment this is now the FALLBACK, not the answer: the rule is per
+ *  DURATION (`Activity.durationBenefits`), and this is read only while that
+ *  field is absent. See `resolveDurationBenefit`, which is the one reader.
  *
  *  Appointments also DROPPED `ActivityAccessRule` entirely in the same pass —
  *  the price is the only gate now (unpriced = anyone books free, priced =
@@ -145,6 +148,75 @@ export interface ActivityMemberBenefit {
    *  the appointment arm of `resolvePaymentOptions` (utils/paymentOptions.ts)
    *  — see its doc comment. */
   discountPercent?: number
+}
+
+/**
+ * APPOINTMENT-ONLY. One member rule, for ONE session length.
+ *
+ * ── WHY IT IS PER LENGTH AGAIN ──────────────────────────────────────────────
+ * An appointment's price is attached to its LENGTH, and a rule about that price
+ * has to be too. With one rule for the whole activity, "members pay CHF 40"
+ * charged the same for thirty minutes and for ninety — an amount that cannot be
+ * right for both, offered by the editor and honoured by the resolver, with no
+ * way to say the true thing (Franco, staging, 2026-09-02).
+ *
+ * This is NOT the matrix that was cut in 2026-07. That one was per duration ×
+ * per subscription type — a grid of PRICES, which is what produced "who pays
+ * base price if only Premium can book?". This is the same ONE rule the studio
+ * already writes, asked once per length: the second axis is still the rule's
+ * own `subscriptionTypeIds`, not a cell.
+ *
+ * A length with no entry has NO rule — see `resolveDurationBenefit` for how
+ * that differs from having no `durationBenefits` at all.
+ */
+export interface ActivityDurationBenefit {
+  /** Joins to `ActivityDuration.minutes`. An entry whose length no longer
+   *  exists is inert: every reader looks up BY minutes, so an orphan is never
+   *  consulted — and re-adding that length restores the rule it had, which is
+   *  the behaviour a studio expects from un-ticking a chip by accident. */
+  minutes: number
+  /** `null` means this length has NO member rule. Distinct from a missing
+   *  entry, which is what `resolveDurationBenefit` reads the legacy field for. */
+  benefit: Benefit | null
+}
+
+/**
+ * THE ONE READER of an appointment's member rule. Every surface that asks
+ * "what does this plan do for this length" goes through here rather than
+ * touching `memberBenefit` or `durationBenefits` directly — which is what keeps
+ * the migration below invisible to all of them.
+ *
+ * ── AUTHORITATIVE ONCE PRESENT ──────────────────────────────────────────────
+ * `durationBenefits` present ⇒ it is the whole answer, and a missing entry
+ * means "no rule for this length". Absent ⇒ the legacy activity-wide
+ * `memberBenefit` still applies to every length, exactly as it did before.
+ *
+ * So an appointment nobody has re-edited behaves identically to yesterday, and
+ * the FIRST per-duration save absorbs the old rule onto every length it had
+ * (`activityPlanEdgeUpdate`) and clears `memberBenefit`. One canonical home
+ * going forward, no backfill to deploy — the same absorption the course gate
+ * does with its own legacy spelling.
+ *
+ * The trap this shape avoids: reading the two as a MERGE (per-duration entry,
+ * else activity-wide) would make "no rule at 90 min" unsayable — clearing the
+ * 90-minute row would silently fall back to the rule the studio had just
+ * removed.
+ */
+export function resolveDurationBenefit(
+  // NULLS TOLERATED on both fields, because the wire shapes carry them: the
+  // public mirror and `listAvailability` both send `null` where a document
+  // simply has no key, and a signature that only accepted `undefined` would
+  // push a cast onto every public caller.
+  a: {
+    memberBenefit?: ActivityMemberBenefit | Benefit | null
+    durationBenefits?: ActivityDurationBenefit[] | null
+  },
+  minutes: number
+): ActivityMemberBenefit | Benefit | null {
+  if (a.durationBenefits) {
+    return a.durationBenefits.find((d) => d.minutes === minutes)?.benefit ?? null
+  }
+  return a.memberBenefit ?? null
 }
 
 // A duration's effective price for one particular contact — THE PRICE IS THE
@@ -198,6 +270,11 @@ export interface Activity {
    *  generalized `Benefit`; ALL reads go through `normalizeBenefit`.
    *  Absent/empty = no benefit, everyone pays base. */
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** APPOINTMENT-ONLY. The member rule PER SESSION LENGTH — read only through
+   *  `resolveDurationBenefit`, never as a raw field. See that function for why
+   *  it is authoritative-once-present and how a legacy `memberBenefit` is
+   *  absorbed into it. */
+  durationBenefits?: ActivityDurationBenefit[]
   /** Does a booking confirm itself, or does the studio decide?
    *  - `true`  → the booking is written `status: 'confirmed'` on the spot.
    *  - `false` → it stays unconfirmed until the studio confirms/checks them in.
@@ -342,6 +419,12 @@ export interface ActivityPublicProfile {
    *  drop-in member rates) — public-safe, since the referenced
    *  subscription-type ids are already public in the shop. */
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** APPOINTMENT-ONLY. Mirrored verbatim from `Activity.durationBenefits`, and
+   *  public-safe for the same reason `memberBenefit` is. The public picker
+   *  reads the pair through `resolveDurationBenefit`, so a tenant mirrored
+   *  before this field existed keeps quoting from `memberBenefit` — this is
+   *  additive, and no republish is owed before it is correct. */
+  durationBenefits?: ActivityDurationBenefit[]
   /** Mirrored from `Activity.tags` — free-text display labels for the public
    *  booking cards. Present only when the activity has any. */
   tags?: string[]

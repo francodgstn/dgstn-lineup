@@ -1779,7 +1779,8 @@
     "sectionAppearanceTitle": "Appearance",
     "sectionAppearanceHint": "Colour and labels shown on your public page.",
     "sectionVisitorTitle": "What a visitor sees",
-    "sectionVisitorHint": "The words and questions someone meets on the way to booking. Every field is optional."
+    "sectionVisitorHint": "The words and questions someone meets on the way to booking. Every field is optional.",
+    "durationsInCatalogue": "Session lengths, their prices and the member rate are set under Access & pricing, beside the plans they apply to."
   },
   "Benefit": {
     "fieldLabel": "Member benefit",
@@ -7521,7 +7522,7 @@
     "noneFiltered": "None in this group.",
     "noPlans": "No plans yet.",
     "noPlansAction": "Create a plan",
-    "noPriceAppointment": "This appointment has no price, so there is nothing to reduce. Price a duration to make this apply.",
+    "noPriceAppointment": "This length has no price, so there is nothing to reduce. Price it above to make this apply.",
     "noPriceCourse": "This course is not on sale, so there is no price to reduce yet. Tick “Sell it without a plan” in the course settings to price it.",
     "noPriceDropIn": "This class sells no drop-in, so there is no price to reduce yet. Add a drop-in price to make this apply.",
     "noProducts": "No products yet.",
@@ -7568,7 +7569,10 @@
     "toGiftCards": "Gift cards",
     "toPricing": "Pricing",
     "toSchedule": "Schedule",
-    "unsaved": "Unsaved changes"
+    "unsaved": "Unsaved changes",
+    "lengthGroup": "{minutes} min",
+    "lengthRow": "{name} · {minutes} min",
+    "durationRulesHint": "Each length is priced on its own, so each one gets its own answer from every plan."
   },
   "VerifyEmail": {
     "title": "Confirm {email}",

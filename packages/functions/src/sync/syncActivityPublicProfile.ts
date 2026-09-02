@@ -106,8 +106,15 @@ export const syncActivityPublicProfile = onDocumentWritten('activities/{activity
     // Appointments: applies to every priced duration. Classes: the member rate
     // on the drop-in price — only meaningful (and only mirrored) alongside a
     // live, priced drop-in.
+    // BOTH HALVES OR NEITHER, on an appointment. `resolveDurationBenefit` reads
+    // the PRESENCE of `durationBenefits` to decide whether the activity-wide
+    // rule still applies, so mirroring one without the other makes the public
+    // picker quote from a rule the server has already stopped honouring.
     ...(data.type === 'appointment' && data.memberBenefit
       ? { memberBenefit: data.memberBenefit }
+      : {}),
+    ...(data.type === 'appointment' && data.durationBenefits
+      ? { durationBenefits: data.durationBenefits }
       : {}),
     ...(data.type !== 'appointment' &&
     data.memberBenefit &&

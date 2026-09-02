@@ -12,7 +12,10 @@ import {
   foldOfferingPlanEdgeUpdates,
   coursePlanFacets,
   courseGatedPlanIds,
+  anyRatedPlanIds,
+  benefitOpensDoorAt,
   offeringRateEffects,
+  offeringRateLengths,
   rateHasAPriceToApplyTo,
   plansSharingCourseRate,
   type ActivityEdgeFields,
@@ -632,5 +635,214 @@ describe('rateHasAPriceToApplyTo', () => {
     assert.equal(has({ type: 'purchase' }), false, 'on sale but unpriced')
     assert.equal(has({ type: 'purchase', priceAmount: 0 }), false)
     assert.equal(has({ type: 'subscription', subscriptionTypeIds: ['premium'] }), false)
+  })
+})
+
+// ─── ONE RULE PER SESSION LENGTH ─────────────────────────────────────────────
+//
+// An appointment's price is attached to its length, so a rule about that price
+// is too (see `ActivityDurationBenefit`). Every case below was a way this could
+// go wrong that a reviewer had to reason about rather than read.
+describe('appointment member rules, per session length', () => {
+  const twoLengths = {
+    durations: [
+      { minutes: 30, priceAmount: 60 },
+      { minutes: 90, priceAmount: 120 },
+    ],
+  }
+
+  it('reads the rule for the length asked about, not the activity', () => {
+    const a = appt({
+      ...twoLengths,
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        { minutes: 90, benefit: null },
+      ],
+    })
+    assert.deepEqual(ratedPlanIds(a, 30), ['premium'])
+    assert.deepEqual(ratedPlanIds(a, 90), [])
+    assert.equal(activityPlanEdge(a, 'premium', 30).rate, true)
+    assert.equal(activityPlanEdge(a, 'premium', 90).rate, false)
+  })
+
+  it('an activity nobody has re-edited behaves exactly as before', () => {
+    // The migration is invisible: no `durationBenefits` ⇒ the activity-wide
+    // rule still answers for every length, which is what stops this change
+    // needing a backfill.
+    const a = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    assert.deepEqual(ratedPlanIds(a, 30), ['basic'])
+    assert.deepEqual(ratedPlanIds(a, 90), ['basic'])
+    assert.deepEqual(ratedPlanIds(a), ['basic'], 'and the legacy whole-activity read still works')
+  })
+
+  it('the FIRST per-length write absorbs the legacy rule onto every length', () => {
+    // THE BUG THIS PINS: seeding only the edited length would leave 90 min
+    // reading a field the same update clears — a member who booked free
+    // yesterday silently starts paying, because the studio touched 30 min.
+    const fresh = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'percent_off', percent: 20 },
+      30
+    )
+    assert.deepEqual(update, {
+      durationBenefits: [
+        {
+          minutes: 30,
+          benefit: {
+            subscriptionTypeIds: ['basic', 'premium'],
+            effect: 'percent_off',
+            percent: 20,
+          },
+        },
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+      memberBenefit: null,
+    })
+  })
+
+  it('clearing a length says NO RULE, and does not fall back to the old one', () => {
+    const fresh = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    const update = activityPlanEdgeUpdate(fresh, 'basic', OFF, undefined, 30)
+    const after = { ...fresh, ...update } as ActivityEdgeFields
+    assert.deepEqual(ratedPlanIds(after, 30), [], 'the length the studio cleared')
+    assert.deepEqual(ratedPlanIds(after, 90), ['basic'], 'the one they did not touch')
+  })
+
+  it('edits to DIFFERENT lengths of one document fold into one payload', () => {
+    // THE BUG THIS PINS: `durationBenefits` is written whole, so folding per
+    // target — one fold per length — would have each rewrite the array from the
+    // pre-save document and only the last would survive. Exactly the defect the
+    // fold was written for, one level down.
+    const fresh = appt(twoLengths)
+    const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh }, [
+      {
+        subTypeId: 'premium',
+        next: { access: false, rate: true },
+        choice: { effect: 'included' },
+        minutes: 30,
+      },
+      {
+        subTypeId: 'basic',
+        next: { access: false, rate: true },
+        choice: { effect: 'percent_off', percent: 10 },
+        minutes: 90,
+      },
+    ])
+    assert.deepEqual(update, {
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['basic'], effect: 'percent_off', percent: 10 },
+        },
+      ],
+    })
+  })
+
+  it('a rate is dimmed against the length that has no price, not the activity', () => {
+    const doc = appt({ durations: [{ minutes: 30 }, { minutes: 90, priceAmount: 120 }] })
+    assert.equal(rateHasAPriceToApplyTo({ kind: 'activity', doc, minutes: 30 }), false)
+    assert.equal(rateHasAPriceToApplyTo({ kind: 'activity', doc, minutes: 90 }), true)
+    assert.equal(
+      rateHasAPriceToApplyTo({ kind: 'activity', doc }),
+      true,
+      'the whole-activity question is still "any of them"'
+    )
+  })
+
+  it('the whole-activity count is the UNION, so the summary survives the migration', () => {
+    // `ratedPlanIds(a)` alone reads the legacy field, which the first
+    // per-length write CLEARS — so a summary built on it would report "no
+    // member rate" as a reward for using the new editor.
+    const a = appt({
+      ...twoLengths,
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['basic'], effect: 'percent_off', percent: 10 },
+        },
+      ],
+    })
+    assert.deepEqual(ratedPlanIds(a), [], 'the legacy field is gone')
+    assert.deepEqual(anyRatedPlanIds(a).sort(), ['basic', 'premium'])
+  })
+
+  it('only an INCLUDED rule opens a benefit-only length, and it is asked per length', () => {
+    const a = appt({
+      durations: [
+        { minutes: 30, benefitOnly: true },
+        { minutes: 90, benefitOnly: true },
+      ],
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 50 },
+        },
+      ],
+    })
+    assert.equal(benefitOpensDoorAt(a, 30), true)
+    assert.equal(
+      benefitOpensDoorAt(a, 90),
+      false,
+      'a percentage off a price that does not exist opens nothing'
+    )
+  })
+
+  it('an orphaned rule is kept, so un-ticking a length by accident is undoable', () => {
+    const fresh = appt({
+      durations: [{ minutes: 30, priceAmount: 60 }],
+      durationBenefits: [
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+    })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'included' },
+      30
+    )
+    assert.deepEqual(update, {
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+    })
+  })
+
+  it('a class is untouched by any of this — one rule, on the activity', () => {
+    const fresh = cls({ dropIn: { enabled: true, priceAmount: 30 } })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'percent_off', percent: 20 }
+    )
+    assert.deepEqual(update, {
+      memberBenefit: {
+        subscriptionTypeIds: ['premium'],
+        effect: 'percent_off',
+        percent: 20,
+      },
+    })
+    assert.deepEqual(offeringRateLengths({ kind: 'activity', doc: fresh }), [])
+  })
+
+  it('an appointment with no lengths set still asks about the fallback one', () => {
+    assert.deepEqual(offeringRateLengths({ kind: 'activity', doc: appt() }), [60])
   })
 })
