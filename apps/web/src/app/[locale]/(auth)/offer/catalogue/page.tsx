@@ -496,82 +496,6 @@ export default function CataloguePage() {
   /** How many dead ends each tab holds — shown on the strip while the filter is
    *  on, because a tab that filters to nothing otherwise reads as "no problems
    *  here" exactly when the studio is hunting for problems. */
-  /**
-   * WHAT THIS TAB HOLDS, before you have clicked anything.
-   *
-   * The pane used to say "select something" over an empty card — the largest
-   * area on the page, spent telling a studio to do the thing they were already
-   * about to do. The catalogue is meant to be the section's MAP, and a map that
-   * shows nothing until you pick a destination is not one (Franco, 2026-09-02).
-   *
-   * Plain counts, no derived scoring: each line is a fact a studio could verify
-   * by reading the list beside it, which is what makes them trustworthy at a
-   * glance. Labels are REUSED from the rows and chips they describe, so the
-   * overview cannot end up calling something by a different name than the list.
-   *
-   * DESKTOP ONLY, and not by omission: it fills a space that only exists there.
-   * On a phone the list is the whole screen and answers "what is here" by being
-   * the thing itself, so an overview below it would just make the list longer.
-   */
-  const overviewRows: { label: string; value: number }[] = (() => {
-    switch (activeTab) {
-      case 'activities':
-        return [
-          { label: t('railClasses'), value: classes.length },
-          { label: t('railAppointments'), value: appointments.length },
-          {
-            label: t('ovOpenToAll'),
-            value: classes.filter((a) => resolveActivityAccessRule(a).type === 'open').length,
-          },
-          {
-            label: t('ovNeedsPlan'),
-            value: classes.filter((a) => resolveActivityAccessRule(a).type !== 'open').length,
-          },
-          {
-            label: t('ovDropIn'),
-            value: classes.filter((a) => a.dropIn?.enabled).length,
-          },
-        ]
-      case 'plans':
-        return [
-          { label: tSet('subTypePublicBadge'), value: plans.filter((s) => s.public).length },
-          {
-            label: tSet('subTypeSourceAggregator'),
-            value: plans.filter((s) => s.source === 'aggregator').length,
-          },
-          {
-            label: t('ovWithPrice'),
-            value: plans.filter((s) => (s.prices ?? []).length > 0).length,
-          },
-          {
-            label: t('ovNoPrice'),
-            value: plans.filter((s) => (s.prices ?? []).length === 0).length,
-          },
-        ]
-      case 'courses':
-        return (['free', 'registered', 'subscription', 'purchase'] as const).map((tier) => ({
-          label: t(`courseAccess_${tier}` as 'courseAccess_free'),
-          value: courses.filter((c) => c.accessRule?.type === tier).length,
-        }))
-      case 'products':
-        return [
-          {
-            label: tSet('subTypeActive'),
-            value: products.filter((pr) => pr.active !== false).length,
-          },
-          {
-            label: tSet('subTypeInactive'),
-            value: products.filter((pr) => pr.active === false).length,
-          },
-        ]
-    }
-  })()
-  const tabIsEmpty =
-    (activeTab === 'activities' && activities.length === 0) ||
-    (activeTab === 'plans' && plans.length === 0) ||
-    (activeTab === 'courses' && courses.length === 0) ||
-    (activeTab === 'products' && products.length === 0)
-
   const deadEndsPerTab: Partial<Record<TabKey, number>> = {
     activities: activities.filter((a) => deadEndIds.has(a.id)).length,
     courses: courses.filter((c) => deadEndIds.has(c.id)).length,
@@ -1335,15 +1259,21 @@ export default function CataloguePage() {
         </div>
 
         {/* ── the pane ── */}
-        {/* THE PANE IS A CARD. It is a settings surface — a stack of fields,
-            switches and a table — and a panel of controls floating on the page
-            background has no edge saying where the form starts and the page
-            ends (Franco, 2026-09-02). */}
-        <div
-          className={`rounded-xl border bg-card p-4 ${
-            selection ? '' : 'hidden lg:block'
-          }`}
-        >
+        {/* NO SELECTION, NO PANE — not an empty card, and not a placeholder.
+            It briefly held an "At a glance" summary of the tab; a studio does
+            not come here to read counts, and it put a second thing in motion
+            every time the tab changed, which is one more than a tab change
+            should move (Franco, 2026-09-02).
+
+            The rail keeps its 340px track either way, so nothing shifts under
+            the cursor that just clicked it — see THE RAIL HOLDS ITS SIZE.
+
+            THE PANE IS A CARD when it is here. It is a settings surface — a
+            stack of fields, switches and a table — and a panel of controls
+            floating on the page background has no edge saying where the form
+            starts and the page ends. */}
+        {selection && (
+        <div className="rounded-xl border bg-card p-4">
           {/* KEYED ON THE SELECTION so the slide replays on EVERY change, not
               only the first. `animate-in` fires on mount, and the pane element
               itself never unmounts — it only gains and loses `hidden` — so
@@ -1355,7 +1285,7 @@ export default function CataloguePage() {
               navigation, so it should read as the pane catching up rather than
               as a screen arriving. */}
           <div
-            key={selection ? `${selection.kind}:${selection.id}` : 'overview'}
+            key={`${selection.kind}:${selection.id}`}
             className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3 motion-safe:duration-200"
           >
           {/* THE WAY BACK, on a phone only. On a desktop the list never left,
@@ -1371,37 +1301,6 @@ export default function CataloguePage() {
               <ChevronLeft className="h-4 w-4" />
               {t('backToList')}
             </button>
-          )}
-
-          {!selection && (
-            <div className="space-y-4 p-2">
-              <div>
-                <h2 className="text-base font-semibold">{t('ovTitle')}</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {tabIsEmpty ? t('ovEmptyTab') : t('ovPickHint')}
-                </p>
-              </div>
-
-              {!tabIsEmpty && (
-                <dl className="divide-y rounded-lg border">
-                  {overviewRows.map((row) => (
-                    <div key={row.label} className="flex items-baseline justify-between px-3 py-2">
-                      <dt className="text-sm text-muted-foreground">{row.label}</dt>
-                      {/* Zero is MUTED rather than hidden: "0 sold as drop-in"
-                          is a fact worth seeing, and a row that disappears at
-                          zero makes the list a different shape per studio. */}
-                      <dd
-                        className={`text-sm tabular-nums ${
-                          row.value === 0 ? 'text-muted-foreground/50' : 'font-medium'
-                        }`}
-                      >
-                        {row.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-            </div>
           )}
 
           {selectedActivity && (
@@ -1625,6 +1524,7 @@ export default function CataloguePage() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* THE EDITORS. Keyed by the record so reopening on a different one
