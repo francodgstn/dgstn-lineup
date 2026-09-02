@@ -66,6 +66,7 @@ import {
   Package,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   type LucideIcon,
   Zap,
@@ -115,8 +116,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Tip } from '@/components/ui/tip'
+import { AiDraftDialog } from '@/components/offer/AiDraftDialog'
+import { useExperimentalFeatures } from '@/hooks/useExperimentalFeatures'
 import {
   PaneDirtyProvider,
   usePaneDirtyState,
@@ -212,9 +216,12 @@ type PaneAction = PaneActionRun & {
 function CreateAction({
   tabs,
   onOpen,
+  onDraftWithAi,
 }: {
   tabs: { key: TabKey }[]
   onOpen: (kind: 'activity' | 'plan') => void
+  /** Absent unless the `offer-drafting` experiment is on for this team. */
+  onDraftWithAi?: () => void
 }) {
   const t = useTranslations('OfferCatalogue')
   const has = (k: TabKey) => tabs.some((x) => x.key === k)
@@ -252,6 +259,19 @@ function CreateAction({
             <Package className="mr-2 h-4 w-4" />
             {t('newProduct')}
           </DropdownMenuItem>
+        )}
+        {/* LAST, and separated. It is another way to create, so it belongs in
+            this menu — but it makes SEVERAL records from a sentence where every
+            row above makes one from a form, and that difference is worth a
+            rule. */}
+        {onDraftWithAi && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDraftWithAi}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {t('aiDraft')}
+            </DropdownMenuItem>
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -393,6 +413,12 @@ export default function CataloguePage() {
   const [creating, setCreating] = useState<'activity' | 'plan' | null>(null)
   const [schedulePreview, setSchedulePreview] = useState<Activity | null>(null)
   const [confirming, setConfirming] = useState<Confirming>(null)
+  // AN EXPERIMENT, off unless the owner switched it on — see
+  // EXPERIMENTAL_FEATURES. `isEnabled` reads false while the team doc is still
+  // loading, which is the safe direction for an opt-in.
+  const { isEnabled } = useExperimentalFeatures()
+  const aiDrafting = isEnabled('offer-drafting')
+  const [aiOpen, setAiOpen] = useState(false)
 
   const { data: activities = [], isLoading: loadingActivities } = useActivities(currentTeamId)
   const { data: plans = [], isLoading: loadingPlans } = useSubscriptionTypes(currentTeamId)
@@ -883,7 +909,15 @@ export default function CataloguePage() {
         // to their own page instead: both gate creation on a per-plan cap and
         // own a bespoke first-step form, and a second copy of either is how the
         // two drift apart.
-        action={canEdit ? <CreateAction tabs={tabs} onOpen={setCreating} /> : undefined}
+        action={
+          canEdit ? (
+            <CreateAction
+              tabs={tabs}
+              onOpen={setCreating}
+              onDraftWithAi={aiDrafting ? () => setAiOpen(true) : undefined}
+            />
+          ) : undefined
+        }
       />
 
       {/* The banner counts dead ends, and clicking it FILTERS THE RAIL rather
@@ -1547,6 +1581,18 @@ export default function CataloguePage() {
         </div>
         )}
       </div>
+
+      {aiDrafting && currentTeamId && (
+        <AiDraftDialog
+          open={aiOpen}
+          onOpenChange={setAiOpen}
+          teamId={currentTeamId}
+          currency={currency}
+          // The records exist by the time this runs — the applier commits one
+          // batch — so the rail only has to re-read.
+          onApplied={() => refreshQueries(qc, ['activities'], ['subscription-types'])}
+        />
+      )}
 
       {/* THE EDITORS. Keyed by the record so reopening on a different one
           remounts the form rather than leaving the previous draft in it — the

@@ -34,7 +34,7 @@ import type { SaasPlan } from './team'
  * Stable machine identifier for one experiment. Kebab-case, matching plugin ids.
  * These are stored in Firestore, so a rename is a migration, not an edit.
  */
-export type ExperimentalFeatureId = 'extra-dashboard' | 'waitlist'
+export type ExperimentalFeatureId = 'extra-dashboard' | 'waitlist' | 'offer-drafting'
 
 /**
  * WHERE an experiment's on/off state lives.
@@ -131,6 +131,29 @@ export const EXPERIMENTAL_FEATURES: readonly ExperimentalFeature[] = [
     descriptionKey: 'waitlistDescription',
     surfaceKey: 'waitlistSurface',
     store: 'booking-settings',
+  },
+  {
+    // Reader: the Create menu on Offerings
+    // (app/[locale]/(auth)/manage/offer/page.tsx), which shows "Draft with AI"
+    // only while this is on.
+    //
+    // AN EXPERIMENT RATHER THAN A PLUGIN, and rather than a feature: the model
+    // is new, its output quality is the thing being tuned, and it may be
+    // withdrawn. Exactly what this registry is for.
+    //
+    // OWNER-ONLY IS LOAD-BEARING HERE, not incidental. The flag lives on the
+    // team doc, which only an owner may write — and `draftOfferings` checks the
+    // same role, so nobody can create priced records from a switch they cannot
+    // reach. That is a stronger pairing than the other two entries need, and it
+    // is why the callable re-checks rather than trusting the flag alone.
+    id: 'offer-drafting',
+    nameKey: 'offerDraftingName',
+    descriptionKey: 'offerDraftingDescription',
+    surfaceKey: 'offerDraftingSurface',
+    // A NOTE, not a gate — same rule as the others. The drafting itself costs
+    // model calls, so it is pointed at the tiers that have an offer worth
+    // drafting; the switch stays live below it.
+    minPlan: 'studio',
   },
 ]
 

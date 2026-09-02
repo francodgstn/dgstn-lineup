@@ -218,6 +218,12 @@ export {
 export { unlockPlugin } from './plugins/unlockPlugin'
 export { assistantChat } from './assistant'
 
+// AI offer drafting — an EXPERIMENT, not a plugin (see EXPERIMENTAL_FEATURES).
+// Two callables on purpose: `draftOfferings` runs the model and writes nothing,
+// `applyOfferingDraft` writes and runs no model. The seam between them is where
+// a human decides.
+export { draftOfferings, applyOfferingDraft } from './offer/draftOfferings'
+
 // Kiosk mode (entrance-tablet PIN unlock)
 export { unlockKiosk } from './kiosk'
 
