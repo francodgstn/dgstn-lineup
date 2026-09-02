@@ -162,6 +162,20 @@ export function TeamSwitcher({ onCreateStudio }: { onCreateStudio?: () => void }
   const standingIn = (teamId: string) =>
     currentScope?.kind === 'team' && currentScope.id === teamId
 
+  /**
+   * A LIST OF ONE IS NOT A LIST — UNLESS YOU ARE NOT STANDING IN IT.
+   *
+   * The single-studio rule below holds only in team scope, where the one row
+   * would be the studio you are already in. In ORG scope you are somewhere
+   * else, so that row is the way BACK — and hiding it left an org admin who
+   * runs one studio with a switcher that could reach the organisation and
+   * nothing else (Franco, 2026-09-02).
+   *
+   * Same blind spot `standingIn` was written for, one step earlier: that fixed
+   * the row rendering as ticked-and-inert, this stops it being absent.
+   */
+  const showStudioList = teams.length > 1 || currentScope?.kind === 'org'
+
   async function switchTo(teamId: string) {
     if (!user || switchingTo) return
     // Already the current team, but standing in an ORG: this is navigation, not
@@ -231,12 +245,12 @@ export function TeamSwitcher({ onCreateStudio }: { onCreateStudio?: () => void }
               2026-08-28). That is what the switcher shows somebody who has one
               studio and no organisation: a way to get a second, and the offer
               behind it. */}
-          {teams.length > 1 && (
+          {showStudioList && (
             <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
               {t('switchStudio')}
             </DropdownMenuLabel>
           )}
-          {teams.length > 1 &&
+          {showStudioList &&
             teams.map((team) => {
             const isCurrent = standingIn(team.id)
             return (
