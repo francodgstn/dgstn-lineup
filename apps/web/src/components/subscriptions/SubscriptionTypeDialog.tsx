@@ -157,6 +157,7 @@ export function SubTypeDialog({
   currency,
   nextOrder,
   onSaved,
+  inline = false,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -169,6 +170,10 @@ export function SubTypeDialog({
   /** Order assigned to a newly created type so it appends to the end. */
   nextOrder: number
   onSaved: () => void
+  /** Render the FORM ONLY, with no dialog around it — see the same prop on
+   *  `ActivityDialog` for why the catalogue's pane needs this and why the form
+   *  is not extracted into its own component to provide it. */
+  inline?: boolean
 }) {
   const t = useTranslations('TeamSettings')
   const tCommon = useTranslations('Common')
@@ -247,20 +252,8 @@ export function SubTypeDialog({
     onOpenChange(false)
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {editing
-              ? t('editSubscriptionType')
-              : duplicating
-                ? tCommon('duplicate')
-                : t('addSubscriptionType')}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
-          <DialogBody className="space-y-4 py-2">
+  const fields = (
+    <>
           <div className="space-y-1">
             <Label>{t('fieldSubTypeName')}</Label>
             <Input {...register('name')} placeholder="e.g. Monthly pass, Fitpass" />
@@ -394,6 +387,39 @@ export function SubTypeDialog({
               <SubscriptionAutomationsSection teamId={teamId} subscriptionType={editing} />
             </FormSection>
           )}
+    </>
+  )
+
+  const save = (
+    <Button type="submit" disabled={isSubmitting}>
+      {isSubmitting ? t('saving') : t('save')}
+    </Button>
+  )
+
+  if (inline) {
+    return (
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {fields}
+        <div className="flex justify-end border-t pt-3">{save}</div>
+      </form>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>
+            {editing
+              ? t('editSubscriptionType')
+              : duplicating
+                ? tCommon('duplicate')
+                : t('addSubscriptionType')}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="space-y-4 py-2">
+            {fields}
           </DialogBody>
 
           <DialogFooter>
@@ -401,9 +427,7 @@ export function SubTypeDialog({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? t('saving') : t('save')}
-              </Button>
+              {save}
             </div>
           </DialogFooter>
         </form>
