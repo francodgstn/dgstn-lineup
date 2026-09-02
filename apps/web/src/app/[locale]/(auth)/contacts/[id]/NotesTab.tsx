@@ -16,6 +16,7 @@ import {
   Bold, Italic, Strikethrough, Code, Heading2, Heading3,
   List, ListOrdered, Quote, Plus, Pencil, Trash2, X, Check,
 } from 'lucide-react'
+import { Tip } from '@/components/ui/tip'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -117,20 +118,23 @@ function ToolbarButton({
   children: React.ReactNode
   title: string
 }) {
+  // Icon-only, like every button in this toolbar — see RichTextEditor.
   return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      className={`p-1.5 rounded transition-colors ${
-        active
-          ? 'bg-foreground/10 text-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
-      } disabled:opacity-40`}
-    >
-      {children}
-    </button>
+    <Tip label={title}>
+      <button
+        type="button"
+        aria-label={title}
+        disabled={disabled}
+        onClick={onClick}
+        className={`p-1.5 rounded transition-colors ${
+          active
+            ? 'bg-foreground/10 text-foreground'
+            : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
+        } disabled:opacity-40`}
+      >
+        {children}
+      </button>
+    </Tip>
   )
 }
 

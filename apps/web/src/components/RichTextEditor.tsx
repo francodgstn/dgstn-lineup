@@ -31,6 +31,7 @@ import {
   resolveDocumentLink,
   type DocumentLinkTarget,
 } from '@linyup/shared'
+import { Tip } from '@/components/ui/tip'
 
 type Range = { from: number; to: number }
 
@@ -53,19 +54,24 @@ function ToolbarButton({
   children: React.ReactNode
   title: string
 }) {
+  // EVERY BUTTON IN THIS TOOLBAR IS AN ICON, so `title` was not extra detail
+  // about a visible label — it WAS the label, and the browser's version of it
+  // never reaches a touch user and takes a second to reach anyone else.
   return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={`p-1.5 rounded transition-colors ${
-        active
-          ? 'bg-foreground/10 text-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
-      }`}
-    >
-      {children}
-    </button>
+    <Tip label={title}>
+      <button
+        type="button"
+        aria-label={title}
+        onClick={onClick}
+        className={`p-1.5 rounded transition-colors ${
+          active
+            ? 'bg-foreground/10 text-foreground'
+            : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
+        }`}
+      >
+        {children}
+      </button>
+    </Tip>
   )
 }
 
