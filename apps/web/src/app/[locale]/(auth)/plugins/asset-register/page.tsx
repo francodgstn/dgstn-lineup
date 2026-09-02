@@ -10,8 +10,11 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import type { Route } from 'next'
+import { QuickLinks } from '@/components/layout/QuickLinks'
+import { PluginNotInstalled } from '@/components/plugins/PluginNotInstalled'
 import { toast } from 'sonner'
-import { Boxes, Download, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import { Boxes, Download, Info, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 import {
@@ -30,6 +33,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SearchInput } from '@/components/ui/search-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -76,6 +80,17 @@ async function uploadPhoto(teamId: string, assetId: string, file: File): Promise
   return getDownloadURL(sRef)
 }
 
+/** Sort orders offered in the list. `acquired_desc` is the default and matches
+ *  what the register shows before anyone touches a control. */
+type AssetSortKey = 'acquired_desc' | 'acquired_asc' | 'name' | 'cost_desc' | 'value_desc'
+const ASSET_SORT_KEYS: AssetSortKey[] = [
+  'acquired_desc',
+  'acquired_asc',
+  'name',
+  'cost_desc',
+  'value_desc',
+]
+
 interface DraftState {
   name: string
   category: AssetCategory
@@ -106,6 +121,7 @@ const emptyDraft = (): DraftState => ({
 
 export default function AssetRegisterPage() {
   const t = useTranslations('AssetRegister')
+  const tPlugins = useTranslations('Plugins')
   const { currentTeamId, teamRole, user, team } = useAuth()
   const teamId = currentTeamId ?? null
   // Managers maintain the register alongside owners — the head coach knows what
@@ -127,6 +143,13 @@ export default function AssetRegisterPage() {
   const [disposeDate, setDisposeDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [proceedsText, setProceedsText] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
+  // Browsing state. Client-side by design: the register is a bounded list a
+  // studio can read end to end, so a query per keystroke would buy nothing and
+  // cost a read. Everything below filters the array already in hand.
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<AssetCategory | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disposed'>('active')
+  const [sortKey, setSortKey] = useState<AssetSortKey>('acquired_desc')
 
   const now = Date.now()
   const valuations = useMemo(
@@ -148,9 +171,52 @@ export default function AssetRegisterPage() {
     [assets, now]
   )
 
+  // WHAT THE LIST SHOWS. The totals above deliberately stay whole-register:
+  // "Total cost" that silently became "total cost of the rows I am looking at"
+  // is a number whose meaning depends on a control somewhere else on the page.
+  // The count line under the filters is what reports the narrowing.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const rows = assets.filter((a) => {
+      if (statusFilter === 'active' && a.status === 'disposed') return false
+      if (statusFilter === 'disposed' && a.status !== 'disposed') return false
+      if (categoryFilter !== 'all' && a.category !== categoryFilter) return false
+      if (!q) return true
+      // Name, where it lives and the note — the three fields that carry words.
+      return (
+        a.name.toLowerCase().includes(q) ||
+        (a.location ?? '').toLowerCase().includes(q) ||
+        (a.note ?? '').toLowerCase().includes(q)
+      )
+    })
+    const byName = (a: Asset, b: Asset) => a.name.localeCompare(b.name)
+    const acquiredMs = (a: Asset) => a.acquired_at?.toMillis?.() ?? 0
+    const book = (a: Asset) => valuations.get(a.id)?.book_value_minor ?? 0
+    const sorted = [...rows]
+    switch (sortKey) {
+      case 'name': sorted.sort(byName); break
+      case 'acquired_desc': sorted.sort((a, b) => acquiredMs(b) - acquiredMs(a) || byName(a, b)); break
+      case 'acquired_asc': sorted.sort((a, b) => acquiredMs(a) - acquiredMs(b) || byName(a, b)); break
+      case 'cost_desc': sorted.sort((a, b) => b.cost_minor - a.cost_minor || byName(a, b)); break
+      case 'value_desc': sorted.sort((a, b) => book(b) - book(a) || byName(a, b)); break
+    }
+    // Disposed rows sink to the bottom whatever the sort — they are history, and
+    // a sort that interleaves them makes the live register harder to read.
+    return sorted.sort(
+      (a, b) => (a.status === 'disposed' ? 1 : 0) - (b.status === 'disposed' ? 1 : 0)
+    )
+  }, [assets, search, categoryFilter, statusFilter, sortKey, valuations])
+
   if (pluginsLoading) return <Skeleton className="m-6 h-40" />
   if (!teamId || !isInstalled('asset-register')) {
-    return <p className="p-6 text-sm text-muted-foreground">{t('notInstalled')}</p>
+    return (
+      <PluginNotInstalled
+        pluginId="asset-register"
+        icon={Boxes}
+        title={t('notInstalledTitle')}
+        body={t('notInstalledBody')}
+      />
+    )
   }
 
   const currency = team?.default_currency ?? 'CHF'
@@ -160,6 +226,14 @@ export default function AssetRegisterPage() {
   // Units vs rows: a batch row is one asset on the schedule but many things in
   // the room, and "how many do we own" is the question the register is asked.
   const totalUnits = active.reduce((s, a) => s + assetQuantity(a), 0)
+
+
+  const filtersActive = search.trim() !== '' || categoryFilter !== 'all' || statusFilter !== 'active'
+  const clearFilters = () => {
+    setSearch('')
+    setCategoryFilter('all')
+    setStatusFilter('active')
+  }
 
   const costMinor = parseMajor(draft.costText)
   const lifeMonths = /^\d+$/.test(draft.lifeText.trim()) ? parseInt(draft.lifeText, 10) : null
@@ -302,10 +376,26 @@ export default function AssetRegisterPage() {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Boxes className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">{t('assetsTitle')}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Boxes className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold">{t('assetsTitle')}</h1>
+          </div>
+          {/* Finance is where these values become a statement of assets, and it
+              is the page that answers "and what does this mean for my books".
+              Falls back to the marketplace when it is not installed, so the way
+              in survives — same as the payments page's line. */}
+          <QuickLinks
+            links={[
+              {
+                href: (isInstalled('finance')
+                  ? '/plugins/finance'
+                  : '/settings/plugins?plugin=finance') as Route,
+                label: tPlugins('financeNavLabel'),
+              },
+            ]}
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={downloadStatement} disabled={assets.length === 0}>
@@ -340,12 +430,80 @@ export default function AssetRegisterPage() {
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">{t('assetsIndicativeHint')}</p>
+      {/* The one thing an owner has to understand about this page: the values
+          are an estimate and nothing here touches the books. It was a grey
+          one-liner in accountant's words; a callout in plain words is the
+          difference between being read and being skipped. */}
+      <div className="flex items-start gap-2.5 rounded-lg border bg-muted/40 p-3 text-sm">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="text-muted-foreground">{t('assetsIndicativeHint')}</p>
+      </div>
+
+      {/* Browse controls. Search first because it is what people reach for; the
+          two narrowing selects then the order. Wraps on a phone. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput
+          value={search}
+          onValueChange={setSearch}
+          placeholder={t('searchPlaceholder')}
+          className="w-full sm:w-72"
+        />
+        <Select value={categoryFilter} onValueChange={(v) => v && setCategoryFilter(v as AssetCategory | 'all')}>
+          <SelectTrigger size="sm" className="w-[170px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('filterAllCategories')}</SelectItem>
+            {ASSET_CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>{t(`assetCategory_${c}`)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v as 'all' | 'active' | 'disposed')}>
+          <SelectTrigger size="sm" className="w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">{t('filterInUse')}</SelectItem>
+            <SelectItem value="disposed">{t('filterDisposed')}</SelectItem>
+            <SelectItem value="all">{t('filterAllStatuses')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortKey} onValueChange={(v) => v && setSortKey(v as AssetSortKey)}>
+          <SelectTrigger size="sm" className="w-[190px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ASSET_SORT_KEYS.map((k) => (
+              <SelectItem key={k} value={k}>{t(`sort_${k}`)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {filtersActive && (
+          <Button size="sm" variant="ghost" onClick={clearFilters}>
+            {t('clearFilters')}
+          </Button>
+        )}
+      </div>
+      {filtersActive && (
+        <p className="text-xs text-muted-foreground">
+          {t('showingCount', { shown: visible.length, total: assets.length })}
+        </p>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-40" />
       ) : assets.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('assetsEmpty')}</p>
+      ) : visible.length === 0 ? (
+        // An empty REGISTER and an empty RESULT are different problems: the
+        // first wants "add your first item", the second wants the way back.
+        <div className="space-y-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+          <p>{t('noMatches')}</p>
+          <Button size="sm" variant="outline" onClick={clearFilters}>
+            {t('clearFilters')}
+          </Button>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table>
@@ -360,7 +518,7 @@ export default function AssetRegisterPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {assets.map((a) => {
+              {visible.map((a) => {
                 const v = valuations.get(a.id)!
                 const disposed = a.status === 'disposed'
                 return (

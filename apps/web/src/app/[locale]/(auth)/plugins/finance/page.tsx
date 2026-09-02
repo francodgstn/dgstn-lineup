@@ -166,12 +166,16 @@ export default function FinanceOverviewPage() {
       <FinanceTrendsSection teamId={teamId} />
 
       {/* Accounting subpages */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Thirds, not quarters: at four across each card was narrower than its own
+          description, which wrapped to three lines and made the row read as
+          denser than it is. Reports leads because it is what an owner opens the
+          page to see — the others are where you go to CHANGE something. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(
           [
+            ['/plugins/finance/reports', Table2, t('reports'), t('reportsDescription')],
             ['/plugins/finance/accounts', BookOpenText, t('accounts'), t('accountsDescription')],
             ['/plugins/finance/entries', ListOrdered, t('entries'), t('entriesDescription')],
-            ['/plugins/finance/reports', Table2, t('reports'), t('reportsDescription')],
             ['/plugins/finance/opening', Scale, t('openingTitle'), t('openingCardDescription')],
             ['/plugins/asset-register', Boxes, t('assetsTitle'), t('assetsCardDescription')],
           ] as Array<[string, typeof BookOpenText, string, string]>
