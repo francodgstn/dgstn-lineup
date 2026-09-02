@@ -32,7 +32,8 @@ import {
 } from '@linyup/shared'
 import { to } from '../utils/async'
 import { hasTeamRole, isTeamMember } from '../utils/teams'
-import { getAssistantModel } from '../utils/vertexClient'
+import { Type } from '@google/genai'
+import { getGenAI, ASSISTANT_MODEL } from '../utils/vertexClient'
 
 const RATE_LIMIT_MAX = 12 // drafts per user + team per hour
 const RATE_WINDOW_MS = 60 * 60 * 1000
@@ -87,6 +88,109 @@ Rules:
   might not notice.
 - Do not duplicate anything in "Already set up" below; complement it.
 - Keep it small and realistic: a handful of activities, two or three plans.`
+
+/**
+ * THE SHAPE, GIVEN TO THE MODEL RATHER THAN DESCRIBED TO IT.
+ *
+ * This is NOT the security boundary — `parseOfferingDraft` is, and it still
+ * refuses everything it refused when the shape lived only in the prompt. What
+ * this buys is a better FIRST draft: a constrained model does not invent a
+ * field name, so fewer usable proposals get thrown away over a spelling.
+ *
+ * It mirrors the prompt rather than replacing it: the prompt says what a GOOD
+ * answer looks like, this says what an answer IS. Only `key` and `name` are
+ * required, because a proposal with nothing but names is still worth reviewing
+ * — and a schema that demands prices would push the model into inventing the
+ * numbers the prompt tells it to leave out.
+ */
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    activities: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          key: { type: Type.STRING, description: 'kebab-case handle, unique in this response' },
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          type: { type: Type.STRING, enum: ['class', 'appointment'] },
+          accessTier: { type: Type.STRING, enum: ['open', 'members', 'subscription'] },
+          planKeys: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'keys of plans in THIS response',
+          },
+          dropInPriceAmount: { type: Type.NUMBER, description: 'classes only' },
+          durations: {
+            type: Type.ARRAY,
+            description: 'appointments only',
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                minutes: { type: Type.INTEGER },
+                priceAmount: { type: Type.NUMBER },
+              },
+              required: ['minutes'],
+            },
+          },
+        },
+        required: ['key', 'name'],
+      },
+    },
+    plans: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          key: { type: Type.STRING },
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          activityKeys: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'keys of activities in THIS response',
+          },
+          prices: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                amount: { type: Type.NUMBER },
+                recurrence: {
+                  type: Type.STRING,
+                  enum: [
+                    'per_class',
+                    'one_time',
+                    'weekly',
+                    'biweekly',
+                    'monthly',
+                    'quarterly',
+                    'annual',
+                  ],
+                },
+                label: { type: Type.STRING },
+                credits: { type: Type.INTEGER },
+              },
+              required: ['amount', 'recurrence'],
+            },
+          },
+          limit: {
+            type: Type.OBJECT,
+            properties: {
+              count: { type: Type.INTEGER },
+              per: { type: Type.STRING, enum: ['day', 'week', 'month'] },
+            },
+            required: ['count', 'per'],
+          },
+        },
+        required: ['key', 'name'],
+      },
+    },
+    note: { type: Type.STRING },
+  },
+  required: ['activities', 'plans'],
+}
 
 type DraftRequest = { teamId?: string; prompt?: string }
 type ApplyRequest = { teamId?: string; draft?: unknown }
@@ -172,15 +276,25 @@ export const draftOfferings = onCall(async (request) => {
 
   let raw = ''
   try {
-    const model = getAssistantModel()
-    const result = await model.generateContent({
+    const response = await getGenAI().models.generateContent({
+      model: ASSISTANT_MODEL,
       contents: [{ role: 'user', parts: [{ text: `${context}\n\nStudio: ${prompt.trim()}` }] }],
-      systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
-      // Low temperature: this is a structured proposal, not a brainstorm, and a
-      // creative model here mostly invents field names.
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' },
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        maxOutputTokens: 2048,
+        // Low temperature: this is a structured proposal, not a brainstorm, and
+        // a creative model here mostly invents field names.
+        temperature: 0.2,
+        // THE SHAPE IS GIVEN, not just described — see RESPONSE_SCHEMA. The
+        // parser still refuses everything it refused before; this only makes
+        // the first draft likelier to survive it.
+        responseMimeType: 'application/json',
+        responseJsonSchema: RESPONSE_SCHEMA,
+      },
     })
-    raw = result.response?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+    // `response.text`, not a walk down candidates[0].content.parts — four
+    // optional steps that each return undefined silently. See vertexClient.
+    raw = response.text ?? ''
   } catch (err) {
     console.error('[draftOfferings] Vertex error:', (err as Error).message)
     throw new HttpsError('internal', 'The drafting service is unavailable right now.')

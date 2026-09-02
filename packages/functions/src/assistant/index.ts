@@ -9,7 +9,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember } from '../utils/teams'
-import { getAssistantModel } from '../utils/vertexClient'
+import { getGenAI, ASSISTANT_MODEL } from '../utils/vertexClient'
 import { pluginIsActive } from '../utils/plugins'
 
 const MAX_MESSAGES = 20
@@ -103,14 +103,18 @@ export const assistantChat = onCall(async (request) => {
   }
 
   try {
-    const model = getAssistantModel()
-    const result = await model.generateContent({
+    const response = await getGenAI().models.generateContent({
+      model: ASSISTANT_MODEL,
       contents: trimmed,
-      systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        maxOutputTokens: 1024,
+        temperature: 0.3,
+      },
     })
-    const reply =
-      result.response?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim() || ''
+    // `response.text` rather than walking candidates[0].content.parts — four
+    // optional steps that each return undefined silently. See vertexClient.
+    const reply = (response.text ?? '').trim()
     if (!reply) throw new HttpsError('internal', 'The assistant returned an empty response.')
     return { reply }
   } catch (err) {
