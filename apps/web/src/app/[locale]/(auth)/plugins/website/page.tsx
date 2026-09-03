@@ -65,7 +65,10 @@ import type {
   WebsiteSection,
   WebsiteSectionType,
 } from '@linyup/shared'
-import { deriveSiteMenu } from '@linyup/shared'
+import {
+  deriveSiteMenu,
+  resolveThemePreset,
+} from '@linyup/shared'
 import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { PreviewOverlay } from '@/plugins/website/PreviewOverlay'
@@ -91,6 +94,21 @@ function AppearancePanel({
 }) {
   const t = useTranslations('Website')
 
+  // Resolved through the SAME function the renderer uses, so "does this theme
+  // have two halves" is answered once. A legacy surface (no preset) follows the
+  // old `theme: 'auto'` field, which is what its page actually does.
+  const themeIsAdaptive = (() => {
+    const preset = resolveThemePreset({
+      presetId: meta.themePreset,
+      base: meta.themeBase,
+      baseDark: meta.themeBaseDark,
+      variantLight: meta.themeVariantLight,
+      variantDark: meta.themeVariantDark,
+      mode: meta.themeMode,
+    })
+    return preset ? preset.adaptive : meta.theme === 'auto'
+  })()
+
   const setHeader = (p: Partial<SiteMeta['header']>) =>
     onChange({ header: { ...meta.header, ...p } })
   const setSeo = (p: Partial<NonNullable<SiteMeta['seo']>>) =>
@@ -113,14 +131,49 @@ function AppearancePanel({
           theme over a dark background was patched by a luminance check that
           silently overrode the studio's own choice. See
           packages/shared/src/types/themePreset.ts for the full list, and for
-          the hooks a custom theme will use later. */}
+          the hooks the custom theme now uses. */}
       <div className="space-y-2">
         <Label className="text-xs">{t('apTheme')}</Label>
         <ThemePresetPicker
           value={meta.themePreset ?? ''}
           onChange={(id) => onChange({ themePreset: id })}
           accentColor={meta.accentColor}
+          base={meta.themeBase}
+          baseDark={meta.themeBaseDark}
+          variantLight={meta.themeVariantLight}
+          variantDark={meta.themeVariantDark}
+          mode={meta.themeMode}
+          // ONE WRITE for all four fields: they are one choice, and saving them
+          // separately would let a base land without the strengths picked
+          // beside it.
+          onCustomChange={(next) =>
+            onChange({
+              themeBase: next.base,
+              themeBaseDark: next.baseDark,
+              themeVariantLight: next.variantLight,
+              themeVariantDark: next.variantDark,
+              themeMode: next.mode,
+            })
+          }
         />
+      </div>
+
+      {/* THE VISITOR'S SWITCH — off by default, and only meaningful on a theme
+          with two halves. On a fixed look ('Ink', or any preset drawn whole in
+          the picker) there is nothing to switch to, so the row says why rather
+          than offering a control that would do nothing. */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">{t('apThemeToggle')}</Label>
+        <div className="flex items-start gap-2.5 rounded-md border p-2.5">
+          <Switch
+            checked={!!meta.themeToggle}
+            disabled={!themeIsAdaptive}
+            onCheckedChange={(v) => onChange({ themeToggle: v })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {themeIsAdaptive ? t('apThemeToggleHint') : t('apThemeToggleFixed')}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-1.5">

@@ -35,6 +35,14 @@
 // deploy ordering, and a studio that had a look it liked keeps it until it picks
 // a preset. Once it does, the preset wins and the legacy fields are ignored.
 
+import {
+  deriveThemePreset,
+  DEFAULT_THEME_VARIANT,
+  DEFAULT_THEME_MODE,
+  type ThemeVariantId,
+  type ThemeMode,
+} from './themeDerive'
+
 /** Stable machine identifier. Stored in Firestore — a rename is a migration. */
 export type SurfaceThemePresetId =
   | 'paper'
@@ -43,6 +51,10 @@ export type SurfaceThemePresetId =
   | 'forest'
   | 'ocean'
   | 'mono'
+  // DERIVED, not a member of SURFACE_THEME_PRESETS. Its palettes are computed
+  // from the tenant's own base colour — see `themeDerive.ts` and
+  // `resolveThemePreset` below, which is the ONE place the two kinds meet.
+  | 'custom'
 
 /** One half of a preset: what the page looks like in one colour scheme. */
 export interface SurfacePalette {
@@ -152,6 +164,53 @@ export function surfaceThemePreset(
 ): SurfaceThemePreset | null {
   if (!id) return null
   return SURFACE_THEME_PRESETS.find((p) => p.id === id) ?? null
+}
+
+/** What a tenant stored about its theme. The fields travel together because
+ *  they are one choice — see `resolveThemePreset`. */
+export interface ThemeSelection {
+  presetId?: string | null
+  /** The studio's own colour, when `presetId` is 'custom'. */
+  base?: string | null
+  /** Optional second colour for the dark half — the "one light, one dark" case. */
+  baseDark?: string | null
+  /** How strongly the colour comes through, PER HALF. A studio judges the two
+   *  separately — see `ThemeVariants`. */
+  variantLight?: string | null
+  variantDark?: string | null
+  /** 'adaptive' (two halves, the default) or 'exact' (the colour as it is, one
+   *  look for everyone) — see `ThemeMode`. */
+  mode?: string | null
+}
+
+/**
+ * THE ONE PLACE A STORED THEME BECOMES A PRESET.
+ *
+ * Both kinds resolve here: a registry id looks up, `'custom'` derives. Every
+ * renderer calls this rather than `surfaceThemePreset`, so there is no surface
+ * where a custom theme could be handled differently from a fixed one — the
+ * failure this whole module exists to prevent, one level up.
+ *
+ * Returns null for "nothing chosen", exactly as `surfaceThemePreset` does, so
+ * the legacy `theme` + `background` fallback in each renderer is reached the
+ * same way it was before custom themes existed. A `'custom'` selection whose
+ * base will not parse ALSO returns null: falling back to the studio's previous
+ * look is honest, where falling back to `paper` would silently redesign the page.
+ */
+export function resolveThemePreset(sel: ThemeSelection): SurfaceThemePreset | null {
+  if (sel.presetId === 'custom') {
+    if (!sel.base) return null
+    return deriveThemePreset(
+      sel.base,
+      {
+        light: (sel.variantLight as ThemeVariantId) || DEFAULT_THEME_VARIANT,
+        dark: (sel.variantDark as ThemeVariantId) || DEFAULT_THEME_VARIANT,
+      },
+      sel.baseDark,
+      (sel.mode as ThemeMode) || DEFAULT_THEME_MODE
+    )
+  }
+  return surfaceThemePreset(sel.presetId)
 }
 
 /**

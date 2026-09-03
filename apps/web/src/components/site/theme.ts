@@ -1,4 +1,4 @@
-import { resolveSurfacePalette, surfaceThemePreset } from '@linyup/shared'
+import { resolveSurfacePalette, resolveThemePreset } from '@linyup/shared'
 import type { SiteMeta, SiteCta, SiteFont, SurfaceThemePresetId } from '@linyup/shared'
 import { DEFAULT_ACCENT } from '@/lib/colors'
 import { publicHrefLocalized } from '@/lib/publicRoutes'
@@ -61,10 +61,24 @@ export function buildPalette(
     accentColor?: string
     background?: string
     themePreset?: SurfaceThemePresetId | null
+    // Read only for a 'custom' preset — see resolveThemePreset, which is the one
+    // place a stored theme becomes a palette whichever kind it is.
+    themeBase?: string | null
+    themeBaseDark?: string | null
+    themeVariantLight?: string | null
+    themeVariantDark?: string | null
+    themeMode?: string | null
   },
   systemDark: boolean
 ): SitePalette {
-  const preset = surfaceThemePreset(meta.themePreset)
+  const preset = resolveThemePreset({
+    presetId: meta.themePreset,
+    base: meta.themeBase,
+    baseDark: meta.themeBaseDark,
+    variantLight: meta.themeVariantLight,
+    variantDark: meta.themeVariantDark,
+    mode: meta.themeMode,
+  })
   if (preset) {
     const surfacePalette = resolveSurfacePalette(preset, systemDark)
     const accent = meta.accentColor || preset.defaultAccent

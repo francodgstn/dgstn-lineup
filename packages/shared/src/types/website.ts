@@ -390,6 +390,45 @@ export interface SiteMeta {
    * until the studio picks one (no backfill, no deploy ordering).
    */
   themePreset?: SurfaceThemePresetId
+  /**
+   * The studio's own colour, read ONLY when `themePreset` is 'custom'. Both
+   * halves of the page are derived from it — see `types/themeDerive.ts`.
+   *
+   * NOT the accent. `accentColor` is what must be noticed (a button, a link);
+   * this is what everything else is made of. Keeping them apart is what lets a
+   * deep-green studio have a green PAGE with an orange call to action, which
+   * the fixed presets could not express at all.
+   */
+  themeBase?: string
+  /** Optional second colour driving the DARK half only — the "one light, one
+   *  dark" case. Absent, both halves come from `themeBase`. */
+  themeBaseDark?: string
+  /**
+   * How much of the base reaches the page: 'soft' | 'tinted' | 'deep', chosen
+   * SEPARATELY for each half. A studio commonly wants a quiet light page and a
+   * richly coloured dark one, which one shared setting could not say.
+   */
+  themeVariantLight?: string
+  themeVariantDark?: string
+  /**
+   * 'adaptive' (a light page and a dark page, the default) or 'exact' — the
+   * base colour used as it is, one look for every visitor. See `ThemeMode`.
+   */
+  themeMode?: string
+  /**
+   * Show visitors a light/dark switch in the site header.
+   *
+   * OFF BY DEFAULT, and absent means off. A studio that has chosen how its site
+   * looks has not asked for a control that lets every visitor choose again, and
+   * a toggle appearing on a live site because a field was added is a change
+   * nobody made.
+   *
+   * It renders only on an ADAPTIVE theme — see `WebsiteRenderer`. On a theme
+   * that is deliberately one look ('ink', or any fixed preset) there is no
+   * second half to switch to, so the control would be a button that does
+   * nothing.
+   */
+  themeToggle?: boolean
   /** LEGACY, and only read while `themePreset` is absent. It crosses with
    *  `background`: "auto" with a fixed background follows the viewer for the
    *  text and not for the page. That is the bug presets exist to remove. */
