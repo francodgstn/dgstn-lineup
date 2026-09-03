@@ -72,6 +72,11 @@ import { Tip } from '@/components/ui/tip'
 
 const DEFAULT_ACCENT = '#6366f1'
 
+/** THE ONE COLUMN TEMPLATE. Every grid in this editor uses it — the heading
+ *  strip and each per-length block — which is the whole reason several detached
+ *  tables can sit under a single set of headings and still line up. */
+const GRID_COLS = 'grid min-w-[36rem] grid-cols-[minmax(9rem,1fr)_repeat(4,5.75rem)]'
+
 /** Effects a rate may carry, per offering — `offeringRateEffects` derives them
  *  from the sets the RESOLVER honours, so this editor can no longer offer an
  *  effect that would be ignored (it used to offer `included` on a class, where
@@ -335,6 +340,25 @@ export function ActivityPlanLinks({
     }))
   }, [direction, plans, offerings, offering, plan])
 
+  /** The rows, cut into consecutive runs of one session length. A run per
+   *  length on an appointment; exactly one run of `null` for everything else,
+   *  which is what `grouped` tests. */
+  const groups = useMemo(() => {
+    const out: { key: string; minutes: number | null; rows: typeof rows }[] = []
+    for (const r of rows) {
+      const last = out[out.length - 1]
+      if (last && last.minutes === r.group) last.rows.push(r)
+      else out.push({ key: String(r.group ?? 'all'), minutes: r.group, rows: [r] })
+    }
+    return out
+  }, [rows])
+  /** Narrowed, not asserted: the grouped branch renders THESE, so a group whose
+   *  length is null can never reach a caption that needs a number. */
+  const lengthGroups = groups.filter(
+    (g): g is { key: string; minutes: number; rows: typeof rows } => g.minutes !== null
+  )
+  const grouped = groups.length > 0 && lengthGroups.length === groups.length
+
   const draftFor = (key: string, off: Offering, planId: string): RowDraft =>
     drafts[key] ?? {
       edge: offeringPlanEdge(off.target, planId),
@@ -459,137 +483,12 @@ export function ActivityPlanLinks({
     }
   }
 
-  // ── empty states ──
-  // Both name a destination AND link it (UX-99): the mirror-image empty states
-  // these replace each named one and went nowhere.
-  if (direction === 'from-offering' && plans.length === 0) {
-    return hostedInForm ? (
-      <p className="text-xs text-muted-foreground">{t('noPlans')}</p>
-    ) : (
-      <EmptyLink text={t('noPlans')} action={t('noPlansAction')} href={'/offer/plans' as Route} />
-    )
-  }
-  if (direction === 'from-plan' && offerings.length === 0) {
-    return hostedInForm ? (
-      <p className="text-xs text-muted-foreground">{t('noActivities')}</p>
-    ) : (
-      <EmptyLink
-        text={t('noActivities')}
-        action={t('noActivitiesAction')}
-        href={'/offer/activities' as Route}
-      />
-    )
-  }
 
-  return (
-    <div className="space-y-3">
-      <SectionHeading
-        level="sub"
-        title={direction === 'from-offering' ? t('plansHeading') : t('includesHeading')}
-        description={
-          // SAID ONCE, ABOVE THE TABLES, rather than repeated on each heading
-          // band: a studio meeting three copies of the same plan list needs to
-          // know WHY before it reads the first one, and the reason is the same
-          // for every group.
-          rows.some((r) => r.group !== null)
-            ? t('durationRulesHint')
-            : direction === 'from-offering'
-              ? t('plansHint')
-              : t('includesHint')
-        }
-      />
-
-      {/* ── A TABLE, BECAUSE IT IS ALWAYS THE SAME QUESTION ────────────────
-          Every row asks one question with the same four answers, so the
-          answers are named ONCE, at the top, and each row is a line of radio
-          cells under them. Repeating four labels on every row was most of the
-          noise on this screen, and it hid the thing a studio actually wants to
-          see: the COLUMN — "what is included in everything" read down the page
-          rather than word by word across it.
-
-          Wide content scrolls in its own container (never the page): a phone
-          cannot fit a name plus four columns, and the name column stays put
-          while the answers scroll so a row is never anonymous. */}
-      <div className="overflow-x-auto rounded-md border">
-      {/* `items-stretch` (the default) is load-bearing: a cell grows to the
-          row's height, so the one column holding an input keeps the others
-          filled beside it rather than leaving gaps in the tint. */}
-      <div className="grid min-w-[36rem] grid-cols-[minmax(9rem,1fr)_repeat(4,5.75rem)]">
-        {/* ── THE HEADER: LABELS ONLY ─────────────────────────────────────
-            It draws no bottom rule of its own: every row draws ONE continuous
-            line above itself (see below), and a second line here would sit a
-            hair off it.
-
-            EACH LABEL USED TO BE THE COLUMN'S SET-ALL BUTTON. Two jobs on one
-            target: a heading names a column, and a heading you can press CHANGES
-            EVERY ROW — the most destructive gesture on the screen, on the one
-            element a reader clicks to find out what a column means (Franco,
-            2026-08-31). The set-all moved to its own line below, where it is
-            visibly a control rather than a caption.
-
-            THE LABEL NOW CARRIES THE EXPLANATION, as a tooltip. That sentence
-            used to be printed UNDER EVERY TICKED ROW, and it is invariant per
-            column — "Holders get it for free" says the same thing about the
-            fortieth row as the first, so a list of twelve plans repeated three
-            sentences twelve times. What is genuinely row-specific stayed on the
-            row: the shared-rule warning, the validation error, and the
-            "nothing to reduce here" hint on the dot itself. */}
-        <div className="bg-muted/30 px-3 py-1.5" />
-        {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => (
-          <div
-            key={c}
-            title={
-              c === 'none' ? t('choiceNoneDesc') : tb(`effect_${c}_desc` as const)
-            }
-            className="cursor-help bg-muted/30 px-1 py-1.5 text-center text-[11px] font-medium text-muted-foreground"
-          >
-            {c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)}
-          </div>
-        ))}
-
-        {/* ── THE SET-ALL LINE ────────────────────────────────────────────────
-            Its own row under the headers, because it is an ACTION and the row
-            above it is a caption. Once the answers are columns, "everything is
-            included in this plan" is a column, and setting it row by row is work
-            the shape of the screen already suggests should be one click.
-
-            It only touches rows that can HONOUR the choice — an appointment has
-            no gate to include, and skipping it silently is right: the
-            alternative is refusing the whole gesture over a row the studio was
-            not thinking about. Like every other edit here it lands as an unsaved
-            draft, so it is reviewed before it is written. */}
-        {canEdit && (
-          <>
-            <div className="flex items-center justify-end bg-muted/10 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground/60">
-              {t('setAllLabel')}
-            </div>
-            {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => {
-              const choiceLabel = c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)
-              return (
-                <div key={c} className="flex items-center justify-center bg-muted/10 px-1 py-1">
-                  <Tip label={t('setColumn', { choice: choiceLabel })}>
-                    <button
-                      type="button"
-                      onClick={() => setColumn(c)}
-                      aria-label={t('setColumn', { choice: choiceLabel })}
-                      className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <ChevronsDown className="h-3.5 w-3.5" />
-                    </button>
-                  </Tip>
-                </div>
-              )
-            })}
-          </>
-        )}
-        {rows.map(({ key, off, plan: p, group }, rowIndex) => {
-          // ── THE LENGTH HEADING, once per group ──────────────────────────
-          // A band across all five columns, so the plans under it are visibly
-          // answers about THAT length. Without it the table reads as one list
-          // with every plan name in it two or three times, which is worse than
-          // no grouping at all — the reader cannot tell which duplicate is
-          // which.
-          const startsGroup = group !== null && group !== rows[rowIndex - 1]?.group
+  /** ONE ROW OF THE MATCHER, lifted out of the map so a group can wrap a subset
+   *  of them in its own block. `display: contents` keeps placing its cells into
+   *  whichever grid encloses it, which is what lets several grids share one set
+   *  of column headings. */
+  const renderRow = ({ key, off, plan: p }: (typeof rows)[number]) => {
           const d = draftFor(key, off, p.id)
           // Which controls this offering can actually honour. An appointment has
           // no gate; a course honours one facet or the other depending on its
@@ -662,11 +561,6 @@ export function ActivityPlanLinks({
             // directly into the shared grid, so the columns line up across every
             // row without a table element.
             <div key={key} className="contents">
-              {startsGroup && (
-                <div className="col-span-5 border-t bg-muted/50 px-3 py-1.5 text-xs font-medium">
-                  {t('lengthGroup', { minutes: group })}
-                </div>
-              )}
               {/* ONE LINE, DRAWN ONCE, ACROSS THE WHOLE ROW. Each cell used to
                   carry its own `border-t`, and the row's left accent bar pushed
                   the first of them inwards — so the rule arrived in pieces with
@@ -978,9 +872,179 @@ export function ActivityPlanLinks({
               )}
             </div>
           )
-        })}
-      </div>
-      </div>
+  }
+
+  /** The column strip and the set-all line, named once and rendered into
+   *  whichever grid needs them — the grouped layout has ONE of these above
+   *  several tables, the flat layout has it inside the only one. */
+  const headerCells = (
+    <>
+        {/* ── THE HEADER: LABELS ONLY ─────────────────────────────────────
+            It draws no bottom rule of its own: every row draws ONE continuous
+            line above itself (see below), and a second line here would sit a
+            hair off it.
+
+            EACH LABEL USED TO BE THE COLUMN'S SET-ALL BUTTON. Two jobs on one
+            target: a heading names a column, and a heading you can press CHANGES
+            EVERY ROW — the most destructive gesture on the screen, on the one
+            element a reader clicks to find out what a column means (Franco,
+            2026-08-31). The set-all moved to its own line below, where it is
+            visibly a control rather than a caption.
+
+            THE LABEL NOW CARRIES THE EXPLANATION, as a tooltip. That sentence
+            used to be printed UNDER EVERY TICKED ROW, and it is invariant per
+            column — "Holders get it for free" says the same thing about the
+            fortieth row as the first, so a list of twelve plans repeated three
+            sentences twelve times. What is genuinely row-specific stayed on the
+            row: the shared-rule warning, the validation error, and the
+            "nothing to reduce here" hint on the dot itself. */}
+        <div className="bg-muted/30 px-3 py-1.5" />
+        {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => (
+          <div
+            key={c}
+            title={
+              c === 'none' ? t('choiceNoneDesc') : tb(`effect_${c}_desc` as const)
+            }
+            className="cursor-help bg-muted/30 px-1 py-1.5 text-center text-[11px] font-medium text-muted-foreground"
+          >
+            {c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)}
+          </div>
+        ))}
+
+        {/* ── THE SET-ALL LINE ────────────────────────────────────────────────
+            Its own row under the headers, because it is an ACTION and the row
+            above it is a caption. Once the answers are columns, "everything is
+            included in this plan" is a column, and setting it row by row is work
+            the shape of the screen already suggests should be one click.
+
+            It only touches rows that can HONOUR the choice — an appointment has
+            no gate to include, and skipping it silently is right: the
+            alternative is refusing the whole gesture over a row the studio was
+            not thinking about. Like every other edit here it lands as an unsaved
+            draft, so it is reviewed before it is written. */}
+        {canEdit && (
+          <>
+            <div className="flex items-center justify-end bg-muted/10 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground/60">
+              {t('setAllLabel')}
+            </div>
+            {(['none', 'included', 'percent_off', 'fixed_price'] as const).map((c) => {
+              const choiceLabel = c === 'none' ? t('choiceNone') : tb(`effect_${c}` as const)
+              return (
+                <div key={c} className="flex items-center justify-center bg-muted/10 px-1 py-1">
+                  <Tip label={t('setColumn', { choice: choiceLabel })}>
+                    <button
+                      type="button"
+                      onClick={() => setColumn(c)}
+                      aria-label={t('setColumn', { choice: choiceLabel })}
+                      className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <ChevronsDown className="h-3.5 w-3.5" />
+                    </button>
+                  </Tip>
+                </div>
+              )
+            })}
+          </>
+        )}
+    </>
+  )
+
+  // ── empty states ──
+  // Both name a destination AND link it (UX-99): the mirror-image empty states
+  // these replace each named one and went nowhere.
+  if (direction === 'from-offering' && plans.length === 0) {
+    return hostedInForm ? (
+      <p className="text-xs text-muted-foreground">{t('noPlans')}</p>
+    ) : (
+      <EmptyLink text={t('noPlans')} action={t('noPlansAction')} href={'/offer/plans' as Route} />
+    )
+  }
+  if (direction === 'from-plan' && offerings.length === 0) {
+    return hostedInForm ? (
+      <p className="text-xs text-muted-foreground">{t('noActivities')}</p>
+    ) : (
+      <EmptyLink
+        text={t('noActivities')}
+        action={t('noActivitiesAction')}
+        href={'/offer/activities' as Route}
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <SectionHeading
+        level="sub"
+        title={direction === 'from-offering' ? t('plansHeading') : t('includesHeading')}
+        description={
+          // SAID ONCE, ABOVE THE TABLES, rather than repeated on each heading
+          // band: a studio meeting three copies of the same plan list needs to
+          // know WHY before it reads the first one, and the reason is the same
+          // for every group.
+          rows.some((r) => r.group !== null)
+            ? t('durationRulesHint')
+            : direction === 'from-offering'
+              ? t('plansHint')
+              : t('includesHint')
+        }
+      />
+
+      {/* ── A TABLE, BECAUSE IT IS ALWAYS THE SAME QUESTION ────────────────
+          Every row asks one question with the same four answers, so the
+          answers are named ONCE, at the top, and each row is a line of radio
+          cells under them. Repeating four labels on every row was most of the
+          noise on this screen, and it hid the thing a studio actually wants to
+          see: the COLUMN — "what is included in everything" read down the page
+          rather than word by word across it.
+
+          Wide content scrolls in its own container (never the page): a phone
+          cannot fit a name plus four columns, and the name column stays put
+          while the answers scroll so a row is never anonymous. */}
+      {/* ── SEPARATE TABLES, ONE SET OF HEADINGS ────────────────────────
+          On an appointment the rows are grouped by session length, and a
+          heading BAND inside a single table did not read as a divider: it was
+          one more full-width tinted strip among rows whose own live tint is
+          almost the same value, so it looked like a row and the sections were
+          invisible (Franco, staging, 2026-09-03).
+
+          So the groups are actually detached — each length is its own bordered
+          block, with a caption, separated by real gaps. The column headings
+          stay above all of them because the question and its four answers are
+          the same for every length; repeating the strip per block would be four
+          identical captions arguing they were different.
+
+          THE COLUMNS STILL LINE UP because every block uses the SAME grid
+          template and the same `min-w`, inside one scroll container. The
+          heading strip carries a TRANSPARENT border so it is inset by exactly
+          the pixel the bordered blocks below it are — without it the headings
+          sit one pixel left of the answers they name, which is visible. */}
+      {grouped ? (
+        <div className="overflow-x-auto">
+          <div
+            className={`${GRID_COLS} rounded-md border border-transparent bg-muted/30`}
+          >
+            {headerCells}
+          </div>
+          {lengthGroups.map((g) => (
+            <div key={g.key} className="mt-2.5 overflow-hidden rounded-md border">
+              <div className="min-w-[36rem] border-b bg-muted px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+                {t('lengthGroup', { minutes: g.minutes })}
+              </div>
+              <div className={GRID_COLS}>{g.rows.map(renderRow)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-md border">
+          {/* `items-stretch` (the default) is load-bearing: a cell grows to the
+              row's height, so the one column holding an input keeps the others
+              filled beside it rather than leaving gaps in the tint. */}
+          <div className={GRID_COLS}>
+            {headerCells}
+            {rows.map(renderRow)}
+          </div>
+        </div>
+      )}
 
       {canEdit && !saveHandle && (
         <div className="flex items-center justify-end gap-3 border-t pt-3">
