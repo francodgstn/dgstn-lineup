@@ -870,12 +870,21 @@ Full docs: `scripts/leads/README.md`.
 
 The sandbox hosts **live prospect demos**, so nothing lands in it unattended:
 
-- **Code deploys are manual.** `deploy-sandbox.yml` (functions + rules) is
-  `workflow_dispatch` only — no push trigger. Sandbox can therefore drift behind
-  `main`; deploy by hand before a demo if backend code changed. The **web app**
-  is separate: it rolls out via App Hosting's own GitHub integration, configured
-  in the Firebase Console (Console → App Hosting → backend → Deployment
-  settings), not in this repo.
+- **Code deploys are deliberate, never automatic on merge.** `deploy-sandbox.yml`
+  runs on a **`sandbox-*` tag push** or `workflow_dispatch` — there is no
+  push-to-`main` trigger, so sandbox drifts behind `main` until somebody tags it,
+  and the run then waits on the `sandbox` environment's reviewer approval before
+  it does anything. Deploy before a demo if backend code changed:
+  `git tag -a sandbox-YYYY-MM-DD <sha> -m "why" && git push origin sandbox-YYYY-MM-DD`.
+  A second deploy the same day takes a letter suffix (`sandbox-2026-09-03b`, then
+  `…c`). **The tag list IS the deployment record** — `git tag -l 'sandbox-*'`, and
+  `git log <last-tag>..origin/main` is how far behind sandbox has drifted.
+- **What that deploy covers:** functions + Firestore rules/indexes + Storage
+  rules, and then the **web app**, rolled out on App Hosting (`linyup-web-eu`,
+  the one backend sandbox has) at the tagged commit rather than a branch tip. No
+  `hosting:landing` — sandbox has no landing site. **App Hosting auto-rollout
+  must stay OFF on that backend**: the workflow does the rollout itself, and the
+  Console's own trigger would race it.
 - **The `/try` demos reset on a schedule; nothing else does.**
   `.github/workflows/reseed-sandbox.yml` wipes + reseeds the `/try` playground
   **daily** (~04:00 Zurich / 03:00 UTC) so it stays clean and current (the seed
