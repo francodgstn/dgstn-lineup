@@ -1,8 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from 'react-native-paper';
-import { gradientColors } from '../theme';
+import { useAppTheme } from '../theme';
 
 interface GradientBackgroundProps {
   children: React.ReactNode;
@@ -10,8 +9,8 @@ interface GradientBackgroundProps {
 }
 
 export const GradientBackground: React.FC<GradientBackgroundProps> = ({ children, style }) => {
-  const theme = useTheme();
-  const colors = theme.dark ? gradientColors.dark : gradientColors.light;
+  // Linyup's stops, or the signed-in member's studio look (theme.ts).
+  const colors = useAppTheme().gradient;
 
   return (
     <LinearGradient

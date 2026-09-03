@@ -92,6 +92,21 @@ caught up to declaring) or genuinely mobile-only view/wire shapes with no
 platform-wide owner (the appointment carousel's row, the leaderboard/weekly
 report shapes, `SessionPublicProfile`).
 
+## Theming
+
+`App.tsx` → `TenantThemeProvider` (above `PaperProvider`) → `buildTheme(systemDark,
+resolveTenantTheme(brand, systemDark))`. The brand (`TenantBrand`: preset id,
+accent, logo, name) is set by `ProfileScreen` from the team's `public_profile`
+mirror (`brandFromProfile`), persisted in AsyncStorage, and cleared by
+`AppNavigator` whenever there is no session. `resolveTenantTheme`
+(`src/utils/tenantTheme.ts`) is pure: it resolves the studio's preset through
+`@linyup/shared`'s `resolveSurfacePalette` (a non-adaptive preset such as `ink`
+is dark in both system schemes), lifts the accent in dark mode, and derives
+primary / container / inverse roles, tinted elevation levels and the gradient
+stops. Null = Linyup's own theme, for no brand or anything malformed.
+`theme.semantic` carries the brand-independent colours; `useAppTheme()` is the
+typed accessor.
+
 ## Update channel
 
 `AppNavigator` calls `Updates.checkForUpdateAsync()` on foreground/cold-start

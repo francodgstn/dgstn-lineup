@@ -6,8 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from 'react-native';
 import { useMemo } from 'react';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { TenantThemeProvider, useTenantTheme } from './src/contexts/TenantThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { buildTheme } from './src/theme';
+import { resolveTenantTheme } from './src/utils/tenantTheme';
 
 class ErrorBoundary extends React.Component<any, any> {
   constructor(props: any) {
@@ -41,21 +43,37 @@ class ErrorBoundary extends React.Component<any, any> {
   }
 }
 
-export default function App() {
+// The theme is the system scheme overlaid with the signed-in member's studio
+// look (TenantThemeContext → utils/tenantTheme.ts → theme.ts). The status bar
+// follows the RESOLVED scheme, not the system's: an `ink` studio is dark in
+// light mode too.
+function ThemedApp() {
   const scheme = useColorScheme();
+  const { brand } = useTenantTheme();
 
-  const theme = useMemo(() => buildTheme(scheme === 'dark'), [scheme]);
+  const theme = useMemo(
+    () => buildTheme(scheme === 'dark', resolveTenantTheme(brand, scheme === 'dark')),
+    [scheme, brand]
+  );
 
   return (
+    <PaperProvider theme={theme}>
+      <AuthProvider>
+        <SafeAreaProvider>
+          <AppNavigator />
+        </SafeAreaProvider>
+        <StatusBar style={theme.dark ? 'light' : 'dark'} />
+      </AuthProvider>
+    </PaperProvider>
+  );
+}
+
+export default function App() {
+  return (
     <ErrorBoundary>
-      <PaperProvider theme={theme}>
-        <AuthProvider>
-          <SafeAreaProvider>
-            <AppNavigator />
-          </SafeAreaProvider>
-          <StatusBar style="auto" />
-        </AuthProvider>
-      </PaperProvider>
+      <TenantThemeProvider>
+        <ThemedApp />
+      </TenantThemeProvider>
     </ErrorBoundary>
   );
 }

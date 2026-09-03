@@ -56,7 +56,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           </TouchableRipple>
           <View style={[styles.editBadge, { backgroundColor: theme.colors.primary, borderColor: theme.colors.background }]}
                 pointerEvents="none">
-            <Icon source="pencil" size={10} color="#fff" />
+            <Icon source="pencil" size={10} color={theme.colors.onPrimary} />
           </View>
         </View>
         <View style={styles.nameSection}>

@@ -98,6 +98,20 @@ src/
 carries a `webAppUrl` (used to point a member at their studio's web Space
 when the mobile app isn't in their plan).
 
+## Theming — the app wears the studio's look
+
+The app is "Linyup" (one listing, one bundle id), but after sign-in it re-themes
+to the member's studio: `bioLinkThemePreset` + `bioLinkAccentColor` (the same
+presets and dark-mode rule as the studio's public site, `@linyup/shared`
+`themePreset.ts`) and the studio logo, all read off the `public_profile` mirror
+the app loads anyway. `src/utils/tenantTheme.ts` derives every MD3 primary role
+from the one accent (pure, WCAG-checked in tests); `TenantThemeContext` holds
+and persists the brand (a cold start opens in the studio's colours) and clears
+it with the session. Colours that mean something regardless of brand — status,
+category, a third-party mark — come from `theme.semantic` (`useAppTheme`), never
+from a hex in a component. An org-branded *build* is a different thing
+(`app.config.js` → `APP_VARIANT`, one entry; roadmap §5).
+
 ## Running locally
 
 **Read `.claude/skills/local-env/SKILL.md` and run

@@ -1,9 +1,13 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Icon, Surface, Text, useTheme } from 'react-native-paper';
+import { Avatar, Icon, Surface, Text } from 'react-native-paper';
+import { useAppTheme } from '../../theme';
+import { withAlpha } from '../../utils/color';
 
 interface TeamCardProps {
   teamName: string;
+  /** The studio's logo from its public profile; the shield icon otherwise. */
+  logoUrl?: string | null;
   subscriptionName: string | null;
   subscriptionRecurrence?: string | null;
   lastSeenAt?: any;
@@ -27,8 +31,11 @@ function formatLastSeen(value: unknown): string {
   return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export const TeamCard: React.FC<TeamCardProps> = ({ teamName, subscriptionName, subscriptionRecurrence, lastSeenAt }) => {
-  const theme = useTheme();
+export const TeamCard: React.FC<TeamCardProps> = ({ teamName, logoUrl, subscriptionName, subscriptionRecurrence, lastSeenAt }) => {
+  const theme = useAppTheme();
+  // The studio row carries the STUDIO's colour (the tenant accent); the other
+  // rows keep their semantic tints so they never collide with it.
+  const badge = (color: string) => ({ backgroundColor: withAlpha(color, theme.dark ? 0.16 : 0.09) });
 
   return (
     <Surface
@@ -36,9 +43,13 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, subscriptionName, 
       elevation={2}
     >
       <View style={styles.row}>
-        <View style={[styles.iconBadge, { backgroundColor: theme.dark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)' }]}>
-          <Icon source="shield-outline" size={16} color="#3B82F6" />
-        </View>
+        {logoUrl ? (
+          <Avatar.Image size={28} source={{ uri: logoUrl }} style={styles.logo} />
+        ) : (
+          <View style={[styles.iconBadge, badge(theme.colors.primary)]}>
+            <Icon source="shield-outline" size={16} color={theme.colors.primary} />
+          </View>
+        )}
         <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>TEAM</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
           {teamName}
@@ -48,8 +59,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, subscriptionName, 
       <View style={[styles.divider, { backgroundColor: theme.colors.outlineVariant }]} />
 
       <View style={styles.row}>
-        <View style={[styles.iconBadge, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)' }]}>
-          <Icon source="tag-outline" size={16} color="#6366F1" />
+        <View style={[styles.iconBadge, badge(theme.semantic.info)]}>
+          <Icon source="tag-outline" size={16} color={theme.semantic.info} />
         </View>
         <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>SUBSCRIPTION</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
@@ -64,8 +75,8 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, subscriptionName, 
       <View style={[styles.divider, { backgroundColor: theme.colors.outlineVariant }]} />
 
       <View style={styles.row}>
-        <View style={[styles.iconBadge, { backgroundColor: theme.dark ? 'rgba(20,184,166,0.12)' : 'rgba(20,184,166,0.08)' }]}>
-          <Icon source="calendar-check-outline" size={16} color="#14B8A6" />
+        <View style={[styles.iconBadge, badge(theme.semantic.teal)]}>
+          <Icon source="calendar-check-outline" size={16} color={theme.semantic.teal} />
         </View>
         <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>LAST SESSION</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
@@ -100,6 +111,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  logo: {
+    borderRadius: 8,
   },
   label: {
     fontWeight: '700',

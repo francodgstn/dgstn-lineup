@@ -635,7 +635,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
                 borderless
                 style={{ borderRadius: 16, padding: 4 }}
               >
-                <Icon source="information-outline" size={22} color="#7C3AED" />
+                <Icon source="information-outline" size={22} color={theme.colors.primary} />
               </TouchableRipple>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>

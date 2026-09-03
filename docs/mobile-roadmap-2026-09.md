@@ -193,9 +193,17 @@ QR-only app unless configured.
    rules test; the update-required screen (fails open); a Maestro smoke flow
    (`apps/mobile/.maestro/login.yaml`, not in CI). Sandbox was already in the
    config map since step 1.
-5. **Runtime tenant theming**: `bioLinkThemePreset` / accent / logo from the
-   mirror into the Paper theme and the team card; hex literals migrated to
-   tokens; an `APP_VARIANT` switch in `app.config.js` left at its default.
+5. **Runtime tenant theming** (`claude/mobile-step5-theming`): the signed-in
+   member's studio look — `bioLinkThemePreset` + `bioLinkAccentColor` +
+   `profileImage` off the `public_profile` mirror — drives the whole Paper
+   theme (`utils/tenantTheme.ts`, pure + tested: the SAME preset registry and
+   dark-mode rule as the web, the accent derived into every MD3 primary role,
+   WCAG-checked), persisted for the next cold start and cleared with the
+   session (`contexts/TenantThemeContext.tsx`); the logo on the team card;
+   semantic tokens (`theme.semantic`) replacing the brand-adjacent hex
+   literals (team card, alerts, social actions, profile icons, navigator,
+   header); `APP_VARIANT` in `app.config.js` with one entry (§6). Data
+   palettes deliberately left (§6).
 
 ---
 
@@ -252,6 +260,19 @@ Collected during autonomous execution; none blocks the current steps.
   `buildContactSession` already allowed for the login itself. A widening,
   deliberate, pinned by `loginChain.test.ts`; revert the one predicate call
   if the old primary-only rule was intended.
+- **Hex literals in the DATA palettes were left as they are** — badge
+  gradients, chart series, the attendance calendar, the gamification card
+  (`BadgesCard`, `PerformanceProfileSection`, `GamificationCard`,
+  `AttendanceCalendar`, most of `ProfileScreen`'s detail rows). They are
+  categorical colours, many per file, and remapping them without a device to
+  look at is a visual regression waiting to happen. The brand-adjacent ones
+  (anything that was Linyup purple/indigo and now fights the studio accent)
+  are tokenised; the rest is a device-verified pass.
+- **`APP_VARIANT` has one entry and no consumer.** An org-branded build is a
+  second entry (name, slug, scheme, bundle id, icon set) plus its own EAS
+  project and credentials — i.e. the per-organisation developer accounts §5
+  names as the deciding cost. Nothing in `src/` would change: the runtime
+  theme already follows the studio.
 - **Maestro is not in CI.** The flow exists and runs locally against any
   seeded environment; a device lane needs a Maestro Cloud (or EAS Workflows)
   account and a `development` build per platform — an account decision.

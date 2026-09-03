@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ActivityIndicator, Linking, Share, StyleSheet, View } from 'react-native';
-import { Icon, Surface, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Icon, Surface, Text, TouchableRipple } from 'react-native-paper';
+import { useAppTheme } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FirestoreService } from '../../services/firestore';
 import { ReferralInfo, TeamPublicProfile } from '../../types';
@@ -39,12 +40,6 @@ async function openInstagram(rawUrl: string) {
   }
 }
 
-// ─── accent colours (small touches only — card stays neutral) ─────────────────
-
-const REFERRAL_COLOR = '#6366F1';
-const IG_COLOR = '#E1306C';
-const REVIEW_COLOR = '#F59E0B';
-
 // ─── component ────────────────────────────────────────────────────────────────
 
 interface SocialActionsCardProps {
@@ -56,7 +51,12 @@ export const SocialActionsCard: React.FC<SocialActionsCardProps> = ({
   teamProfile,
   rewardedCount,
 }) => {
-  const theme = useTheme();
+  const theme = useAppTheme();
+  // Accent colours (small touches only — the card stays neutral): the referral
+  // action in the studio's own colour, the third-party marks in theirs.
+  const REFERRAL_COLOR = theme.colors.primary;
+  const IG_COLOR = theme.semantic.instagram;
+  const REVIEW_COLOR = theme.semantic.warning;
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const shimmer = useRef(new Animated.Value(0)).current;
