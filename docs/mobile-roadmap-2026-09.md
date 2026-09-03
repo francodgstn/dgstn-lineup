@@ -306,12 +306,17 @@ building. Everything still listed below is Apple, Google, or the prod key.
   ~~`messagingSenderId` for staging~~ done (`157648925506`); prod + sandbox
   still carry the TODO, and `appId` is read by nothing yet (Terraform outputs).
 - App Store Connect record for `com.dgstn.linyup` → `ascAppId`; ASC API key
-  for `eas submit`; Play service-account JSON in EAS. Until the Apple side
+  for `eas submit`; Play service-account JSON in EAS. **Runbook:**
+  `docs/mobile-store-setup.md`. The long pole is not the setup but Play's
+  12-testers-for-14-days closed test (personal account, post-2023-11-13,
+  per app), which gates production only — internal testing is unaffected. Until the Apple side
   exists the **staging lane is `platform: android`** — an iOS internal build
   needs an ad hoc profile listing device UDIDs (`eas device:create`), so `all`
   would make every run on main red on its iOS half. Widening that one input
   back to `all` is the last step of setting up the Apple account.
-- Store metadata: screenshots (iPhone + iPad while `supportsTablet` is true),
-  a privacy policy that covers the app's users (today's covers website
-  visitors and Customers only), Terms/DPA without the DRAFT banner, a support
-  URL, and the fixed review-access code entered in ASC/Play.
+- Store metadata: screenshots (iPhone + iPad while `supportsTablet` is true —
+  setting it false halves that work permanently), ~~a privacy policy that
+  covers the app's users~~ done (`/privacy` §2.10, plus the
+  `/delete-account` page Play requires alongside the in-app route),
+  Terms/DPA without the DRAFT banner, a support URL, and the fixed
+  review-access code entered in ASC/Play.
