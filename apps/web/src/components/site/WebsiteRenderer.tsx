@@ -12,7 +12,7 @@ import type {
   OrgSiteTeamRef,
   SocialLink,
 } from '@linyup/shared'
-import { surfaceThemePreset } from '@linyup/shared'
+import { resolveThemePreset } from '@linyup/shared'
 import { deriveSiteMenu } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
@@ -93,7 +93,16 @@ export default function WebsiteRenderer({
   // not just the legacy `theme: 'auto'`. Guarding on the old field alone would
   // have left a preset-themed site frozen at "light" for a viewer in dark mode:
   // `buildPalette` asks for `systemDark`, and nothing would ever have set it.
-  const themePreset = surfaceThemePreset(site.meta.themePreset)
+  // Resolved through the SAME door buildPalette uses, so a CUSTOM adaptive theme
+  // (which is not in the registry, so `surfaceThemePreset` would miss it) still
+  // subscribes to the system preference and still enables the toggle.
+  const themePreset = resolveThemePreset({
+    presetId: site.meta.themePreset,
+    light: site.meta.themeLight,
+    dark: site.meta.themeDark,
+    single: site.meta.themeSingle,
+    lighting: site.meta.themeLighting,
+  })
   const followsSystem = themePreset ? themePreset.adaptive : site.meta.theme === 'auto'
   useEffect(() => {
     if (!followsSystem) return

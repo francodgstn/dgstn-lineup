@@ -1,74 +1,57 @@
 'use client'
 
 /**
- * THE THEME PICKER for a public surface — one control, both colour schemes.
+ * THE THEME PICKER for a public surface — a wall of preset tiles plus one
+ * CUSTOM tile whose colours the studio sets directly.
  *
- * It replaces the pair it sits in place of: a light/dark/auto switch AND a free
- * background colour or gradient. Those two crossed, and every crossing was a way
- * to ship an unreadable page — the full list is in the header of
- * `packages/shared/src/types/themePreset.ts`, which is also the registry this
- * renders.
- *
- * ── THE SWATCH SHOWS BOTH HALVES ────────────────────────────────────────────
- * An adaptive preset is drawn split: what a viewer in light mode sees on the
- * left, what a viewer in dark mode sees on the right. That IS the feature — the
- * thing the old controls could not express is "and it looks right in dark mode
- * too" — so the picker shows it rather than claiming it in a caption. A preset
- * that is deliberately one look (`adaptive: false`) is drawn whole, with a chip
- * saying so, because a split swatch would promise an adaptation it does not do.
+ * ── TWO WAYS IN ─────────────────────────────────────────────────────────────
+ * 1. Pick a preset. No effort — a light/dark pair in one hue, drawn split so
+ *    both versions are visible before it is chosen.
+ * 2. Pick the custom tile and set the colours: a light-page colour and a
+ *    dark-page colour, or one colour for the whole site. The colour you pick IS
+ *    the page (see themeDerive.ts) — there is no strength dial, because that was
+ *    the thing that made a simple idea feel complicated.
  *
  * ── NOTHING IS PRESELECTED FOR A LEGACY SURFACE ─────────────────────────────
- * `value` is empty for a studio that set its look with the old controls, and the
- * picker says so instead of highlighting a preset it did not choose. Its page
- * keeps rendering from the legacy fields until it picks one here — see the
- * fallback in `buildPalette` / `resolveBioLinkPalette`. Converting a live public
- * page as a side effect of saving an unrelated field would be a change nobody
- * asked for.
+ * `value` is empty for a studio still on the old fields, and the picker says so
+ * rather than highlighting a preset it did not choose — its page keeps rendering
+ * from the legacy fields until it picks one here.
+ *
+ * The custom controls render only when `onCustomChange` is passed, so a surface
+ * that offers presets only (bio-link, org site) shows the tiles and no more.
  */
 
 import { useTranslations } from 'next-intl'
 import { Check, Moon, Palette } from 'lucide-react'
-import {
-  SURFACE_THEME_PRESETS,
-  THEME_VARIANTS,
-  DEFAULT_THEME_VARIANT,
-  DEFAULT_THEME_MODE,
-  deriveThemePreset,
-} from '@linyup/shared'
+import { SURFACE_THEME_PRESETS, deriveCustomPreset } from '@linyup/shared'
+import type { SurfaceThemePresetId } from '@linyup/shared'
 import { ColorPicker } from '@/components/ui/color-picker'
-import type { SurfaceThemePresetId, ThemeVariantId, ThemeMode } from '@linyup/shared'
-
-/** What the colour input starts on before a studio has chosen. The product's
- *  own primary, so the first custom theme a studio sees is recognisably Linyup
- *  rather than an arbitrary hue. */
-const DEFAULT_CUSTOM_BASE = '#6366f1'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+
+/** Where the custom colours start before a studio has chosen — a light indigo
+ *  page and a deep indigo night, recognisably Linyup rather than an arbitrary
+ *  pair. */
+export const DEFAULT_CUSTOM_LIGHT = '#eef2ff'
+export const DEFAULT_CUSTOM_DARK = '#12162a'
 
 export interface ThemePresetPickerProps {
   /** The chosen preset id, or '' for a surface still on the legacy fields. */
   value: SurfaceThemePresetId | ''
   onChange: (id: SurfaceThemePresetId) => void
-  /** The studio's accent, drawn on each swatch so the pairing is visible before
-   *  it is committed. */
+  /** The studio's accent, drawn on each swatch so the pairing is visible. */
   accentColor?: string
   disabled?: boolean
-  // ── the custom theme, derived from the studio's own colour ───────────────
-  // Absent handlers mean "this surface does not offer a custom theme", and the
-  // tile is not drawn at all — a picker that shows an option it cannot save is
-  // worse than one that shows six.
-  base?: string
-  baseDark?: string
-  /** Strength per half — a studio judges the light and dark pages separately. */
-  variantLight?: string
-  variantDark?: string
-  /** 'adaptive' (two pages) or 'exact' (the colour as it is, one look). */
-  mode?: string
+  // ── the custom theme — absent handlers mean this surface offers presets only ──
+  light?: string
+  dark?: string
+  single?: boolean
+  lighting?: boolean
   onCustomChange?: (next: {
-    base: string
-    baseDark?: string
-    variantLight: string
-    variantDark: string
-    mode: string
+    light: string
+    dark?: string
+    single: boolean
+    lighting: boolean
   }) => void
 }
 
@@ -77,296 +60,265 @@ export function ThemePresetPicker({
   onChange,
   accentColor,
   disabled,
-  base,
-  baseDark,
-  variantLight,
-  variantDark,
-  mode,
+  light,
+  dark,
+  single,
+  lighting,
   onCustomChange,
 }: ThemePresetPickerProps) {
   const t = useTranslations('Themes')
   const offersCustom = !!onCustomChange
   const isCustom = value === 'custom'
-  const effectiveBase = base || DEFAULT_CUSTOM_BASE
-  const vLight = (variantLight as ThemeVariantId) || DEFAULT_THEME_VARIANT
-  const vDark = (variantDark as ThemeVariantId) || DEFAULT_THEME_VARIANT
-  // Derived for the SWATCHES as well as for the page, through the same function
-  // the renderer uses — so what a studio previews here is what ships, rather
-  // than a second approximation of it.
-  const effectiveMode = (mode as ThemeMode) || DEFAULT_THEME_MODE
-  const isExact = effectiveMode === 'exact'
-  const derived = deriveThemePreset(
-    effectiveBase,
-    { light: vLight, dark: vDark },
-    baseDark,
-    effectiveMode
-  )
-  /** One writer for the four fields — they are one choice, and a base that
-   *  landed without the strengths picked beside it would render as something
-   *  nobody chose. */
-  const emit = (
-    patch: Partial<{
-      base: string
-      baseDark?: string
-      variantLight: string
-      variantDark: string
-      mode: string
-    }>
-  ) =>
-    onCustomChange?.({
-      base: effectiveBase,
-      baseDark,
-      variantLight: vLight,
-      variantDark: vDark,
-      mode: effectiveMode,
-      ...patch,
-    })
-  const selectedPreset = isCustom
-    ? derived
-    : (SURFACE_THEME_PRESETS.find((p) => p.id === value) ?? null)
+  const cLight = light || DEFAULT_CUSTOM_LIGHT
+  const cDark = dark || DEFAULT_CUSTOM_DARK
+  const cSingle = !!single
+  const cLighting = !!lighting
 
-  /** Turning the custom tile on has to WRITE the colour, not just select the
-   *  id: a 'custom' preset with no stored base resolves to null and the page
-   *  would fall back to its legacy look with no explanation. */
+  // Derived through the SAME function the renderer uses, so a swatch is never a
+  // second approximation of the page.
+  const derived = deriveCustomPreset({
+    light: cLight,
+    dark: dark,
+    single: cSingle,
+    lighting: cLighting,
+  })
+
+  /** One writer for the four custom fields — they are one choice. */
+  const emit = (patch: Partial<{ light: string; dark?: string; single: boolean; lighting: boolean }>) =>
+    onCustomChange?.({ light: cLight, dark, single: cSingle, lighting: cLighting, ...patch })
+
+  /** Selecting the custom tile has to WRITE the colours, not just the id: a
+   *  'custom' theme with no stored light colour resolves to null and the page
+   *  would silently fall back to its legacy look. */
   const pickCustom = () => {
     emit({})
     onChange('custom')
   }
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="space-y-3">
+      {/* PROPORTIONAL TILES — four across, so each is about a quarter width and
+          a light/dark pair reads at a glance without a giant swatch. */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {SURFACE_THEME_PRESETS.map((preset) => {
           const selected = preset.id === value
           const accent = accentColor || preset.defaultAccent
           return (
-            <button
+            <Tile
               key={preset.id}
-              type="button"
+              selected={selected}
               disabled={disabled}
               onClick={() => onChange(preset.id)}
-              aria-pressed={selected}
-              className={`group relative overflow-hidden rounded-xl border text-left transition-all disabled:opacity-60 ${
-                selected ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/50'
-              }`}
-            >
-              <div className="flex h-16">
-                {preset.adaptive ? (
-                  <>
-                    <div
-                      className="flex-1"
-                      style={{ background: preset.light.background }}
-                      aria-hidden
-                    />
-                    <div
-                      className="flex-1"
-                      style={{ background: preset.dark.background }}
-                      aria-hidden
-                    />
-                  </>
-                ) : (
-                  <div
-                    className="flex-1"
-                    style={{
-                      background:
-                        preset.fixedScheme === 'light'
-                          ? preset.light.background
-                          : preset.dark.background,
-                    }}
-                    aria-hidden
-                  />
-                )}
-              </div>
-              {/* The accent, drawn over the seam so it is read against both
-                  halves at once — which is exactly how a viewer will meet it. */}
-              <span
-                className="absolute left-1/2 top-8 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/70 shadow"
-                style={{ background: accent }}
-                aria-hidden
-              />
-              {selected && (
-                <span className="absolute right-1.5 top-1.5 rounded-full bg-primary p-0.5 text-primary-foreground">
-                  <Check className="h-3 w-3" />
-                </span>
-              )}
-              <div className="flex items-center gap-1.5 px-2.5 py-2">
-                <span className="truncate text-xs font-medium">
-                  {t(preset.nameKey as Parameters<typeof t>[0])}
-                </span>
-                {!preset.adaptive && (
-                  <Badge variant="outline" className="gap-1 px-1 py-0 text-[9px] font-normal">
-                    <Moon className="h-2.5 w-2.5" />
-                    {t('alwaysDark')}
-                  </Badge>
-                )}
-              </div>
-            </button>
+              accent={accent}
+              lightBg={preset.light.background}
+              darkBg={preset.dark.background}
+              adaptive={preset.adaptive}
+              label={t(preset.nameKey as Parameters<typeof t>[0])}
+              badge={!preset.adaptive ? t('alwaysDark') : undefined}
+            />
           )
         })}
 
-        {/* THE CUSTOM TILE sits with the presets rather than under them: it is
-            another way to answer the same question, and a studio comparing
-            looks should see it beside the six it is choosing between. */}
         {offersCustom && (
-          <button
-            type="button"
+          <Tile
+            selected={isCustom}
             disabled={disabled}
             onClick={pickCustom}
-            aria-pressed={isCustom}
-            className={`group relative overflow-hidden rounded-xl border text-left transition-all disabled:opacity-60 ${
-              isCustom ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/50'
-            }`}
-          >
-            {/* Drawn whole in exact mode, split otherwise — the same rule the
-                fixed presets follow, so the swatch never promises an adaptation
-                the theme does not do. */}
-            <div className="flex h-16">
-              {isExact ? (
-                <div className="flex-1" style={{ background: derived?.light.background }} aria-hidden />
-              ) : (
-                <>
-                  <div className="flex-1" style={{ background: derived?.light.background }} aria-hidden />
-                  <div className="flex-1" style={{ background: derived?.dark.background }} aria-hidden />
-                </>
-              )}
-            </div>
-            <span
-              className="absolute left-1/2 top-8 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/70 shadow"
-              style={{ background: accentColor || derived?.defaultAccent }}
-              aria-hidden
-            />
-            {isCustom && (
-              <span className="absolute right-1.5 top-1.5 rounded-full bg-primary p-0.5 text-primary-foreground">
-                <Check className="h-3 w-3" />
-              </span>
-            )}
-            <div className="flex items-center gap-1.5 px-2.5 py-2">
-              <Palette className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span className="truncate text-xs font-medium">{t('custom')}</span>
-            </div>
-          </button>
+            accent={accentColor || derived?.defaultAccent || DEFAULT_CUSTOM_DARK}
+            lightBg={derived?.light.background ?? cLight}
+            darkBg={derived?.dark.background ?? cDark}
+            adaptive={!cSingle}
+            label={t('custom')}
+            icon={<Palette className="h-3 w-3 shrink-0 text-muted-foreground" />}
+          />
         )}
       </div>
 
-      {/* THE CONTROLS APPEAR ONLY WHEN CUSTOM IS CHOSEN. Shown always, two
-          colour inputs and a three-way switch would read as settings that apply
-          to whatever preset is selected — and they do not. */}
+      {/* THE CUSTOM CONTROLS appear only when the custom tile is chosen —
+          two rows, light then dark, the colour on each; a switch to use one
+          colour; and the lighting effect. */}
       {offersCustom && isCustom && (
         <div className="space-y-3 rounded-lg border p-3">
-          {/* THE MODE COMES FIRST because it decides what the rest of the panel
-              even is: 'exact' has no second page to configure, so the dark row
-              below does not render. */}
-          <div className="flex flex-wrap gap-1.5">
-            {(['adaptive', 'exact'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                disabled={disabled}
-                aria-pressed={effectiveMode === m}
-                onClick={() => emit({ mode: m })}
-                className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
-                  effectiveMode === m ? 'border-primary bg-primary/5 font-medium' : 'hover:border-primary/50'
-                }`}
-              >
-                {t(m === 'adaptive' ? 'modeAdaptive' : 'modeExact')}
-              </button>
-            ))}
-          </div>
+          <ColourRow
+            label={t('lightColour')}
+            value={cLight}
+            disabled={disabled}
+            onChange={(hex) => emit({ light: hex })}
+          />
 
-          {/* ONE ROW PER PAGE — the colour and its strength together, because
-              they are judged together: a studio looks at the light page, sets
-              its colour and how strongly it shows, then does the same for the
-              dark one. Splitting them into a colours block and a strengths
-              block made the reader pair them up by position (Franco,
-              2026-09-03). */}
-          {(isExact
-            ? ([{ key: 'light' as const, label: t('modeExactRow'), colour: effectiveBase, variant: vLight }])
-            : ([
-                { key: 'light' as const, label: t('variantLightLabel'), colour: effectiveBase, variant: vLight },
-                { key: 'dark' as const, label: t('variantDarkLabel'), colour: baseDark || effectiveBase, variant: vDark },
-              ])
-          ).map((row) => (
-            <div key={row.key} className="space-y-1.5">
-              <span className="block text-xs font-medium">{row.label}</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <ColorPicker
-                  value={row.colour}
-                  disabled={disabled}
-                  aria-label={row.label}
-                  className="h-8 w-8"
-                  onChange={(hex) =>
-                    emit(row.key === 'light' ? { base: hex } : { baseDark: hex })
-                  }
-                />
-                {/* The dark row's colour is OPTIONAL: absent it follows the
-                    base, and this is the way back to that — an input cannot
-                    express "unset" by itself. */}
-                {row.key === 'dark' && baseDark && (
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => emit({ baseDark: undefined })}
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                  >
-                    {t('baseDarkClear')}
-                  </button>
-                )}
-                {/* Strength does not apply in exact mode — the colour is used
-                    as it is, which is the whole meaning of the mode. */}
-                {!isExact && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {THEME_VARIANTS.map((v) => {
-                      const on = v.id === row.variant
-                      const preview = deriveThemePreset(
-                        effectiveBase,
-                        row.key === 'light' ? { light: v.id, dark: vDark } : { light: vLight, dark: v.id },
-                        baseDark
-                      )
-                      const swatch =
-                        row.key === 'light' ? preview?.light.background : preview?.dark.background
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          disabled={disabled}
-                          aria-pressed={on}
-                          onClick={() =>
-                            emit(row.key === 'light' ? { variantLight: v.id } : { variantDark: v.id })
-                          }
-                          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
-                            on ? 'border-primary bg-primary/5 font-medium' : 'hover:border-primary/50'
-                          }`}
-                        >
-                          <span
-                            className="h-4 w-6 shrink-0 rounded-sm border"
-                            style={{ background: swatch }}
-                            aria-hidden
-                          />
-                          {t(v.nameKey as Parameters<typeof t>[0])}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+          {/* The dark row is hidden under "one colour", because there is no dark
+              version to set. */}
+          {!cSingle && (
+            <ColourRow
+              label={t('darkColour')}
+              value={cDark}
+              disabled={disabled}
+              onChange={(hex) => emit({ dark: hex })}
+              onReset={dark ? () => emit({ dark: undefined }) : undefined}
+              resetLabel={t('darkAuto')}
+            />
+          )}
+
+          <ToggleRow
+            label={t('singleColour')}
+            hint={t('singleColourHint')}
+            checked={cSingle}
+            disabled={disabled}
+            onChange={(v) => emit({ single: v })}
+          />
+
+          <ToggleRow
+            label={t('lighting')}
+            hint={t('lightingHint')}
+            checked={cLighting}
+            disabled={disabled}
+            onChange={(v) => emit({ lighting: v })}
+          />
         </div>
       )}
 
-      {/* The hint follows the SELECTED preset, not the picker. Saying "comes
-          with a light and a dark version" under a chosen `Ink` would be false —
-          it is dark for everyone, which is why it is a separate kind of preset
-          at all. */}
       <p className="text-xs text-muted-foreground">
         {isCustom
-          ? t(isExact ? 'customExactHint' : 'customHint')
-          : !selectedPreset
+          ? cSingle
+            ? t('customSingleHint')
+            : t('customHint')
+          : !value
             ? t('legacyHint')
-            : selectedPreset.adaptive
+            : SURFACE_THEME_PRESETS.find((p) => p.id === value)?.adaptive
               ? t('adaptiveHint')
               : t('fixedHint')}
       </p>
+    </div>
+  )
+}
+
+function Tile({
+  selected,
+  disabled,
+  onClick,
+  accent,
+  lightBg,
+  darkBg,
+  adaptive,
+  label,
+  badge,
+  icon,
+}: {
+  selected: boolean
+  disabled?: boolean
+  onClick: () => void
+  accent?: string
+  lightBg?: string
+  darkBg?: string
+  adaptive: boolean
+  label: string
+  badge?: string
+  icon?: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`group relative overflow-hidden rounded-xl border text-left transition-all disabled:opacity-60 ${
+        selected ? 'border-primary ring-2 ring-primary/30' : 'hover:border-primary/50'
+      }`}
+    >
+      <div className="flex h-12">
+        {adaptive ? (
+          <>
+            <div className="flex-1" style={{ background: lightBg }} aria-hidden />
+            <div className="flex-1" style={{ background: darkBg }} aria-hidden />
+          </>
+        ) : (
+          <div className="flex-1" style={{ background: lightBg }} aria-hidden />
+        )}
+      </div>
+      {/* The accent over the seam, read against both halves at once. */}
+      <span
+        className="absolute left-1/2 top-6 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/70 shadow"
+        style={{ background: accent }}
+        aria-hidden
+      />
+      {selected && (
+        <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+          <Check className="h-3 w-3" />
+        </span>
+      )}
+      <div className="flex items-center gap-1 px-2 py-1.5">
+        {icon}
+        <span className="truncate text-xs font-medium">{label}</span>
+        {badge && (
+          <Badge variant="outline" className="gap-1 px-1 py-0 text-[9px] font-normal">
+            <Moon className="h-2.5 w-2.5" />
+            {badge}
+          </Badge>
+        )}
+      </div>
+    </button>
+  )
+}
+
+function ColourRow({
+  label,
+  value,
+  disabled,
+  onChange,
+  onReset,
+  resetLabel,
+}: {
+  label: string
+  value: string
+  disabled?: boolean
+  onChange: (hex: string) => void
+  onReset?: () => void
+  resetLabel?: string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <ColorPicker
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        className="h-8 w-8"
+        onChange={onChange}
+      />
+      <span className="text-xs font-medium">{label}</span>
+      {onReset && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onReset}
+          className="ml-auto text-xs text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {resetLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ToggleRow({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string
+  hint: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <Switch checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      <div className="min-w-0">
+        <span className="block text-xs font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </div>
     </div>
   )
 }

@@ -1,96 +1,30 @@
-// ─── A theme derived from the studio's own colour ────────────────────────────
+// ─── A theme built from the studio's own colours ─────────────────────────────
 //
-// WHAT THE REGISTRY COULD NOT SAY. `SURFACE_THEME_PRESETS` is six fixed looks,
-// and read together they have a shape a studio noticed before we did: the light
-// halves are all near-white and the dark halves are all near-black, so the only
-// thing that really varies between them is a faint tint (Franco, 2026-09-03).
-// A studio whose brand is deep green cannot get a deep green site; it can get a
-// white site with a green accent, six ways.
+// WHAT THE PRESETS COULD NOT SAY. The fixed presets are one look each; a studio
+// that wants a page in its own colour picks colours here instead (Franco,
+// 2026-09-03).
 //
-// So this derives a preset from ONE colour instead of choosing between six. The
-// base is NOT the accent — that separation is the point. The accent is what
-// stands out (a button, a link); the base is what everything else is made of.
-// A studio that sets both gets a page built from its brand with a second colour
-// for the things that must be noticed; a studio that sets only a base gets a
-// coherent page with an accent derived from it.
+// THE COLOUR YOU PICK IS THE PAGE. There is no "strength" and no ramp — the
+// earlier version had three of them per half and it was the thing that made a
+// simple idea feel complicated. You choose the light-page colour and the
+// dark-page colour, and those ARE the backgrounds. A switch collapses that to
+// one colour and one look for everyone.
 //
-// ── WHY DERIVED AND NOT STORED ──────────────────────────────────────────────
-// The palettes are computed at read time from `{base, variant}` rather than
-// frozen into Firestore. One source of truth, so a fix to the ramp reaches every
-// tenant, and a studio's stored intent stays "our green" rather than eleven hex
-// values that no longer mean anything if the ramp changes. The cost is that
-// improving the ramp shifts existing pages — which is why the variants below are
-// coarse and named for INTENT ('soft', 'tinted', 'deep') rather than for numbers
-// nobody promised to keep.
+// TWO THINGS ARE STILL DERIVED, because they are consequences of the choice
+// rather than choices of their own:
+//   • the SURFACE (cards, the header bar) steps a few percent away from the
+//     page so it separates from it — lighter on a dark page, darker on a light
+//     one;
+//   • the TEXT SCHEME follows the page's lightness, so a dark colour gets light
+//     text and a light one dark text. Declared on the palette, never sniffed at
+//     render time.
 //
-// ── THE ONE THING THAT IS NOT NEGOTIABLE ────────────────────────────────────
-// A derived palette declares its `scheme` like every other palette, and the
-// derivation guarantees the contrast that declaration claims: the light half is
-// always light enough for dark text, the dark half always dark enough for light
-// text, whatever hue and saturation the studio picked. `clampL` is where that
-// is enforced, and it is why a studio cannot produce an unreadable page by
-// picking a mid-grey — the very failure the preset system was built to remove.
+// THE ONE GUARANTEE. A colour that lands in the unreadable middle — too dark
+// for dark text, too light for light — is nudged to the nearer edge, and only
+// then. Every colour a studio would actually choose as a page is used verbatim;
+// the nudge exists so a mid-grey cannot produce a page nobody can read.
 
 import type { SurfacePalette, SurfaceThemePreset } from './themePreset'
-
-/**
- * How much of the base colour reaches the page.
- *
- * Named for intent rather than for the numbers, because the numbers are allowed
- * to improve and the intent is what a studio chose. Order is picker order.
- */
-export type ThemeVariantId = 'soft' | 'tinted' | 'deep'
-
-export const THEME_VARIANTS: readonly { id: ThemeVariantId; nameKey: string }[] = [
-  // Barely there — the base is a hint, closest to the fixed presets.
-  { id: 'soft', nameKey: 'variantSoft' },
-  // Clearly the studio's colour, still calm enough to read a page on.
-  { id: 'tinted', nameKey: 'variantTinted' },
-  // The dark half stops being near-black and becomes the colour. This is the
-  // one the fixed presets could not express at all.
-  { id: 'deep', nameKey: 'variantDeep' },
-]
-
-export const DEFAULT_THEME_VARIANT: ThemeVariantId = 'tinted'
-
-/**
- * Whether the theme has two halves at all.
- *
- * 'adaptive' derives a light page AND a dark page from the base, and the viewer
- * gets whichever matches their device. That is the default and what most
- * studios want.
- *
- * 'exact' uses the colour AS IT IS: the page background IS the base, and the
- * site is that one look for everyone. It exists because a studio that picked a
- * deep navy or a warm cream did not pick "a hint of navy in a white page" — and
- * under 'adaptive' that is what they got, because every derived light half is
- * pushed up to near-white by construction (Franco, 2026-09-03).
- *
- * The text scheme is decided by the colour's own lightness, so a dark base
- * gives a dark site and a light base a light one. There is nothing to choose
- * and nothing to get wrong.
- */
-export type ThemeMode = 'adaptive' | 'exact'
-
-export const DEFAULT_THEME_MODE: ThemeMode = 'adaptive'
-
-/**
- * THE UNREADABLE MIDDLE, and the one place 'exact' is not exact.
- *
- * A background between these is too dark for dark text and too light for light
- * text — no scheme reads on it. Rather than render a page nobody can use, a
- * base that lands in the band is pushed to the nearer edge: the studio still
- * gets its hue, at the closest lightness that carries type.
- *
- * Everything outside the band is used verbatim, which is every colour a studio
- * would actually choose as a page.
- */
-const UNREADABLE_MIN = 42
-const UNREADABLE_MAX = 62
-
-// ── colour maths ────────────────────────────────────────────────────────────
-// Small and local on purpose: this is the only place in the codebase that needs
-// HSL, and a dependency for forty lines is a dependency to keep updated.
 
 interface Hsl {
   h: number
@@ -142,164 +76,118 @@ function hslToHex({ h, s, l }: Hsl): string {
   return `#${to(r1)}${to(g1)}${to(b1)}`
 }
 
-/** THE CONTRAST GUARANTEE. A palette that declares `scheme: 'dark'` (dark text)
- *  must be light enough to carry it, and vice versa — whatever the studio
- *  picked. Nothing else in this file may widen these bounds. */
-function clampL(l: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, l))
-}
-
-interface Ramp {
-  /** Lightness of the light half's page background / its surface. */
-  lightBg: number
-  lightSurface: number
-  /** Lightness of the dark half's page background / its surface. */
-  darkBg: number
-  darkSurface: number
-  /** How much of the base's saturation survives into each half. */
-  lightSat: number
-  darkSat: number
-}
-
-const RAMPS: Record<ThemeVariantId, Ramp> = {
-  // Near-white and near-black, a breath of hue. Roughly where the fixed presets
-  // already were, kept so "custom" is not a jump.
-  soft: { lightBg: 98, lightSurface: 95, darkBg: 9, darkSurface: 14, lightSat: 30, darkSat: 22 },
-  // The default. The colour is legible on both halves without competing with
-  // page content.
-  tinted: { lightBg: 96, lightSurface: 91, darkBg: 12, darkSurface: 18, lightSat: 55, darkSat: 40 },
-  // The dark half becomes the colour rather than a tinted black — deep navy,
-  // forest, plum. THE reason this module exists.
-  deep: { lightBg: 93, lightSurface: 87, darkBg: 17, darkSurface: 24, lightSat: 80, darkSat: 65 },
-}
-
-/** Bounds, not preferences. See `clampL`. */
-const LIGHT_MIN = 88
-const LIGHT_MAX = 99
-const DARK_MIN = 6
-const DARK_MAX = 26
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
 /**
- * How strongly the colour comes through, chosen PER HALF.
- *
- * One strength for both was the first cut and it could not express the thing
- * studios actually want: a light half that stays quiet in daylight and a dark
- * half that is properly the colour at night (Franco, 2026-09-03). They are two
- * different rooms, and a studio judges them separately.
- *
- * A bare `ThemeVariantId` is still accepted and means "the same in both", which
- * is what every caller that does not care should pass.
+ * THE UNREADABLE MIDDLE. A background between these carries neither dark text
+ * nor light text, so a colour that lands here is pushed to the nearer edge —
+ * keeping its hue, at the closest lightness that reads. Everything outside is
+ * used exactly as picked.
  */
-export interface ThemeVariants {
-  light: ThemeVariantId
-  dark: ThemeVariantId
-}
+const BAND_MIN = 40
+const BAND_MAX = 66
 
-export function normalizeVariants(
-  v: ThemeVariantId | ThemeVariants | null | undefined
-): ThemeVariants {
-  if (!v) return { light: DEFAULT_THEME_VARIANT, dark: DEFAULT_THEME_VARIANT }
-  if (typeof v === 'string') return { light: v, dark: v }
+/** One page background → a full palette. Null if the colour will not parse. */
+function paletteFromColour(hex: string, lighting: boolean): SurfacePalette | null {
+  const hsl = hexToHsl(hex)
+  if (!hsl) return null
+  const l =
+    hsl.l > BAND_MIN && hsl.l < BAND_MAX
+      ? hsl.l - BAND_MIN < BAND_MAX - hsl.l
+        ? BAND_MIN
+        : BAND_MAX
+      : hsl.l
+  const isLightPage = l >= BAND_MAX
+  const bg: Hsl = { h: hsl.h, s: hsl.s, l }
+  // The surface steps AWAY from the page so cards and the header separate from
+  // it either way — darker on a light page, lighter on a dark one.
+  const surface = hslToHex({ ...bg, l: isLightPage ? clamp(l - 5, 0, 100) : clamp(l + 7, 0, 100) })
   return {
-    light: v.light ?? DEFAULT_THEME_VARIANT,
-    dark: v.dark ?? DEFAULT_THEME_VARIANT,
+    background: lighting ? lightingGradient(bg, isLightPage) : hslToHex(bg),
+    surface,
+    // 'dark' means DARK TEXT (a light page); 'light' means light text.
+    scheme: isLightPage ? 'dark' : 'light',
   }
 }
 
 /**
- * Build a preset from a studio's own colour.
- *
- * `baseDark` is optional and is the "two colours, one light one dark" case: a
- * studio whose brand has a separate dark tone gives it here and the dark half
- * is built from that hue instead. Absent, both halves come from `base`, which
- * is the common case and the one the picker leads with.
- *
- * Returns null for an unparseable base so the caller can fall back to a fixed
- * preset rather than render from nothing.
+ * A soft radial glow from the top, instead of a flat fill — the "lighting"
+ * option. Subtle on purpose: it lifts the flatness without becoming a feature
+ * of its own. The surface stays a solid, because the header bar and cards take
+ * an alpha and a gradient cannot.
  */
-export function deriveThemePreset(
-  base: string,
-  variant: ThemeVariantId | ThemeVariants = DEFAULT_THEME_VARIANT,
-  baseDark?: string | null,
-  mode: ThemeMode = DEFAULT_THEME_MODE
-): SurfaceThemePreset | null {
-  const hsl = hexToHsl(base)
-  if (!hsl) return null
-  const darkHsl = (baseDark ? hexToHsl(baseDark) : null) ?? hsl
+function lightingGradient(bg: Hsl, isLightPage: boolean): string {
+  const glow: Hsl = isLightPage
+    ? { h: bg.h, s: clamp(bg.s + 6, 0, 100), l: clamp(bg.l + 4, 0, 100) }
+    : { h: bg.h, s: clamp(bg.s + 16, 0, 100), l: clamp(bg.l + 12, 0, 45) }
+  return `radial-gradient(130% 90% at 50% -10%, ${hslToHex(glow)} 0%, ${hslToHex(bg)} 62%)`
+}
 
-  if (mode === 'exact') {
-    // The colour AS IT IS, nudged out of the unreadable band and no further.
-    const l =
-      hsl.l > UNREADABLE_MIN && hsl.l < UNREADABLE_MAX
-        ? hsl.l - UNREADABLE_MIN < UNREADABLE_MAX - hsl.l
-          ? UNREADABLE_MIN
-          : UNREADABLE_MAX
-        : hsl.l
-    const isLightPage = l >= UNREADABLE_MAX
-    const background = hslToHex({ ...hsl, l })
-    // The surface steps AWAY from the page — lighter on a dark page, darker on
-    // a light one — so cards and the header bar separate from it either way.
-    const surface = hslToHex({ ...hsl, l: isLightPage ? Math.max(0, l - 5) : Math.min(100, l + 7) })
-    const palette: SurfacePalette = {
-      background,
-      surface,
-      // 'dark' means DARK TEXT. A light page takes dark text and vice versa.
-      scheme: isLightPage ? 'dark' : 'light',
-    }
+/** The dark counterpart of a light colour, same hue — used when a studio sets a
+ *  light colour and leaves the dark one to us, so "the dark correlates with the
+ *  light" holds by construction. */
+function correlatedDark(hex: string): string {
+  const hsl = hexToHsl(hex) ?? { h: 220, s: 20, l: 10 }
+  return hslToHex({ h: hsl.h, s: clamp(Math.max(hsl.s, 24), 0, 60), l: 11 })
+}
+
+function accentFrom(hex: string): string {
+  const hsl = hexToHsl(hex) ?? { h: 245, s: 70, l: 60 }
+  return hslToHex({ h: hsl.h, s: Math.max(hsl.s, 55), l: clamp(hsl.l, 42, 60) })
+}
+
+/** What a studio configured for a custom theme. */
+export interface CustomThemeInput {
+  /** The light-page background colour — and, when `single`, the whole site. */
+  light: string
+  /** The dark-page background colour. Absent ⇒ a correlate of `light`. */
+  dark?: string | null
+  /** One colour, one look for everyone — no separate dark version. */
+  single?: boolean
+  /** A soft gradient instead of a flat background. */
+  lighting?: boolean
+}
+
+/**
+ * Build a preset from a studio's own colours.
+ *
+ * `single` gives one look for everyone: the light colour is used as it is, and
+ * whether the site reads light or dark follows that colour's own lightness. The
+ * result is `adaptive: false`, which is what makes the visitor light/dark switch
+ * refuse to render on it — there is no second version to switch to.
+ *
+ * Otherwise the light and dark colours drive their own halves and a viewer gets
+ * whichever matches their device.
+ *
+ * Returns null for an unparseable light colour, so the caller falls back to the
+ * studio's previous look rather than rendering from nothing.
+ */
+export function deriveCustomPreset(input: CustomThemeInput): SurfaceThemePreset | null {
+  const light = paletteFromColour(input.light, !!input.lighting)
+  if (!light) return null
+
+  if (input.single) {
     return {
       id: 'custom',
       nameKey: 'custom',
-      // BOTH HALVES ARE THE SAME PALETTE, and `adaptive: false` is what makes
-      // that a promise rather than a coincidence: the renderer never asks the
-      // viewer's device, and the visitor scheme toggle refuses to render.
-      light: palette,
-      dark: palette,
-      defaultAccent: hslToHex({
-        h: hsl.h,
-        s: Math.max(hsl.s, 45),
-        // Away from the page, so the accent is visible on it.
-        l: isLightPage ? 38 : 66,
-      }),
+      light,
+      dark: light,
+      defaultAccent: accentFrom(input.light),
       adaptive: false,
-      fixedScheme: isLightPage ? 'light' : 'dark',
+      // Both halves are identical, so which one `resolveSurfacePalette` picks
+      // does not matter — 'light' reads it off `preset.light`.
+      fixedScheme: 'light',
     }
   }
 
-  const v = normalizeVariants(variant)
-  // ONE RAMP PER HALF. Each half reads only its own, so the two can differ
-  // freely — and passing a single id keeps them identical, which is the old
-  // behaviour exactly.
-  const lightRamp = RAMPS[v.light] ?? RAMPS[DEFAULT_THEME_VARIANT]
-  const darkRamp = RAMPS[v.dark] ?? RAMPS[DEFAULT_THEME_VARIANT]
-
-  // A near-grey base has no hue worth carrying, so scaling its saturation would
-  // produce a colour cast from rounding rather than from a choice. Below this it
-  // stays neutral and the studio gets a clean monochrome page.
-  const sat = (source: number, pct: number) => (source < 6 ? 0 : (source * pct) / 100)
-
-  const light: SurfacePalette = {
-    background: hslToHex({ h: hsl.h, s: sat(hsl.s, lightRamp.lightSat), l: clampL(lightRamp.lightBg, LIGHT_MIN, LIGHT_MAX) }),
-    surface: hslToHex({ h: hsl.h, s: sat(hsl.s, lightRamp.lightSat), l: clampL(lightRamp.lightSurface, LIGHT_MIN, LIGHT_MAX) }),
-    // 'dark' means DARK TEXT on this background — see SurfacePalette.
-    scheme: 'dark',
-  }
-  const dark: SurfacePalette = {
-    background: hslToHex({ h: darkHsl.h, s: sat(darkHsl.s, darkRamp.darkSat), l: clampL(darkRamp.darkBg, DARK_MIN, DARK_MAX) }),
-    surface: hslToHex({ h: darkHsl.h, s: sat(darkHsl.s, darkRamp.darkSat), l: clampL(darkRamp.darkSurface, DARK_MIN, DARK_MAX) }),
-    scheme: 'light',
-  }
-
+  const dark =
+    paletteFromColour(input.dark || correlatedDark(input.light), !!input.lighting) ?? light
   return {
     id: 'custom',
     nameKey: 'custom',
     light,
     dark,
-    // The accent a studio gets BEFORE it picks one: the base at full strength,
-    // pulled to a lightness that works as a button colour under either half.
-    defaultAccent: hslToHex({ h: hsl.h, s: Math.max(hsl.s, 45), l: clampL(hsl.l, 38, 58) }),
-    // Always adaptive. A derived theme has two real halves by construction, so
-    // there is nothing for a `fixedScheme` to choose between — and a studio that
-    // wants one look picks a fixed preset instead.
+    defaultAccent: accentFrom(input.light),
     adaptive: true,
   }
 }

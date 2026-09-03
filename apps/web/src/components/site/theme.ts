@@ -63,21 +63,19 @@ export function buildPalette(
     themePreset?: SurfaceThemePresetId | null
     // Read only for a 'custom' preset — see resolveThemePreset, which is the one
     // place a stored theme becomes a palette whichever kind it is.
-    themeBase?: string | null
-    themeBaseDark?: string | null
-    themeVariantLight?: string | null
-    themeVariantDark?: string | null
-    themeMode?: string | null
+    themeLight?: string | null
+    themeDark?: string | null
+    themeSingle?: boolean | null
+    themeLighting?: boolean | null
   },
   systemDark: boolean
 ): SitePalette {
   const preset = resolveThemePreset({
     presetId: meta.themePreset,
-    base: meta.themeBase,
-    baseDark: meta.themeBaseDark,
-    variantLight: meta.themeVariantLight,
-    variantDark: meta.themeVariantDark,
-    mode: meta.themeMode,
+    light: meta.themeLight,
+    dark: meta.themeDark,
+    single: meta.themeSingle,
+    lighting: meta.themeLighting,
   })
   if (preset) {
     const surfacePalette = resolveSurfacePalette(preset, systemDark)

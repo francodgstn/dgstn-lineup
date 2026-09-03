@@ -399,22 +399,18 @@ export interface SiteMeta {
    * deep-green studio have a green PAGE with an orange call to action, which
    * the fixed presets could not express at all.
    */
-  themeBase?: string
-  /** Optional second colour driving the DARK half only — the "one light, one
-   *  dark" case. Absent, both halves come from `themeBase`. */
-  themeBaseDark?: string
   /**
-   * How much of the base reaches the page: 'soft' | 'tinted' | 'deep', chosen
-   * SEPARATELY for each half. A studio commonly wants a quiet light page and a
-   * richly coloured dark one, which one shared setting could not say.
+   * Custom theme — the studio's own colours. Read only when `themePreset` is
+   * 'custom'; the colour you pick IS the page background (see themeDerive.ts).
    */
-  themeVariantLight?: string
-  themeVariantDark?: string
-  /**
-   * 'adaptive' (a light page and a dark page, the default) or 'exact' — the
-   * base colour used as it is, one look for every visitor. See `ThemeMode`.
-   */
-  themeMode?: string
+  /** The light-page colour, and the whole site when `themeSingle`. */
+  themeLight?: string
+  /** The dark-page colour. Absent ⇒ a correlate of `themeLight`. */
+  themeDark?: string
+  /** One colour, one look for everyone — no separate dark version. */
+  themeSingle?: boolean
+  /** A soft gradient instead of a flat background. */
+  themeLighting?: boolean
   /**
    * Show visitors a light/dark switch in the site header.
    *
