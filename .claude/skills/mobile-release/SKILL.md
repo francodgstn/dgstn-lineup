@@ -112,11 +112,16 @@ project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
   `.env.*` templates ship `EAS_PROJECT_ID=`).
 - First Play submission is manual: Google requires the very first AAB to be
   uploaded by hand before `eas submit` can target a track.
-- `FIREBASE_API_KEY` per environment — **EAS environment variables**, never
-  `eas.json` `env` (which is a literal string, not interpolated). `development`
-  and `preview` carry the staging key (`plaintext`, so the builder's
-  `expo config` can read it); `production` is still EMPTY, so the release lane
-  cannot build until the prod key is added.
+- `FIREBASE_API_KEY` — **both** `eas.json`'s `env` block per profile **and**
+  an EAS environment variable per environment. Not redundancy: the `env`
+  block is the only thing in scope when `eas build` evaluates app.config.js
+  LOCALLY (eas-cli sets `EXPO_NO_DOTENV=1` there), while the EAS environment
+  variable is what the builder gets and what `eas update --environment`
+  resolves for the OTA path. `development` and `preview` carry the staging
+  key in both; the `store` profile and the `production` environment carry
+  NOTHING, so the release lane cannot build until the prod key is added to
+  both. Write the literal value — `"${FIREBASE_API_KEY}"` is not
+  interpolated and gets baked in as that string.
 - Apple ASC API key, Play service-account JSON — stored on EAS
   (`credentialsSource: remote`).
 
@@ -124,6 +129,12 @@ project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
 
 - `"${FIREBASE_API_KEY}"` in `eas.json` bakes the literal into the app: auth
   fails at runtime, build succeeds.
+- The opposite trap, which cost the first green run on main: NO key in
+  `eas.json` `env` at all. `eas build` evaluates app.config.js locally before
+  upload, the config's own guard throws, `expo config --json` exits 1 with
+  EMPTY stderr, and expo-github-action reports only "failed with exit code
+  1". Nothing anywhere names the cause. An EAS environment variable does not
+  cover this — it is not in scope for that local read.
 - A stale `packages/shared/dist` on the EAS builder: `eas-build-post-install`
   builds shared; if that script is removed, Metro fails to resolve
   `@linyup/shared`.
