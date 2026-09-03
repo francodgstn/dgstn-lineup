@@ -49,6 +49,7 @@ import {
   foldOfferingPlanEdgeUpdates,
   offeringRateChoiceOf,
   offeringRateEffects,
+  offeringRateLengths,
   rateHasAPriceToApplyTo,
   resolveUsageLimit,
   isAppointmentActivity,
@@ -213,6 +214,11 @@ export type EdgeDirection = 'from-offering' | 'from-plan'
  *  see the note above `PlanLinkTarget` in @linyup/shared. */
 export interface Offering {
   id: string
+  /** Row identity, when `id` is not unique among the rows. An appointment is
+   *  expanded to one offering PER SESSION LENGTH in the `from-plan` direction
+   *  — same document, same id, different rule — so the length has to be part of
+   *  what tells two of those rows apart. Defaults to `id`. */
+  key?: string
   name: string
   /** Firestore collection the document lives in — the transaction reads it back
    *  from here before writing. */
@@ -293,11 +299,40 @@ export function ActivityPlanLinks({
   // Rows are the OTHER side. Everything below is written against (offering,
   // plan) pairs, so the two directions differ only in which of the two each row
   // supplies.
+  //
+  // ── ONE TABLE PER SESSION LENGTH, on an appointment ────────────────────────
+  // An appointment carries one member rule PER LENGTH, so "what does this plan
+  // do about this appointment" is not one question — it is one per length, and
+  // a single table answering it once could only ever write one of them. The
+  // rows below are therefore (length × plan) there, and grouped under a heading
+  // at render. Everything else — a class, a course — has one rule and one
+  // group, which is why `group` is null rather than a special case.
   const rows = useMemo(() => {
     if (direction === 'from-offering') {
-      return plans.map((p) => ({ key: p.id, plan: p, off: offering! }))
+      const o = offering!
+      const lengths = offeringRateLengths(o.target)
+      if (!lengths.length) {
+        return plans.map((p) => ({ key: p.id, plan: p, off: o, group: null as number | null }))
+      }
+      return lengths.flatMap((m) =>
+        plans.map((p) => ({
+          key: `${m}:${p.id}`,
+          plan: p,
+          // A TARGET PER LENGTH. Every read below (`offeringPlanEdge`,
+          // `rateDraftOf`, `plansSharingOfferingRate`) dispatches on it, so
+          // pointing it at the length is all it takes for the whole row to be
+          // about that length.
+          off: { ...o, target: { ...o.target, minutes: m } as PlanLinkTarget },
+          group: m as number | null,
+        }))
+      )
     }
-    return offerings.map((o) => ({ key: o.id, plan: plan!, off: o }))
+    return offerings.map((o) => ({
+      key: o.key ?? o.id,
+      plan: plan!,
+      off: o,
+      group: null as number | null,
+    }))
   }, [direction, plans, offerings, offering, plan])
 
   const draftFor = (key: string, off: Offering, planId: string): RowDraft =>
@@ -391,6 +426,10 @@ export function ActivityPlanLinks({
             subTypeId: r.plan.id,
             next: d.edge,
             choice: d.edge.rate ? toChoice(d.rate) : undefined,
+            // WHICH LENGTH this edit is about. It travels with the EDIT, not
+            // with the group's target, because one fold covers every length of
+            // one document — see `foldOfferingPlanEdgeUpdates`.
+            minutes: r.off.target.kind === 'activity' ? r.off.target.minutes : undefined,
           })
           byDoc.set(key, entry)
         }
@@ -447,7 +486,17 @@ export function ActivityPlanLinks({
       <SectionHeading
         level="sub"
         title={direction === 'from-offering' ? t('plansHeading') : t('includesHeading')}
-        description={direction === 'from-offering' ? t('plansHint') : t('includesHint')}
+        description={
+          // SAID ONCE, ABOVE THE TABLES, rather than repeated on each heading
+          // band: a studio meeting three copies of the same plan list needs to
+          // know WHY before it reads the first one, and the reason is the same
+          // for every group.
+          rows.some((r) => r.group !== null)
+            ? t('durationRulesHint')
+            : direction === 'from-offering'
+              ? t('plansHint')
+              : t('includesHint')
+        }
       />
 
       {/* ── A TABLE, BECAUSE IT IS ALWAYS THE SAME QUESTION ────────────────
@@ -533,7 +582,14 @@ export function ActivityPlanLinks({
             })}
           </>
         )}
-        {rows.map(({ key, off, plan: p }) => {
+        {rows.map(({ key, off, plan: p, group }, rowIndex) => {
+          // ── THE LENGTH HEADING, once per group ──────────────────────────
+          // A band across all five columns, so the plans under it are visibly
+          // answers about THAT length. Without it the table reads as one list
+          // with every plan name in it two or three times, which is worse than
+          // no grouping at all — the reader cannot tell which duplicate is
+          // which.
+          const startsGroup = group !== null && group !== rows[rowIndex - 1]?.group
           const d = draftFor(key, off, p.id)
           // Which controls this offering can actually honour. An appointment has
           // no gate; a course honours one facet or the other depending on its
@@ -606,6 +662,11 @@ export function ActivityPlanLinks({
             // directly into the shared grid, so the columns line up across every
             // row without a table element.
             <div key={key} className="contents">
+              {startsGroup && (
+                <div className="col-span-5 border-t bg-muted/50 px-3 py-1.5 text-xs font-medium">
+                  {t('lengthGroup', { minutes: group })}
+                </div>
+              )}
               {/* ONE LINE, DRAWN ONCE, ACROSS THE WHOLE ROW. Each cell used to
                   carry its own `border-t`, and the row's left accent bar pushed
                   the first of them inwards — so the rule arrived in pieces with

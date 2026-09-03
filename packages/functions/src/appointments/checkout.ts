@@ -9,7 +9,13 @@
 import * as admin from 'firebase-admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
-import { GUEST_SNAPSHOT, resolveDurationSale, resolvePaymentOptions } from '@linyup/shared'
+import {
+  GUEST_SNAPSHOT,
+  normalizeBenefit,
+  resolveDurationBenefit,
+  resolveDurationSale,
+  resolvePaymentOptions,
+} from '@linyup/shared'
 import { loadEnabledTeam, requireChargeableAccount } from '../connect/access'
 import {
   assertQuotedAmount,
@@ -178,11 +184,15 @@ export const createAppointmentCheckout = onCall(
     // resolved (possibly discounted) price. Free path callers never reach
     // here — the client only calls checkout after bookAppointment's refusal. ──
     const caller = await resolveAppointmentCaller(request, { ...data, teamId })
+    // THE ONE READER: the member rule for THE LENGTH being bought. `bookAppointment`
+    // resolves the identical rule for the free path — the two must agree, or a
+    // caller is refused at one price and charged another.
+    const durationRule = resolveDurationBenefit(ctx.activity, ctx.chosenDuration.minutes)
     const snapshot = caller.authenticatedContact
       ? await loadContactPaymentSnapshot({
           teamId,
           contact: caller.authenticatedContact,
-          relevantTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+          relevantTypeIds: normalizeBenefit(durationRule)?.subscriptionTypeIds ?? [],
         })
       : GUEST_SNAPSHOT
 
@@ -228,7 +238,7 @@ export const createAppointmentCheckout = onCall(
       {
         kind: 'appointment',
         duration: ctx.chosenDuration,
-        benefit: ctx.activity.memberBenefit ?? null,
+        benefit: durationRule,
       },
       promo.modifier ? { promo: promo.modifier } : undefined
     )

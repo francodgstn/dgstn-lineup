@@ -54,7 +54,7 @@ export async function pass05Contacts(
       const tgtRef = tgt.collection('contacts').doc(d.id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
+        if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
       }
 
       // Track subscription match rate before transforming (transform logs nothing)
@@ -90,7 +90,7 @@ export async function pass05Contacts(
           const subRef = tgt.collection('contacts').doc(d.id).collection(toName).doc(sd.id)
           if (!cfg.dryRun) {
             const existing = await subRef.get()
-            if (existing.exists) { bw.skip(); continue }
+            if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
           }
           const data = transformSubcollectionDoc(fromName, sd.id, sd.data() as Record<string, unknown>)
           bw.set(subRef, data)
@@ -105,7 +105,7 @@ export async function pass05Contacts(
           const evRef = tgt.collection('contacts').doc(d.id).collection('goals').doc(gd.id).collection('evaluations').doc(ev.id)
           if (!cfg.dryRun) {
             const existing = await evRef.get()
-            if (existing.exists) { bw.skip(); continue }
+            if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
           }
           bw.set(evRef, ev.data())
         }

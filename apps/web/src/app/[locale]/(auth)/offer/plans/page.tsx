@@ -22,6 +22,6 @@ export default async function PlansPage({
 }) {
   const { locale } = await params
   const { tab } = await searchParams
-  const path = tab === 'affiliations' ? '/affiliations' : '/offer/catalogue?tab=plans'
+  const path = tab === 'affiliations' ? '/affiliations' : '/manage/offer?tab=plans'
   redirect((locale === 'en' ? path : `/${locale}${path}`) as Route)
 }

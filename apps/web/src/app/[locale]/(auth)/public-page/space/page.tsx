@@ -122,7 +122,7 @@ export default function SpaceSettingsPage() {
           </div>
         </div>
         <Link
-          href={'/offer/online-courses' as Route}
+          href={'/manage/online-courses' as Route}
           className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
         >
           {t('manageContent')}

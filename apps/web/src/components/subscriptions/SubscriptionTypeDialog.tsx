@@ -121,7 +121,7 @@ function emptyDefaults(editing: SubscriptionType | null): SubTypeData {
 }
 
 // Linking an activity to a subscription is NOT done here any more. It lives in
-// /offer/catalogue, which edits the same edge from either side through the one
+// /manage/offer, which edits the same edge from either side through the one
 // writer in @linyup/shared (`activityPlanEdgeUpdate`). This editor used to own a
 // second copy of where that edge is stored — and the copies disagreed: it read
 // only `accessRule`, so every appointment benefit looked unlinked, and an
