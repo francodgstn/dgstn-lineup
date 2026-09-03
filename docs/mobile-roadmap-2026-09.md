@@ -285,15 +285,21 @@ Collected during autonomous execution; none blocks the current steps.
 
 ## 7. What only the owner can do (needed for step 2 to run end to end)
 
-The staging half — EAS project, staging key into EAS environment variables,
-`EXPO_TOKEN`, the first `preview` build — is written as a runbook a local
-agent can execute: `docs/mobile-eas-setup.md`. It was run on 2026-09-03; the
+The staging half — EAS project, the staging key, `EXPO_TOKEN`, the first
+`preview` build — is written as a runbook a local agent can execute:
+`docs/mobile-eas-setup.md`. It was run on 2026-09-03 and is **DONE**. The
 EAS project is **`@francodagostino/linyup`**,
-`f941b285-002a-4bdb-8c42-8c3e5edfab66` (the default in `app.config.js`).
+`f941b285-002a-4bdb-8c42-8c3e5edfab66` (the default in `app.config.js`); CI
+authenticates as the robot user `linyup-eas-robot`.
+
+Both halves of the lane are proven on `main`: a finished `preview` APK, and
+EAS updates published to the `staging` branch at a runtime version that APK
+matches — so the next push that changes only JS publishes an OTA instead of
+building. Everything still listed below is Apple, Google, or the prod key.
 
 - ~~`eas init` in `apps/mobile` (writes `extra.eas.projectId`)~~ — done; the
-  id is a literal in `app.config.js` because the config is dynamic. An
-  `EXPO_TOKEN` repository secret for CI.
+  id is a literal in `app.config.js` because the config is dynamic.
+  ~~An `EXPO_TOKEN` repository secret for CI~~ — done, a robot token.
 - `FIREBASE_API_KEY` in BOTH eas.json `env` and the EAS environment:
   ~~`development` + `preview` → staging~~ done; `production`/`store` → prod
   still owed, in both channels.

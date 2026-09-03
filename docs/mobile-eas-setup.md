@@ -8,6 +8,17 @@ browser are at hand — none of that exists in a cloud session. Scope is
 **staging only**: nothing here touches `linyup-prod`, the stores, or
 `eas submit`.
 
+> **EXECUTED 2026-09-03 — do not run steps 2 and 5 again.** The EAS project
+> `@francodagostino/linyup` (`f941b285-002a-4bdb-8c42-8c3e5edfab66`) exists and
+> is the default in `app.config.js`; `eas init` here would create a SECOND
+> project, and the account owns exactly one. `EXPO_TOKEN` is set (robot user
+> `linyup-eas-robot`), the key is in both channels for `development` and
+> `preview`, and both halves of the lane are proven on `main` — a finished
+> `preview` APK plus EAS updates on the `staging` branch at a matching runtime
+> version. What is left is the Apple/Google work in "Out of scope" below, plus
+> the prod key. Read on for HOW it was done and the corrections it earned; run
+> it again only against a different Expo account.
+
 Paste this into a local session to run it:
 
 > Read `docs/mobile-eas-setup.md` and execute it for staging, step by step.
