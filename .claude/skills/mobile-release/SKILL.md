@@ -100,6 +100,9 @@ A phone can be several store versions behind. Before merging a backend change:
 
 ## Secrets and where they live
 
+The one-time staging setup (project, key, token, first build) is a runbook
+for a local session: `docs/mobile-eas-setup.md`.
+
 - `EXPO_TOKEN` — GitHub repository secret (the CI's EAS identity).
 - `EAS_PROJECT_ID` — set by `eas init` into `app.config.js` (`extra.eas.projectId`
   + `updates.url`); until then OTA is inert and the lanes' update step is a no-op.
