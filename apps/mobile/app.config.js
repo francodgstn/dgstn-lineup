@@ -54,7 +54,38 @@ const environments = {
   },
 }
 
+// ── App variants — the white-label seam, deliberately ONE entry ──────────────
+// A studio's look is a RUNTIME concern (src/utils/tenantTheme.ts re-themes the
+// app from the studio's public profile after sign-in). What a runtime theme
+// cannot change is the store listing: name, icon, bundle id, scheme — and
+// behind those, an App Store Connect record and a Play listing, i.e. developer
+// accounts per organisation (docs/mobile-roadmap-2026-09.md §5). That is the
+// only thing an org-branded variant would add, so it is the only thing this
+// map holds. Adding one = a second entry with its own assets + its own EAS
+// project/credentials; nothing in src/ changes. Until then `APP_VARIANT` is
+// unset and this resolves to Linyup.
+const VARIANTS = {
+  linyup: {
+    name: 'Linyup',
+    slug: 'linyup',
+    scheme: 'linyup',
+    bundleId: 'com.dgstn.linyup',
+    icon: './assets/icon.png',
+    adaptiveIcon: './assets/adaptive-icon.png',
+    // Foreground is a white swoosh on transparency — bg must be brand purple
+    adaptiveIconBackground: '#6d28d9',
+    splash: './assets/splash-icon.png',
+    favicon: './assets/favicon.png',
+  },
+}
+
 export default ({ config }) => {
+  const variantId = process.env.APP_VARIANT || 'linyup'
+  const variant = VARIANTS[variantId]
+  if (!variant) {
+    throw new Error(`Unknown APP_VARIANT: ${variantId} (known: ${Object.keys(VARIANTS).join(', ')})`)
+  }
+
   // Default to the local emulator project (demo-linyup) when no real API key is
   // provided — lets `pnpm start` run against the Firebase emulators with no real
   // Firebase project. EAS staging/prod builds set FIREBASE_API_KEY + FIREBASE_PROJECT_ID.
@@ -111,14 +142,14 @@ export default ({ config }) => {
 
   return {
     ...config,
-    name: 'Linyup',
-    slug: 'linyup',
+    name: variant.name,
+    slug: variant.slug,
     version,
     orientation: 'portrait',
-    icon: './assets/icon.png',
+    icon: variant.icon,
     userInterfaceStyle: 'automatic',
     newArchEnabled: true,
-    scheme: 'linyup',
+    scheme: variant.scheme,
     runtimeVersion: {
       policy: 'fingerprint',
     },
@@ -140,32 +171,32 @@ export default ({ config }) => {
       ],
     ],
     splash: {
-      image: './assets/splash-icon.png',
+      image: variant.splash,
       resizeMode: 'contain',
       backgroundColor: '#ffffff',
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: 'com.dgstn.linyup',
+      bundleIdentifier: variant.bundleId,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
       adaptiveIcon: {
-        // Foreground is a white swoosh on transparency — bg must be brand purple
-        foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#6d28d9',
+        foregroundImage: variant.adaptiveIcon,
+        backgroundColor: variant.adaptiveIconBackground,
       },
-      package: 'com.dgstn.linyup',
+      package: variant.bundleId,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       softwareKeyboardLayoutMode: 'resize',
     },
     web: {
-      favicon: './assets/favicon.png',
+      favicon: variant.favicon,
     },
     extra: {
+      variant: variantId,
       firebase: firebaseConfig,
       useEmulators,
       emulatorPorts,

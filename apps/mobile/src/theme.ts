@@ -1,8 +1,11 @@
-import { MD3DarkTheme, MD3LightTheme, configureFonts } from 'react-native-paper'
+import { MD3DarkTheme, MD3LightTheme, configureFonts, useTheme, type MD3Theme } from 'react-native-paper'
 import merge from 'deepmerge'
+import type { ResolvedTenantTheme } from './utils/tenantTheme'
 
 // Linyup brand — purple accent (hue ~292, matching the web app's oklch primary).
-// All MD3 color roles derived from this base.
+// All MD3 color roles derived from this base. This is the look the app has
+// with NO studio signed in; once a member is in, `buildTheme` overlays their
+// studio's preset + accent (utils/tenantTheme.ts) on top of it.
 
 const fontConfig = {
   displayLarge: { fontFamily: 'System', fontWeight: '700' as const, letterSpacing: 0, lineHeight: 44, fontSize: 32 },
@@ -89,16 +92,66 @@ const darkColors = {
   onErrorContainer: '#FFDAD6',
 }
 
-export function buildTheme(isDark: boolean) {
-  const base = isDark ? MD3DarkTheme : MD3LightTheme
-  return merge(base, {
-    colors: isDark ? darkColors : lightColors,
-    fonts: configureFonts({ config: fontConfig }),
-  })
-}
-
 // Gradient stops used by GradientBackground and any future branded surfaces.
 export const gradientColors = {
   light: ['#FAFAFF', '#F0E8FF', '#E8DCFF'] as const,
   dark: ['#121015', '#1A1028', '#221838'] as const,
+}
+
+// ── Semantic colours ─────────────────────────────────────────────────────────
+// The colours that mean something regardless of the studio's brand: a status,
+// a category, a third-party mark. Components read these through `useAppTheme`
+// instead of carrying their own hex, so a tenant accent never collides with a
+// "success" green — and so the literals live in ONE place per scheme.
+//
+// NOT here, on purpose: the categorical palettes for charts, badge gradients
+// and the attendance calendar (BadgesCard, PerformanceProfileSection,
+// GamificationCard, AttendanceCalendar). Those are data colours, many per
+// file, and re-mapping them blind is a visual regression waiting to happen —
+// a device-verified pass (roadmap §6).
+export const semanticColors = {
+  light: {
+    info: '#3B82F6',
+    success: '#22C55E',
+    warning: '#F59E0B',
+    danger: '#EF4444',
+    teal: '#14B8A6',
+    instagram: '#E1306C',
+  },
+  dark: {
+    info: '#60A5FA',
+    success: '#4ADE80',
+    warning: '#FBBF24',
+    danger: '#F87171',
+    teal: '#2DD4BF',
+    instagram: '#F06292',
+  },
+} as const
+
+export type SemanticColors = (typeof semanticColors)['light']
+
+/** Paper's MD3 theme plus what this app hangs on it. */
+export type AppTheme = MD3Theme & {
+  semantic: SemanticColors
+  /** GradientBackground's stops — Linyup's, or the studio's (tenantTheme). */
+  gradient: readonly [string, string, string]
+}
+
+export const useAppTheme = () => useTheme<AppTheme>()
+
+/**
+ * The theme for one render: the system scheme, overlaid with the signed-in
+ * member's studio look when there is one. A non-adaptive studio preset decides
+ * dark/light itself (`tenant.isDark`), exactly as it does on the web.
+ */
+export function buildTheme(systemDark: boolean, tenant?: ResolvedTenantTheme | null): AppTheme {
+  const isDark = tenant?.isDark ?? systemDark
+  const base = isDark ? MD3DarkTheme : MD3LightTheme
+  const colors = merge(isDark ? darkColors : lightColors, tenant?.colors ?? {})
+  return merge(base, {
+    colors,
+    fonts: configureFonts({ config: fontConfig }),
+    semantic: semanticColors[isDark ? 'dark' : 'light'],
+    gradient: tenant?.gradient ?? gradientColors[isDark ? 'dark' : 'light'],
+  }) as AppTheme
 }

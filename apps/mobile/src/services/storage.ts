@@ -5,6 +5,7 @@ const CODE_ID_KEY = '@linyup_code_id';
 const SELECTED_CONTACT_ID_KEY = '@linyup_contact_id';
 const STAY_LOGGED_IN_KEY = '@linyup_stay_logged_in';
 const SESSION_EXPIRES_KEY = '@linyup_session_expires';
+const TENANT_BRAND_KEY = '@linyup_tenant_brand';
 
 export const StorageService = {
   // Email
@@ -66,8 +67,36 @@ export const StorageService = {
     return val ? Number(val) : null;
   },
 
+  // The signed-in member's studio look (utils/tenantTheme.ts TenantBrand) —
+  // persisted so a cold start opens in the studio's colours. Cleared with auth.
+  async saveTenantBrand(brand: object): Promise<void> {
+    await AsyncStorage.setItem(TENANT_BRAND_KEY, JSON.stringify(brand));
+  },
+
+  async getTenantBrand<T extends object = Record<string, unknown>>(): Promise<T | null> {
+    const val = await AsyncStorage.getItem(TENANT_BRAND_KEY);
+    if (!val) return null;
+    try {
+      const parsed = JSON.parse(val);
+      return parsed && typeof parsed === 'object' ? (parsed as T) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async removeTenantBrand(): Promise<void> {
+    await AsyncStorage.removeItem(TENANT_BRAND_KEY);
+  },
+
   // Clear all auth data
   async clearAuth(): Promise<void> {
-    await AsyncStorage.multiRemove([EMAIL_KEY, CODE_ID_KEY, SELECTED_CONTACT_ID_KEY, STAY_LOGGED_IN_KEY, SESSION_EXPIRES_KEY]);
+    await AsyncStorage.multiRemove([
+      EMAIL_KEY,
+      CODE_ID_KEY,
+      SELECTED_CONTACT_ID_KEY,
+      STAY_LOGGED_IN_KEY,
+      SESSION_EXPIRES_KEY,
+      TENANT_BRAND_KEY,
+    ]);
   }
 };

@@ -44,6 +44,8 @@ import { AlertsCard } from '../components/AlertsCard';
 import { BadgesCard } from '../components/profile/BadgesCard';
 import { SocialActionsCard } from '../components/profile/SocialActionsCard';
 import { TeamCard } from '../components/profile/TeamCard';
+import { useTenantTheme } from '../contexts/TenantThemeContext';
+import { brandFromProfile } from '../utils/tenantTheme';
 import { TeamQrScannerModal } from '../components/profile/TeamQrScannerModal';
 import { SessionPickerModal } from '../components/profile/SessionPickerModal';
 import { GoalsSection } from '../components/profile/GoalsSection';
@@ -124,6 +126,7 @@ export const ProfileScreen: React.FC = () => {
   const scrollRef = useRef<any>(null);
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
+  const { setBrand } = useTenantTheme();
   const [affiliationTerm, setAffiliationTerm] = useState<string>('Affiliation');
   const [rankingSystems, setRankingSystems] = useState<RankingSystem[]>([]);
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
@@ -182,6 +185,9 @@ export const ProfileScreen: React.FC = () => {
         // possible (a contact session cannot read organizations/{id}).
         loadedProfile = await FirestoreService.getTeamPublicProfile(contact.teamId);
         setTeamProfile(loadedProfile);
+        // The studio's look (preset + accent + logo) → the whole app's theme,
+        // persisted for the next cold start. utils/tenantTheme.ts.
+        if (loadedProfile) setBrand(brandFromProfile(loadedProfile));
         setAffiliationTerm(resolveAffiliationTerm(loadedProfile?.affiliation_term));
         setRankingSystems(loadedProfile?.ranking_systems ?? []);
       }
@@ -524,6 +530,7 @@ export const ProfileScreen: React.FC = () => {
           {teamProfile && (
             <TeamCard
               teamName={teamProfile.name}
+              logoUrl={teamProfile.profileImage ?? null}
               subscriptionName={subscriptionTypeName}
               subscriptionRecurrence={contact.subscription_recurrence}
               lastSeenAt={contact.last_seen_at}
@@ -684,8 +691,8 @@ export const ProfileScreen: React.FC = () => {
           <Text variant="titleMedium" style={styles.infoSectionTitle}>PERSONAL DETAILS</Text>
 
           <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF' }]}>
-              <Icon source="cake-variant-outline" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="cake-variant-outline" size={20} color={theme.colors.primary} />
             </View>
             <View style={styles.infoTextContainer}>
               <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>BIRTHDATE & BIRTHPLACE</Text>
@@ -696,8 +703,8 @@ export const ProfileScreen: React.FC = () => {
           </View>
 
           <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(168, 85, 247, 0.15)' : '#F5F3FF' }]}>
-              <Icon source="gender-male-female" size={20} color={theme.dark ? '#A855F7' : '#7C3AED'} />
+            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="gender-male-female" size={20} color={theme.colors.primary} />
             </View>
             <View style={styles.infoTextContainer}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -944,8 +951,8 @@ export const ProfileScreen: React.FC = () => {
                       {websiteLink && (
                         <TouchableRipple onPress={() => Linking.openURL(websiteLink.url).catch(() => undefined)}>
                           <View style={[styles.infoRow, { paddingVertical: 4 }]}>
-                            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}>
-                              <Icon source="web" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                              <Icon source="web" size={20} color={theme.colors.primary} />
                             </View>
                             <View style={styles.infoTextContainer}>
                               <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>Website</Text>
@@ -957,8 +964,8 @@ export const ProfileScreen: React.FC = () => {
                       {generalLinks.map((link, idx) => (
                         <TouchableRipple key={idx} onPress={() => { if (link.url) Linking.openURL(link.url).catch(() => undefined) }}>
                           <View style={[styles.infoRow, { paddingVertical: 4 }]}>
-                            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}>
-                              <Icon source="link-variant" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                              <Icon source="link-variant" size={20} color={theme.colors.primary} />
                             </View>
                             <View style={styles.infoTextContainer}>
                               <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>{link.label}</Text>

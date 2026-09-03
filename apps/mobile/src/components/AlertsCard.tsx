@@ -17,6 +17,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 import { ContactAlert } from '../types';
+import { withAlpha } from '../utils/color';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -77,10 +78,11 @@ export const AlertsCard: React.FC<AlertsCardProps> = ({ alerts }) => {
   // Accent color for the alert card (clean alerts)
   const isDark = theme.dark;
 
-  // Use a softer Indigo/Blue for a "messaging" feel rather than "warning"
-  const alertColor = '#6366F1';
-  const accentBg = isDark ? 'rgba(99, 102, 241, 0.12)' : '#F5F7FF';
-  const accentBorder = isDark ? 'rgba(99, 102, 241, 0.3)' : '#E0E7FF';
+  // The studio's own messages, in the studio's colour (the tenant accent) —
+  // a "messaging" tint rather than a warning one.
+  const alertColor = theme.colors.primary;
+  const accentBg = withAlpha(alertColor, isDark ? 0.12 : 0.06);
+  const accentBorder = withAlpha(alertColor, isDark ? 0.3 : 0.18);
 
   const styles = createStyles(theme);
 
@@ -105,7 +107,7 @@ export const AlertsCard: React.FC<AlertsCardProps> = ({ alerts }) => {
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : '#EEF2FF' },
+                { backgroundColor: withAlpha(alertColor, isDark ? 0.2 : 0.1) },
               ]}
             >
               <Icon
@@ -118,7 +120,7 @@ export const AlertsCard: React.FC<AlertsCardProps> = ({ alerts }) => {
               <Text
                 variant="bodyMedium"
                 numberOfLines={isExpanded ? undefined : 2}
-                style={[styles.messageText, { color: isDark ? '#E0E7FF' : '#3730A3', fontWeight: '500' }]}
+                style={[styles.messageText, { color: isDark ? theme.colors.onSurface : theme.colors.onPrimaryContainer, fontWeight: '500' }]}
               >
                 {alert.message}
               </Text>
@@ -127,7 +129,7 @@ export const AlertsCard: React.FC<AlertsCardProps> = ({ alerts }) => {
               <Icon
                 source={isExpanded ? 'chevron-up' : 'chevron-down'}
                 size={20}
-                color={isDark ? 'rgba(99, 102, 241, 0.6)' : '#6366F1'}
+                color={isDark ? withAlpha(alertColor, 0.6) : alertColor}
               />
             )}
           </View>
