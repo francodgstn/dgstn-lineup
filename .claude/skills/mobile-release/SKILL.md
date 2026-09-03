@@ -125,11 +125,13 @@ Apple/Google (see the roadmap §7), plus the prod key.
   block is the only thing in scope when `eas build` evaluates app.config.js
   LOCALLY (eas-cli sets `EXPO_NO_DOTENV=1` there), while the EAS environment
   variable is what the builder gets and what `eas update --environment`
-  resolves for the OTA path. `development` and `preview` carry the staging
-  key in both; the `store` profile and the `production` environment carry
-  NOTHING, so the release lane cannot build until the prod key is added to
-  both. Write the literal value — `"${FIREBASE_API_KEY}"` is not
-  interpolated and gets baked in as that string.
+  resolves for the OTA path. `development` and `preview` carry the staging key
+  in both. The `store` profile TEMPORARILY carries the STAGING key too, so the
+  Play closed test could start before the prod key was decided — the release
+  lane refuses a `mobile-v*` tag while its `FIREBASE_PROJECT_ID` is anything but
+  `linyup-prod`, so this cannot ship by accident. The `production` EAS
+  environment still carries nothing. Write the literal value —
+  `"${FIREBASE_API_KEY}"` is not interpolated and gets baked in as that string.
 - Apple ASC API key, Play service-account JSON — stored on EAS
   (`credentialsSource: remote`).
 

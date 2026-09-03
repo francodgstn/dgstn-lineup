@@ -128,12 +128,21 @@ cd apps/mobile
 npx eas-cli build --profile store --platform android
 ```
 
-This needs `FIREBASE_API_KEY` for **`linyup-prod`** in the `store` profile's
-`env` block *and* in the `production` EAS environment — see
-`docs/mobile-eas-setup.md` step 5 for why both, and why omitting the `env` half
-fails with an empty error. **Neither is set yet.** Adding the prod key is a
-deliberate decision; take it here, or point the `store` profile at
-`linyup-staging` for the qualification builds and switch before going public.
+**The `store` profile targets `linyup-staging`** — decided 2026-09-03, so the
+clock can start without the production key being settled. Know what you are
+trading: testers sign into **seeded demo studios**, not a real school, and
+staging is wiped and reseeded, so anything they do there is disposable. That
+satisfies the mechanical requirement (12 opted in, 14 continuous days); it does
+NOT give Google's engagement check real members making real bookings. Recruit
+testers who are fine with a demo — friends and colleagues, not your studio's
+members.
+
+**Before going public**, set `FIREBASE_PROJECT_ID` back to `linyup-prod` and put
+the prod key in the `store` profile's `env` block *and* the `production` EAS
+environment (`docs/mobile-eas-setup.md` step 5 explains why both, and why
+omitting the `env` half fails with an empty error). You cannot forget this: the
+release lane refuses a `mobile-v*` tag while that value is anything but
+`linyup-prod`.
 
 **d. Upload that AAB by hand.** Google requires the first one to be uploaded
 manually before `eas submit` can target a track. Play Console → Testing →

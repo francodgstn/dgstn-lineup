@@ -111,16 +111,17 @@ jobs:
       - name: Evaluate app config per build profile, as `eas build` does
         working-directory: apps/mobile
         run: |
-          for profile in development preview; do
+          for profile in development preview store; do
             echo "== profile: $profile =="
             env EXPO_NO_DOTENV=1 \
               $(node -p "Object.entries(require('./eas.json').build['$profile'].env||{}).map(([k,v])=>k+'='+v).join(' ')") \
               npx expo config --type public > /dev/null
           done
 
-      # `store` cannot join the loop above until the prod key is in its `env`.
-      # Until then, check only that the config KNOWS linyup-prod — a placeholder
-      # key is fine for that one question and is not a substitute for the loop.
+      # `store` is in the loop above now that it carries a key. It points at
+      # linyup-STAGING for the moment (see the release job below), so nothing in
+      # that loop exercises linyup-prod any more — this step is what keeps the
+      # prod project id honest. A placeholder key is fine for that one question.
       - name: Prod project id is known to the config
         working-directory: apps/mobile
         run: FIREBASE_PROJECT_ID=linyup-prod FIREBASE_API_KEY=ci-placeholder npx expo config --type public > /dev/null
@@ -179,6 +180,21 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v7
+
+      # The `store` profile is TEMPORARILY pointed at linyup-staging so the Play
+      # closed test can start without the prod key being decided
+      # (docs/mobile-store-setup.md). A `mobile-v*` tag means a REAL release, and
+      # a store build that talks to staging would put real members on seeded demo
+      # data that gets wiped and reseeded. eas.json cannot hold a comment saying
+      # so, and a note in a doc is not a guard — this is.
+      - name: The store profile must target production
+        run: |
+          id=$(node -p "require('./apps/mobile/eas.json').build.store.env.FIREBASE_PROJECT_ID")
+          if [ "$id" != "linyup-prod" ]; then
+            echo "::error::eas.json store profile targets $id, not linyup-prod — switch it back, with the prod key, before tagging a release. See docs/mobile-store-setup.md."
+            exit 1
+          fi
+          echo "store profile targets $id"
 
       - uses: pnpm/action-setup@v6
 

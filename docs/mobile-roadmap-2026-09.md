@@ -301,8 +301,10 @@ building. Everything still listed below is Apple, Google, or the prod key.
   id is a literal in `app.config.js` because the config is dynamic.
   ~~An `EXPO_TOKEN` repository secret for CI~~ — done, a robot token.
 - `FIREBASE_API_KEY` in BOTH eas.json `env` and the EAS environment:
-  ~~`development` + `preview` → staging~~ done; `production`/`store` → prod
-  still owed, in both channels.
+  ~~`development` + `preview` → staging~~ done. The `store` profile TEMPORARILY
+  targets staging too (2026-09-03) so the Play closed test could start; the prod
+  key is still owed in both channels, and the release lane refuses a `mobile-v*`
+  tag until `store` points at `linyup-prod` again.
   ~~`messagingSenderId` for staging~~ done (`157648925506`); prod + sandbox
   still carry the TODO, and `appId` is read by nothing yet (Terraform outputs).
 - App Store Connect record for `com.dgstn.linyup` → `ascAppId`; ASC API key
