@@ -37,23 +37,23 @@ function PreviewCard({
   const k = ink(palette.scheme)
   return (
     <div className="overflow-hidden rounded-lg border" style={{ borderColor: k.border }}>
-      {/* the page */}
-      <div style={{ background: palette.background }}>
-        {/* a header bar, from the surface — the one place the surface shows */}
+      {/* THE PAGE, with the scheme label sitting directly on it. */}
+      <div className="space-y-2 p-2.5" style={{ background: palette.background }}>
+        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: k.muted }}>
+          {label}
+        </span>
+        {/* THE CARD — the surface, floating on the page. It is neutral on
+            purpose, so it comes out of a coloured background rather than
+            blending into it. The heading, text and button live on it, which is
+            where they live on the real site. */}
         <div
-          className="flex items-center justify-between px-3 py-1.5"
-          style={{ background: palette.surface, borderBottom: `1px solid ${k.border}` }}
+          className="space-y-2 rounded-md border p-2.5 shadow-sm"
+          style={{ background: palette.surface, borderColor: k.border }}
         >
-          <span className="text-[11px] font-semibold" style={{ color: k.text }}>
-            {label}
-          </span>
-          <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
-        </div>
-        <div className="space-y-2 px-3 py-3">
           <div className="text-sm font-bold leading-tight" style={{ color: k.text }}>
             Aa
           </div>
-          <div className="h-1.5 w-full rounded-full" style={{ background: k.text, opacity: 0.8 }} />
+          <div className="h-1.5 w-full rounded-full" style={{ background: k.text, opacity: 0.78 }} />
           <div className="h-1.5 w-2/3 rounded-full" style={{ background: k.muted }} />
           <span
             className="mt-1 inline-block rounded-md px-2.5 py-1 text-[10px] font-medium"

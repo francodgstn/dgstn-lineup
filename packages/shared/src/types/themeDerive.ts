@@ -79,6 +79,30 @@ function hslToHex({ h, s, l }: Hsl): string {
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
 /**
+ * THE CARD COLOUR, kept NEUTRAL so cards lift off the page.
+ *
+ * TWO FIXED SHADES, not a derived one: a card that shared the page's hue blended
+ * into a coloured page, and even a whisper of hue looked like a tint that did
+ * not quite match. So the card is a plain near-white on a light page and a plain
+ * dark neutral on a dark one — it comes out because it is hueless, whatever the
+ * page's colour (Franco, 2026-09-03). Not dynamic on purpose: one grey to
+ * recognise across every theme.
+ */
+const SURFACE_LIGHT = '#f6f7f9'
+const SURFACE_DARK = '#1b1e25'
+
+function neutralSurfaceHsl(bg: Hsl): string {
+  return bg.l >= BAND_MAX ? SURFACE_LIGHT : SURFACE_DARK
+}
+
+/** The neutral card colour for a page background — the exported form used to
+ *  build the fixed presets, so they and the custom themes share one rule. */
+export function neutralSurface(hex: string): string {
+  const hsl = hexToHsl(hex)
+  return hsl ? neutralSurfaceHsl(hsl) : SURFACE_LIGHT
+}
+
+/**
  * THE UNREADABLE MIDDLE. A background between these carries neither dark text
  * nor light text, so a colour that lands here is pushed to the nearer edge —
  * keeping its hue, at the closest lightness that reads. Everything outside is
@@ -99,12 +123,10 @@ function paletteFromColour(hex: string, lighting: boolean): SurfacePalette | nul
       : hsl.l
   const isLightPage = l >= BAND_MAX
   const bg: Hsl = { h: hsl.h, s: hsl.s, l }
-  // The surface steps AWAY from the page so cards and the header separate from
-  // it either way — darker on a light page, lighter on a dark one.
-  const surface = hslToHex({ ...bg, l: isLightPage ? clamp(l - 5, 0, 100) : clamp(l + 7, 0, 100) })
   return {
     background: lighting ? lightingGradient(bg, isLightPage) : hslToHex(bg),
-    surface,
+    // Neutral, so cards come out of the page rather than blending into it.
+    surface: neutralSurfaceHsl(bg),
     // 'dark' means DARK TEXT (a light page); 'light' means light text.
     scheme: isLightPage ? 'dark' : 'light',
   }

@@ -143,3 +143,38 @@ describe('resolveThemePreset — one door for both kinds', () => {
     assert.equal(SURFACE_THEME_PRESETS.find((p) => p.id === ('mono' as string)), undefined)
   })
 })
+
+// Neutrality is measured by RGB CHROMA (max-min channel), not HSL saturation:
+// near white, HSL saturation balloons on a one-point channel spread, so #fdfcfc
+// reads as "20% saturated" while being visibly neutral. Chroma is what the eye
+// actually sees.
+function chroma(hex: string): number {
+  const m = hex.replace('#', '')
+  const r = parseInt(m.slice(0, 2), 16)
+  const g = parseInt(m.slice(2, 4), 16)
+  const b = parseInt(m.slice(4, 6), 16)
+  return Math.max(r, g, b) - Math.min(r, g, b)
+}
+
+describe('deriveCustomPreset — the card is neutral, so it comes out of the page', () => {
+  it('a strongly-tinted page gets a near-hueless card', () => {
+    const p = deriveCustomPreset({ light: '#0a3d0a' })! // saturated green
+    assert.ok(chroma(p.dark.surface) <= 20, `card chroma ${chroma(p.dark.surface)} should be near-neutral`)
+    assert.ok(chroma(p.dark.surface) < chroma('#0a3d0a'), 'and far less coloured than the page')
+  })
+
+  it('a light page gets a near-white card, a dark page a light-neutral one', () => {
+    const light = deriveCustomPreset({ light: '#f0f7f2' })!
+    const dark = deriveCustomPreset({ light: '#0b1410', single: true })!
+    assert.ok(luminance(light.light.surface) >= 95, 'light card is near white')
+    assert.ok(luminance(dark.light.surface) > luminance('#0b1410'), 'dark card is lighter than its page')
+  })
+
+  it('every preset card is neutral too — one rule', () => {
+    for (const preset of SURFACE_THEME_PRESETS) {
+      for (const half of [preset.light, preset.dark]) {
+        assert.ok(chroma(half.surface) <= 20, `${preset.id} surface not neutral (chroma ${chroma(half.surface)})`)
+      }
+    }
+  })
+})
