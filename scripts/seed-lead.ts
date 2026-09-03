@@ -2783,6 +2783,10 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
     footer: { showSocial: true },
   }
+  // A stored menu, when the profile provides one — else the header derives its
+  // menu from the sections (see WebsiteRenderer). Written to both docs so the
+  // published site and the builder draft agree.
+  const menu = profile.siteMenu ? { menu: profile.siteMenu } : {}
   await db
     .collection('site_drafts')
     .doc(teamId)
@@ -2793,6 +2797,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       enabled: true,
       meta: siteMeta,
       sections,
+      ...menu,
       updated_at: ts(daysFromNow(-12)),
       updatedBy: uid,
     })
@@ -2805,6 +2810,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       name: profile.teamName,
       meta: siteMeta,
       sections,
+      ...menu,
       socialLinks: profile.socialLinks,
       showBranding: false, // studio plan
       published_at: ts(daysFromNow(-12)),

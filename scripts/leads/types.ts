@@ -654,6 +654,15 @@ export interface LeadProfile {
   events: LeadEventDef[]
 
   siteSections: LeadSiteSection[]
+  /**
+   * Optional stored header MENU (a `SiteMenuItem[]` tree). Absent ⇒ the header
+   * is DERIVED from the sections — every nav-visible section becomes a top-level
+   * item, which grows long once a site has many sections. A profile provides
+   * this to demo a realistic GROUPED menu: a few top items, some with children,
+   * and secondary sections folded away (set their `showInNav: false`).
+   * Authored by hand as `{ id, label?, target, children? }`; see SiteMenuItem.
+   */
+  siteMenu?: Record<string, unknown>[]
   courses: LeadCourseDef[]
   products: LeadProductDef[]
   /** Gift cards (settings.giftCards + the team public_profile mirror): lets the
