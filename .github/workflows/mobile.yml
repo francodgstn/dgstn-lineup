@@ -20,9 +20,17 @@
 # an EAS ENVIRONMENT VARIABLE (development/preview/production), never an
 # eas.json `env` literal — eas.json does not interpolate `${…}`.
 #
-# Verify on the FIRST run of each lane (nothing here can be exercised without
-# an EAS project and token): the action's `auto-submit-builds` input name, and
-# that the `production` EAS environment carries FIREBASE_API_KEY.
+# Action version: the `continuous-deploy-fingerprint` sub-action exists on
+# expo-github-action v9 (and main) — NOT on the v8 tag, where the first run on
+# main died with "Can't find action.yml". Its inputs (profile, branch,
+# environment, platform, auto-submit-builds, github-token, working-directory)
+# are verified against v9's action.yml. `environment` is passed explicitly so
+# the EAS environment variables (FIREBASE_API_KEY) apply to `eas update` as
+# well as to the build the profile names.
+#
+# Still to verify on the first REAL run (needs the EAS project + token —
+# docs/mobile-eas-setup.md): that the `preview` / `production` EAS
+# environments carry FIREBASE_API_KEY.
 name: Mobile
 
 on:
@@ -108,7 +116,7 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v9
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
@@ -121,11 +129,12 @@ jobs:
         run: pnpm --filter @linyup/shared run build
 
       - name: OTA update, or preview build when the native fingerprint changed
-        uses: expo/expo-github-action/continuous-deploy-fingerprint@v8
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@v9
         with:
           working-directory: apps/mobile
           profile: preview
           branch: staging
+          environment: preview
           platform: all
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -146,7 +155,7 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v9
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
@@ -159,11 +168,12 @@ jobs:
         run: pnpm --filter @linyup/shared run build
 
       - name: OTA update, or store build + submit when the native fingerprint changed
-        uses: expo/expo-github-action/continuous-deploy-fingerprint@v8
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@v9
         with:
           working-directory: apps/mobile
           profile: store
           branch: production
+          environment: production
           platform: all
           auto-submit-builds: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
