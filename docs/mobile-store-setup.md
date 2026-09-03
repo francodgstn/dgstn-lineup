@@ -54,6 +54,9 @@ moment the first build is uploaded.
   one alongside the in-app route.
 - **The privacy policy covers app users** — `/privacy` §2.10, written for
   members, matching the deletion behaviour above.
+- **The app runs on a real device and the review login works** — verified
+  2026-09-03 on build `0e3f3ee6`, which is what the store reviewer will do
+  first. Two device checks remain open; see `docs/mobile-eas-setup.md` step 7.
 - The app collects **no advertising ID, no third-party analytics, no location,
   and sends no push notifications**. The only thing it writes back is
   `last_seen_at` plus app/OTA version (`utils/mobileAppTelemetry.ts`). This
