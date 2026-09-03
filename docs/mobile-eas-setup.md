@@ -178,9 +178,17 @@ the branch, open a PR, let the `Mobile` check job pass, merge. The push to
 `main` runs the `staging` lane: with the token and the project in place the
 `continuous-deploy-fingerprint` step either publishes an OTA update to the
 `staging` branch or starts a `preview` build, and comments the result on the
-commit. Two inputs the workflow header asks to verify on this first run: the
-action's `auto-submit-builds` input name (release lane only) and that the
+commit. Both inputs the workflow header asked about are now settled, in the
+header itself: `auto-submit-builds` is the action's real input name, and the
 `preview` EAS environment carries `FIREBASE_API_KEY` (step 5).
+
+**On the very first run there is nothing to update, so the lane BUILDS** —
+which is why the staging lane is pinned to `platform: android`. Step 7's
+"Android first, iOS when the owner is at the keyboard" is a property of the
+workflow, not just of the manual build: an iOS internal build with no ad hoc
+provisioning profile fails, and with `platform: all` it would fail on every
+run on `main`. That input is the one thing to widen once the Apple account
+and `eas device:create` are done.
 
 If the lane fails on `eas update`/`eas build` with an auth error, the token is
 wrong or scoped to another account; if it fails computing the fingerprint,

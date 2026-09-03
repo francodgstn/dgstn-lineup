@@ -4,6 +4,7 @@
 #   main merge touching the app/shared → the `staging` channel: an OTA update when a
 #                                        build with the current native fingerprint
 #                                        already exists, a `preview` BUILD otherwise
+#                                        (ANDROID ONLY for now — see the staging job)
 #   mobile-v* tag                      → the `production` channel: same rule with the
 #                                        `store` profile, and builds are auto-submitted
 #
@@ -28,9 +29,11 @@
 # the EAS environment variables (FIREBASE_API_KEY) apply to `eas update` as
 # well as to the build the profile names.
 #
-# Still to verify on the first REAL run (needs the EAS project + token —
-# docs/mobile-eas-setup.md): that the `preview` / `production` EAS
-# environments carry FIREBASE_API_KEY.
+# Settled 2026-09-03, when docs/mobile-eas-setup.md was executed for staging:
+# `auto-submit-builds` IS the input's real name (checked against v9's
+# action.yml), and the `preview` environment carries FIREBASE_API_KEY. The
+# `production` environment does NOT — that is the prod key, deliberately still
+# absent, so the release lane cannot build until it is added.
 name: Mobile
 
 on:
@@ -135,7 +138,14 @@ jobs:
           profile: preview
           branch: staging
           environment: preview
-          platform: all
+          # Android only, deliberately. With no build matching the current
+          # fingerprint the action BUILDS rather than updates, and an iOS
+          # internal-distribution build needs an ad hoc provisioning profile
+          # listing device UDIDs — i.e. an Apple Developer login and
+          # `eas device:create`, neither of which exists yet. `all` here would
+          # make every run on main red on its iOS half. Widen to `all` once
+          # the Apple account is set up (docs/mobile-roadmap-2026-09.md §7).
+          platform: android
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # ── mobile-v* → production channel / store ────────────────────────────────

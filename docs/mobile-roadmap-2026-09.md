@@ -299,7 +299,11 @@ EAS project is **`@francodagostino/linyup`**,
   ~~`messagingSenderId` for staging~~ done (`157648925506`); prod + sandbox
   still carry the TODO, and `appId` is read by nothing yet (Terraform outputs).
 - App Store Connect record for `com.dgstn.linyup` → `ascAppId`; ASC API key
-  for `eas submit`; Play service-account JSON in EAS.
+  for `eas submit`; Play service-account JSON in EAS. Until the Apple side
+  exists the **staging lane is `platform: android`** — an iOS internal build
+  needs an ad hoc profile listing device UDIDs (`eas device:create`), so `all`
+  would make every run on main red on its iOS half. Widening that one input
+  back to `all` is the last step of setting up the Apple account.
 - Store metadata: screenshots (iPhone + iPad while `supportsTablet` is true),
   a privacy policy that covers the app's users (today's covers website
   visitors and Customers only), Terms/DPA without the DRAFT banner, a support
