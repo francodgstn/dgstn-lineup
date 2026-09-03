@@ -11,7 +11,7 @@
 //
 //   bio-link       → /team/bio-link
 //   website        → /plugins/website          (set up via /settings/plugins)
-//   shop           → /offer/catalogue (what the shop sells)
+//   shop           → /manage/offer (what the shop sells)
 //   space          → /public-page/space
 //   booking        → /settings/booking
 //   └ appointments → /schedule/availability    (switched on in /settings/booking)
@@ -257,7 +257,7 @@ export default function PublicPageHub() {
       // settings page here until 2026-09-01; it wrote nothing and only signposted
       // /offer/* and the payment settings, so this row (live dot, preview, and
       // the price-list distinction above) replaced it outright.
-      action: <ManageLink href={'/offer/catalogue' as Route} label={t('manage')} />,
+      action: <ManageLink href={'/manage/offer' as Route} label={t('manage')} />,
     },
     {
       key: 'space', icon: GraduationCap, title: t('surfaceSpace'), desc: t('spaceDesc'),

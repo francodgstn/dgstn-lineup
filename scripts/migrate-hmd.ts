@@ -10,6 +10,9 @@
  * Options:
  *   --org-admin-email <email>  Email of the user who becomes org creator + org_admin (default: franco.dgstn@gmail.com)
  *   --dry-run                  Log writes without committing
+ *   --overwrite                Re-apply current transforms to docs that already exist on the
+ *                              target (default: skip them). Needed whenever a transform has
+ *                              changed since the target was last migrated — see MIGRATE-HMD.md.
  *   --only <pass>                 Run a single pass (see pass names below)
  *   --from-team <teamId>          Resume contacts/sessions from a specific team
  *   --verify                      Run verification after migration
@@ -47,6 +50,7 @@ const { values } = parseArgs({
     'target-emulator': { type: 'boolean', default: false },
     'org-admin-email': { type: 'string', default: DEFAULT_ORG_ADMIN_EMAIL },
     'dry-run':         { type: 'boolean', default: false },
+    'overwrite':       { type: 'boolean', default: false },
     'only':            { type: 'string' },
     'from-team':       { type: 'string' },
     'verify':          { type: 'boolean', default: false },
@@ -71,6 +75,7 @@ const cfg: MigrationConfig = {
   targetEmulator,
   orgAdminEmail:   values['org-admin-email'] ?? DEFAULT_ORG_ADMIN_EMAIL,
   dryRun:          values['dry-run'] ?? false,
+  overwrite:       values['overwrite'] ?? false,
   only:            values['only'],
   fromTeam:        values['from-team'],
 }
@@ -106,6 +111,11 @@ async function run() {
 
   initApps(cfg)
   if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
+  if (cfg.overwrite) {
+    console.log('=== OVERWRITE — existing target docs are re-written from the source ===')
+    console.log('    App-side edits to migrated contacts/sessions/events/check-ins will be replaced.')
+    console.log('    The org doc, the org admin team_members row and the org website are NOT touched.')
+  }
   console.log(`Org admin: ${cfg.orgAdminEmail}`)
 
   await enableEmailPasswordSignIn()

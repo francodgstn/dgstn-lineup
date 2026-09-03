@@ -17,9 +17,11 @@
 
 import {
   resolveActivityAccessRule,
+  resolveDurationBenefit,
   resolveDurationSale,
   normalizeBenefit,
   type ActivityAccessRule,
+  type ActivityDurationBenefit,
   type ActivityMemberBenefit,
   type Benefit,
 } from '@linyup/shared'
@@ -83,6 +85,9 @@ export interface ActivityTermsInput {
    *  legacy appointment shape or the generalized `Benefit`; normalized via
    *  `normalizeBenefit`. */
   memberBenefit?: ActivityMemberBenefit | Benefit | null
+  /** APPOINTMENT-ONLY. The per-length rules — read WITH `memberBenefit`
+   *  through `resolveDurationBenefit`, never on their own. */
+  durationBenefits?: ActivityDurationBenefit[] | null
 }
 
 /** Resolves the structured list of commercial/access terms for one activity.
@@ -109,7 +114,19 @@ export function resolveActivityTerms(a: ActivityTermsInput): ActivityTerm[] {
     // one line); the public surfaces that show it do so via the resolver's
     // `appliedBenefit` on the actual priced option instead (see BookingForm /
     // ShopHome / AppointmentPicker).
-    const benefit = normalizeBenefit(a.memberBenefit)
+    // ── ONE CHIP FOR SEVERAL LENGTHS, OR NONE ──────────────────────────────
+    // The rule is per length now, and this is a ONE-LINE summary of the whole
+    // appointment on a public card. "Included with Premium" when only the
+    // 30-minute length is included would be a lie told to a stranger — so the
+    // chip is shown only when every length says the SAME thing, and otherwise
+    // the card carries its price range alone and the picker quotes the real
+    // per-length price.
+    const perLength = (a.durations?.length ? a.durations : [{ minutes: 60 }]).map((d) =>
+      normalizeBenefit(resolveDurationBenefit(a, d.minutes))
+    )
+    const first = perLength[0] ?? null
+    const unanimous = perLength.every((b) => JSON.stringify(b) === JSON.stringify(first))
+    const benefit = unanimous ? first : null
     const benefitTypeIds = benefit?.subscriptionTypeIds ?? []
     if (benefit && benefitTypeIds.length > 0) {
       if (benefit.effect === 'included') {
