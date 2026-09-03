@@ -135,8 +135,8 @@ capability `student_app` was declared and enforced nowhere.
 | Trigger | Outcome | Intent |
 |---|---|---|
 | PR | `verify.yml` gains mobile lint + unit tests + `expo config` evaluation per profile, plus Firestore rules tests and `concurrency` groups for the whole repo | fail in CI, not on EAS's clock |
-| `main` merge touching `apps/mobile/**` | `eas update --channel staging`; if the native fingerprint changed vs the last preview build → `eas build --profile preview` | automatic, test devices |
-| `mobile-v*` tag | fingerprint unchanged vs the last store build → OTA to the `production` channel; changed → `eas build --profile store` + auto-submit to TestFlight / Play internal | explicit, the owner's call |
+| `main` merge touching `apps/mobile/**` or `packages/shared/**` | the `staging` channel: an OTA update when a `preview` build with the current native fingerprint exists, a `preview` build otherwise (Expo's `continuous-deploy-fingerprint` action) | automatic, test devices |
+| `mobile-v*` tag | the `production` channel, same rule with the `store` profile; a build is auto-submitted to TestFlight and the Play internal track | explicit, the owner's call |
 | `v*` tag | backend + web + landing, exactly as today | unchanged |
 
 Two consequences the web never had, built into step 1:

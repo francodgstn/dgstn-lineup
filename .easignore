@@ -1,0 +1,20 @@
+# What EAS Build does NOT upload. The project lives in apps/mobile but EAS
+# archives the whole git root (the pnpm workspace root), so this file sits at
+# the root next to .gitignore. It only trims weight: every workspace
+# package.json stays in the archive so the root `pnpm install` resolves the
+# lockfile's importers unchanged. Anything the build needs — apps/mobile,
+# packages/shared (built by eas-build-post-install), the root manifests — is
+# never listed here.
+docs/
+infra/
+snapshots/
+scripts/leads/
+.claude/
+.github/
+apps/landing/public/
+apps/landing/dist/
+apps/web/public/
+apps/web/.next/
+apps/admin/.next/
+packages/functions/vendor/
+packages/functions/lib/
