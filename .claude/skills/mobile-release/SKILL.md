@@ -101,15 +101,22 @@ A phone can be several store versions behind. Before merging a backend change:
 ## Secrets and where they live
 
 The one-time staging setup (project, key, token, first build) is a runbook
-for a local session: `docs/mobile-eas-setup.md`.
+for a local session: `docs/mobile-eas-setup.md`. Run 2026-09-03 — the EAS
+project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
 
 - `EXPO_TOKEN` — GitHub repository secret (the CI's EAS identity).
-- `EAS_PROJECT_ID` — set by `eas init` into `app.config.js` (`extra.eas.projectId`
-  + `updates.url`); until then OTA is inert and the lanes' update step is a no-op.
+- `EAS_PROJECT_ID` — the project id is now the DEFAULT in `app.config.js`
+  (`extra.eas.projectId` + `updates.url` are live, so OTA is armed). The env
+  var only redirects a build at another EAS project; an empty value falls
+  back to the default (which is why the config uses `||`, not `??` — the
+  `.env.*` templates ship `EAS_PROJECT_ID=`).
 - First Play submission is manual: Google requires the very first AAB to be
   uploaded by hand before `eas submit` can target a track.
 - `FIREBASE_API_KEY` per environment — **EAS environment variables**, never
-  `eas.json` `env` (which is a literal string, not interpolated).
+  `eas.json` `env` (which is a literal string, not interpolated). `development`
+  and `preview` carry the staging key (`plaintext`, so the builder's
+  `expo config` can read it); `production` is still EMPTY, so the release lane
+  cannot build until the prod key is added.
 - Apple ASC API key, Play service-account JSON — stored on EAS
   (`credentialsSource: remote`).
 

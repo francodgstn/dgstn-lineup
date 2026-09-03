@@ -82,14 +82,19 @@ project (the one the Apple/Google accounts will later be attached to).
 ```bash
 cd apps/mobile
 npx eas-cli init          # or: npx eas-cli project:init
+# non-interactive: it refuses to CREATE without --force, which is the
+# difference between linking an existing project and making a new one
 ```
 
 Because `app.config.js` is dynamic, `eas init` **cannot write the id into the
 config**. It prints the project id (a UUID) and, if the account is an
 organisation, may ask for `owner`. Then, in `app.config.js`:
 
-- make the id the default: `const easProjectId = process.env.EAS_PROJECT_ID ?? '<the uuid>'`
-  (keep the env override — CI and a second account can still redirect it);
+- make the id the default: `const easProjectId = process.env.EAS_PROJECT_ID || '<the uuid>'`
+  (keep the env override — CI and a second account can still redirect it).
+  **`||`, not `??`**: `.env.example` and every `.env.*` copied from it ship an
+  empty `EAS_PROJECT_ID=`, and an empty string is not nullish — with `??` the
+  staging target silently loses `updates.url` and OTA goes inert again;
 - if `eas init` asked for an owner, add `owner: '<account slug>'` next to `slug`.
 
 Verify: `FIREBASE_PROJECT_ID=demo-linyup npx expo config --type public --json | jq '.extra.eas, .updates'`

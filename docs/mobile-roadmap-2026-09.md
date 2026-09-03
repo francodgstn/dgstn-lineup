@@ -287,13 +287,17 @@ Collected during autonomous execution; none blocks the current steps.
 
 The staging half — EAS project, staging key into EAS environment variables,
 `EXPO_TOKEN`, the first `preview` build — is written as a runbook a local
-agent can execute: `docs/mobile-eas-setup.md`.
+agent can execute: `docs/mobile-eas-setup.md`. It was run on 2026-09-03; the
+EAS project is **`@francodagostino/linyup`**,
+`f941b285-002a-4bdb-8c42-8c3e5edfab66` (the default in `app.config.js`).
 
-- `eas init` in `apps/mobile` (writes `extra.eas.projectId`), and an
+- ~~`eas init` in `apps/mobile` (writes `extra.eas.projectId`)~~ — done; the
+  id is a literal in `app.config.js` because the config is dynamic. An
   `EXPO_TOKEN` repository secret for CI.
-- EAS environment variables `FIREBASE_API_KEY` (per environment: `preview` →
-  staging, `production`/`store` → prod); `messagingSenderId` / `appId` for
-  staging and prod (Terraform outputs).
+- EAS environment variables `FIREBASE_API_KEY`: ~~`development` + `preview` →
+  staging~~ done; `production`/`store` → prod still owed.
+  ~~`messagingSenderId` for staging~~ done (`157648925506`); prod + sandbox
+  still carry the TODO, and `appId` is read by nothing yet (Terraform outputs).
 - App Store Connect record for `com.dgstn.linyup` → `ascAppId`; ASC API key
   for `eas submit`; Play service-account JSON in EAS.
 - Store metadata: screenshots (iPhone + iPad while `supportsTablet` is true),
