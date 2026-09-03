@@ -285,6 +285,10 @@ Collected during autonomous execution; none blocks the current steps.
 
 ## 7. What only the owner can do (needed for step 2 to run end to end)
 
+The staging half — EAS project, staging key into EAS environment variables,
+`EXPO_TOKEN`, the first `preview` build — is written as a runbook a local
+agent can execute: `docs/mobile-eas-setup.md`.
+
 - `eas init` in `apps/mobile` (writes `extra.eas.projectId`), and an
   `EXPO_TOKEN` repository secret for CI.
 - EAS environment variables `FIREBASE_API_KEY` (per environment: `preview` →
