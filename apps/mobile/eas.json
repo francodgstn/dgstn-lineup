@@ -53,7 +53,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "FIREBASE_PROJECT_ID": "linyup-prod"
+        "FIREBASE_PROJECT_ID": "linyup-staging",
+        "FIREBASE_API_KEY": "AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg"
       }
     }
   },
