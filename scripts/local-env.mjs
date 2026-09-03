@@ -35,6 +35,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, cpSync, statSync, readdirSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { BUILT_PACKAGES, distState } from './lib/distState.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const WIN = process.platform === 'win32'
@@ -54,6 +55,7 @@ const SERVICES = {
   hub: { port: 4400, label: 'emulator hub', emulator: true },
   logging: { port: 4500, label: 'emulator logging', emulator: true },
   functions: { port: 5001, label: 'functions', emulator: true },
+  metro: { port: 8081, label: 'metro (Expo)' },
   firestore: { port: 8080, label: 'firestore', emulator: true },
   database: { port: 9000, label: 'RTDB', emulator: true },
   auth: { port: 9099, label: 'auth', emulator: true },
@@ -333,6 +335,17 @@ async function cmdStatus(flags) {
   console.log(`  checkout  ${ROOT}`)
   console.log(`  branch    ${git(['branch', '--show-current']) || '(detached)'}`)
   console.log(`  slot      ${mySlot === null ? 'UNCLAIMED — run `node scripts/local-env.mjs init`' : mySlot}`)
+  // A dist older than its src is served as-is by everything that bypasses turbo
+  // (dev servers, the emulator, seeders, backfills) — and fails as an app bug.
+  for (const pkg of BUILT_PACKAGES) {
+    const d = distState(ROOT, pkg)
+    if (d.state === 'fresh') continue
+    console.log(
+      `  ! ${d.state === 'missing' ? 'MISSING' : 'STALE'}   ${pkg.dir}/dist ${
+        d.state === 'missing' ? 'has never been built' : `is older than its src (built ${fmtAge(d.built)}, src changed ${fmtAge(d.srcChanged)})`
+      } — run \`pnpm bootstrap\``
+    )
+  }
   console.log('')
 
   for (const s of slots) {
@@ -389,9 +402,10 @@ async function cmdStatus(flags) {
       } else console.log(`    functions  ${reg.count} loaded`)
     }
 
-    for (const app of ['web', 'admin', 'landing']) {
+    for (const app of ['web', 'admin', 'landing', 'metro']) {
       if (!s.services[app].up) continue
-      const r = await probe(`http://127.0.0.1:${s.services[app].port}/`, { redirect: 'manual' }, 3000)
+      const path = app === 'metro' ? '/status' : '/'
+      const r = await probe(`http://127.0.0.1:${s.services[app].port}${path}`, { redirect: 'manual' }, 3000)
       console.log(`    ${app.padEnd(9)}  :${s.services[app].port} -> ${r.ok ? `HTTP ${r.status}` : 'not answering'}`)
     }
     console.log('')
@@ -428,6 +442,8 @@ const IMPORTS = [
   { path: 'apps/web/.env.local', why: 'web Firebase config + NEXT_PUBLIC_USE_EMULATORS' },
   { path: 'apps/admin/.env.local', why: 'admin Firebase config + OPERATOR_EMAILS' },
   { path: 'packages/functions/.env.local', why: 'EVERY defineString param — one missing hangs function discovery' },
+  { path: 'apps/mobile/.env.staging', why: 'the staging web API key the member app targets by default' },
+  { path: 'apps/landing/.env', why: 'landing site URLs + optional PostHog key' },
   { path: 'scripts/leads/.env.local', why: 'lead demo passwords + Stripe test account ids' },
   { path: 'scripts/leads', why: 'lead profiles (each lead dir is gitignored)', subdirsOnly: true },
   { path: 'keys', why: 'service-account keys (migrate:hmd source creds)', dir: true },
@@ -521,6 +537,20 @@ function cmdInit(flags) {
     FIRESTORE_EMULATOR_HOST: `localhost:${portFor('firestore', slot)}`,
     FIREBASE_AUTH_EMULATOR_HOST: `localhost:${portFor('auth', slot)}`,
   })
+  // Expo loads .env.local on its own (before app.config.js runs), for every
+  // start mode; the ports only take effect under the emulator target, so the
+  // block is harmless to `pnpm dev:mobile` against staging. No template owns
+  // this file, so it is created here.
+  writeEnvBlock(
+    join(ROOT, 'apps/mobile/.env.local'),
+    slot,
+    {
+      EXPO_PUBLIC_FIRESTORE_EMULATOR_PORT: portFor('firestore', slot),
+      EXPO_PUBLIC_AUTH_EMULATOR_PORT: portFor('auth', slot),
+      EXPO_PUBLIC_FUNCTIONS_EMULATOR_PORT: portFor('functions', slot),
+    },
+    { create: true }
+  )
 
   console.log('')
   console.log('  start this slot with:')
@@ -535,10 +565,14 @@ function cmdInit(flags) {
  * whoever reads it, and reading it is exactly what happens when the ports are
  * suspected.
  */
-function writeEnvBlock(file, slot, vars) {
+function writeEnvBlock(file, slot, vars, { create = false } = {}) {
   if (!existsSync(file)) {
-    console.log(`  !  ${rel(file)} missing — nothing to patch (copy it from the main checkout first)`)
-    return
+    if (!create) {
+      console.log(`  !  ${rel(file)} missing — nothing to patch (run \`pnpm bootstrap\` first)`)
+      return
+    }
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, '# Local overrides for this checkout (gitignored).\n')
   }
   const BEGIN = '# >>> local-env slot'
   const END = '# <<< local-env <<<'
@@ -562,12 +596,14 @@ function printStartCommands(slot) {
     console.log('    pnpm emulators:seed          # wipes + seeds, then stays up')
     console.log('    pnpm dev:web                 # :3000')
     console.log('    pnpm dev:admin               # :3002')
+    console.log('    pnpm dev:mobile:emulators    # Expo/Metro :8081, against this stack')
   } else {
     console.log(
       `    node scripts/emulators-run.mjs --config ${FIREBASE_LOCAL} --only auth,firestore,functions,storage --project demo-linyup`
     )
     console.log(`    PORT=${portFor('web', slot)} pnpm dev:web`)
     console.log(`    pnpm --filter @linyup/admin exec next dev --turbopack --port ${portFor('admin', slot)}`)
+    console.log(`    pnpm dev:mobile:emulators -- --port ${portFor('metro', slot)}`)
     console.log('')
     console.log(`    # then seed it:  node scripts/local-env.mjs reset --slot ${slot} --yes`)
   }

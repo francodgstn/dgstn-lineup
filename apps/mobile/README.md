@@ -102,17 +102,23 @@ when the mobile app isn't in their plan).
 
 **Read `.claude/skills/local-env/SKILL.md` and run
 `node scripts/local-env.mjs status` before starting anything** — several
-worktrees share the same emulator ports. This app is not yet in the local-env
-slot model (planned for step 3 of the mobile roadmap); it hard-codes the
-emulator's default ports (Firestore 8080, Auth 9099, Functions 5001) and
-resolves the emulator host from the Metro/Expo dev-server IP.
+worktrees share the same emulator ports. This app is in the slot model: the
+emulator PORTS come from `.env.local` (`EXPO_PUBLIC_*_EMULATOR_PORT`, written by
+`local-env init` for this checkout's slot; Expo loads that file itself before
+`app.config.js` runs), Metro is slot port 8081, and the emulator HOST is
+resolved from the Metro/Expo dev-server IP so a phone on the LAN reaches the
+dev machine.
 
 ```bash
-pnpm install                  # from repo root
-pnpm emulators:seed           # Terminal 1 — backend (see root README / SKILL.md)
-pnpm dev:mobile:emulators     # Terminal 2 — this app, against the emulators
-# or: pnpm dev:mobile         # against linyup-staging (the default, non-emulator target)
+pnpm install && pnpm bootstrap   # from repo root — writes .env.staging (fill FIREBASE_API_KEY)
+pnpm emulators:seed              # Terminal 1 — backend (see root README / SKILL.md)
+pnpm dev:mobile:emulators        # Terminal 2 — this app, against the emulators
+# or: pnpm dev:mobile            # against linyup-staging (the default, non-emulator target)
 ```
+
+`app.config.js` refuses a real project without `FIREBASE_API_KEY` at config
+time, naming the env file to fill — rather than running against it with a
+placeholder and failing later as `auth/invalid-api-key`.
 
 Scripts (see `package.json`): `start` / `start:clear` / `start:prod` (staging
 / production), `start:emulators` / `start:emulators:web` (local emulators),

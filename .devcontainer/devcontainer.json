@@ -8,14 +8,18 @@
       "installMaven": false
     }
   },
-  "forwardPorts": [3000, 4000, 5001, 8080, 9000, 9099],
+  "forwardPorts": [3000, 3002, 4000, 4321, 5001, 8080, 8081, 9000, 9099, 9199],
   "portsAttributes": {
-    "3000": { "label": "Web Admin Panel", "onAutoForward": "openBrowser" },
+    "3000": { "label": "Web app (Next)", "onAutoForward": "openBrowser" },
+    "3002": { "label": "Operator console (Next)", "onAutoForward": "silent" },
     "4000": { "label": "Firebase Emulator UI", "onAutoForward": "notify" },
+    "4321": { "label": "Landing (Astro)", "onAutoForward": "silent" },
     "5001": { "label": "Functions Emulator", "onAutoForward": "silent" },
     "8080": { "label": "Firestore Emulator", "onAutoForward": "silent" },
+    "8081": { "label": "Metro (Expo)", "onAutoForward": "silent" },
     "9000": { "label": "Realtime DB Emulator", "onAutoForward": "silent" },
-    "9099": { "label": "Auth Emulator", "onAutoForward": "silent" }
+    "9099": { "label": "Auth Emulator", "onAutoForward": "silent" },
+    "9199": { "label": "Storage Emulator", "onAutoForward": "silent" }
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "customizations": {

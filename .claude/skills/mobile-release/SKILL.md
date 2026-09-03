@@ -27,6 +27,14 @@ instead. JS/TS-only changes, assets, copy, most `packages/shared` changes → OT
 Adding/removing a dependency with native code, touching `plugins`, permissions,
 icons/splash, bundle ids → build.
 
+`apps/mobile/fingerprint.config.js` makes the hash ignore `extra` and the
+version fields (`SourceSkips.ExpoConfigExtraSection | ExpoConfigVersions`).
+Without it the lane's runner — which evaluates `app.config.js` with no
+`FIREBASE_API_KEY`, i.e. the demo project — would never hash the same as the
+EAS build carrying the real key, every push would look native, and OTA would
+never be chosen. Keep runtime data in `extra`; never move native config there.
+`npx @expo/fingerprint apps/mobile` prints the hash and its sources.
+
 Never bump `runtimeVersion` by hand; never set `updates.url` or
 `extra.eas.projectId` by hand (owner-set once via `eas init`).
 

@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "bootstrap": "node scripts/bootstrap.mjs",
     "dev:web": "pnpm --filter @linyup/web dev",
     "dev:admin": "pnpm --filter @linyup/admin dev",
     "dev:admin:sandbox": "pnpm --filter @linyup/admin dev:sandbox",

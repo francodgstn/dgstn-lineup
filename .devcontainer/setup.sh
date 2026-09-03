@@ -12,8 +12,10 @@ corepack prepare pnpm@9.15.0 --activate
 echo "==> Installing workspace dependencies"
 pnpm install
 
-echo "==> Writing apps/web/.env.local (emulator mode)"
-bash scripts/write-env-local.sh
+# Env files from their templates (emulator-first; Codespaces mode detected),
+# the shared + functions builds every dev path reads, the port slot.
+echo "==> Bootstrapping the checkout"
+pnpm bootstrap
 
 echo ""
 echo "==> Setup complete."

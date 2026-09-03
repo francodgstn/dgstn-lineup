@@ -984,6 +984,9 @@ Or run the scripts directly (start the backend in one terminal, then each app in
 
 ```bash
 pnpm install            # root — installs all workspaces (once)
+pnpm bootstrap          # env files from their *.example templates (emulator-first), shared +
+                        # functions built when their dist is missing/stale, a port slot claimed.
+                        # Idempotent; also runs as the SessionStart hook (.claude/settings.json).
 
 # ── Terminal 1: backend (datasets may be combined — see "Emulator data modes") ──
 pnpm emulators:seed     # fresh seed: emulators (auth+firestore+functions+storage) + 3 demo accounts
@@ -994,7 +997,8 @@ pnpm emulators:hmd      # HMD migration snapshot (auth+firestore+storage)
 pnpm dev:web            # Next.js admin dashboard (port 3000)
 pnpm dev:admin          # operator console (port 3002)
 pnpm dev:landing        # Astro marketing site (port 4321)
-pnpm dev:mobile         # Expo student app
+pnpm dev:mobile         # Expo member app against STAGING (default target)
+pnpm dev:mobile:emulators  # … against the local stack (ports from this checkout's slot)
 
 # ── Optional extra terminals ──
 pnpm stripe:listen      # forward Stripe test webhooks (platform + Connect) to the local
