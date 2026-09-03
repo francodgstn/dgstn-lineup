@@ -37,7 +37,7 @@ export const MONEY_MAP_NODES: MoneyMapNode[] = [
   { id: 'offer', icon: Package, x: 15, y: 14, w: 170, h: 48, href: '/offer/activities', linkKey: 'activities' },
   { id: 'sell', icon: Tag, x: 375, y: 14, w: 170, h: 48, href: '/offer/plans', linkKey: 'plans' },
   { id: 'benefits', icon: Sparkles, x: 195, y: 118, w: 170, h: 48, href: '/offer/activities', linkKey: 'activities' },
-  { id: 'preview', icon: Eye, x: 195, y: 222, w: 170, h: 48, href: '/offer/pricing', linkKey: 'pricing' },
+  { id: 'preview', icon: Eye, x: 195, y: 222, w: 170, h: 48, href: '/manage/pricing', linkKey: 'pricing' },
 ]
 
 export interface MoneyMapEdge {
@@ -93,7 +93,7 @@ export const PRICING_RECIPES: PricingRecipe[] = [
   { id: 'class-pack', links: [{ href: '/offer/plans', labelKey: 'plans' }] },
   { id: 'paid-trial', links: [{ href: '/offer/activities', labelKey: 'activities' }] },
   { id: 'appointments', links: [{ href: '/offer/activities', labelKey: 'activities' }] },
-  { id: 'sell-course', links: [{ href: '/offer/online-courses', labelKey: 'courses' }] },
+  { id: 'sell-course', links: [{ href: '/manage/online-courses', labelKey: 'courses' }] },
   { id: 'gift-cards', links: [{ href: '/payments', labelKey: 'payments' }] },
   { id: 'no-show-fee', links: [{ href: '/settings/booking', labelKey: 'booking' }] },
   {
@@ -106,4 +106,4 @@ export const PRICING_RECIPES: PricingRecipe[] = [
 ]
 
 /** Always-present "Check it" link — the persona preview every recipe points at. */
-export const PRICING_CHECK_LINK: PricingRecipeLink = { href: '/offer/pricing', labelKey: 'pricing' }
+export const PRICING_CHECK_LINK: PricingRecipeLink = { href: '/manage/pricing', labelKey: 'pricing' }

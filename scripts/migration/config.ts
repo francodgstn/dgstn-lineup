@@ -130,6 +130,36 @@ export interface MigrationConfig {
   targetEmulator: boolean
   dryRun: boolean
   only?: string
+  /**
+   * Re-apply the CURRENT transforms to documents that already exist on the
+   * target, instead of skipping them.
+   *
+   * WHY IT EXISTS. Every pass is skip-if-exists, which makes the migration an
+   * INSERT-MISSING tool rather than an APPLY-TRANSFORMS one. Re-running it over
+   * a populated target therefore delivers none of the transform fixes shipped
+   * since that target was first migrated — silently, because `verify` compares
+   * COUNTS and the counts still match. That is how staging kept 23 events typed
+   * `fighting_cup` (and 1947 check-ins stamped with it) through a full re-run
+   * that reported "All counts OK".
+   *
+   * WHAT IT DOES NOT TOUCH, deliberately. Some documents stay guarded even under
+   * --overwrite, because their target state is authored locally rather than
+   * derived from the source, so re-writing them destroys work the source cannot
+   * give back.
+   *
+   * THE CENSUS LIVES IN scripts/MIGRATE-HMD.md — "Re-running over a populated
+   * target". It is not repeated here: two copies of one list disagree the moment
+   * a guard is added, and these two already did (one said three, the other four,
+   * for the same five documents). Each guarded pass also says so at the branch
+   * that guards it, which is where a reader working in that file will look.
+   *
+   * It DOES overwrite migrated source documents — contacts, sessions'
+   * subcollections, activities, series, events, check-ins, referrals, team
+   * subcollections and places — so any edit made to one of those THROUGH THE APP
+   * is replaced by the source's version. That is the point, and it is why this
+   * is a flag rather than the default.
+   */
+  overwrite: boolean
   fromTeam?: string
   orgAdminEmail: string      // email of the user who becomes org creator + org_admin
 }

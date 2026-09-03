@@ -8,6 +8,7 @@ import {
   normalizeBenefit,
   resolveActivityAccessRule,
   resolveAppointmentDurations,
+  resolveDurationBenefit,
   resolveDurationSale,
   resolvePaymentOptions,
   resolveProductPrice,
@@ -236,7 +237,9 @@ export function resolveAppointmentCells(
       resolvePaymentOptions(snapshot, {
         kind: 'appointment',
         duration,
-        benefit: activity.memberBenefit ?? null,
+        // THE ONE READER — one rule per length now, so the row for 30 min must
+        // not be priced by the rule the studio wrote for 90.
+        benefit: resolveDurationBenefit(activity, duration.minutes),
       }),
       false
     ),
@@ -294,11 +297,29 @@ export function grantsForType(
         coveredClassNames.push(a.name)
       }
     }
+    // AN APPOINTMENT HAS ONE RULE PER LENGTH, so it can grant this plan several
+    // different things — 60 min included, 90 min at 20% off. Each is its own
+    // row, named by its length, because collapsing them would have to pick one
+    // effect to report and there is no right one to pick.
+    if (isAppointment) {
+      for (const d of resolveAppointmentDurations(a)) {
+        const benefit = normalizeBenefit(resolveDurationBenefit(a, d.minutes))
+        if (!benefit?.subscriptionTypeIds.includes(typeId)) continue
+        benefits.push({
+          targetName: `${a.name} · ${d.minutes} min`,
+          targetKind: 'appointment',
+          effect: benefit.effect,
+          percent: benefit.percent,
+          amount: benefit.amount,
+        })
+      }
+      continue
+    }
     const benefit = normalizeBenefit(a.memberBenefit)
     if (benefit && benefit.subscriptionTypeIds.includes(typeId)) {
       benefits.push({
         targetName: a.name,
-        targetKind: isAppointment ? 'appointment' : 'class',
+        targetKind: 'class',
         effect: benefit.effect,
         percent: benefit.percent,
         amount: benefit.amount,
@@ -361,7 +382,7 @@ export function computePricingHealth(
   const knownTypeIds = new Set(subscriptionTypes.map((t) => t.id))
 
   const checkBenefit = (
-    benefitRaw: Activity['memberBenefit'] | Course['benefit'],
+    benefitRaw: Activity['memberBenefit'] | Course['benefit'] | null,
     subjectName: string,
     subjectKind: 'activity' | 'course',
     subjectId: string
@@ -382,37 +403,48 @@ export function computePricingHealth(
   const acceptedTypeIds = new Set<string>()
   for (const a of activities) {
     const isAppointment = a.type === 'appointment'
-    checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
     if (isAppointment) {
-      // UX-70's own failure mode: a length sold ONLY through the member benefit
-      // (`benefitOnly`), with no benefit that actually covers it, is bookable by
-      // NOBODY — the appointment twin of `gated_no_newcomer_path`, and the
-      // reason that fix could not ship without this check. Only an INCLUDED
-      // benefit is a way in: a percentage off a price that does not exist opens
-      // nothing (see the resolver's appointment arm).
-      const hasBenefitOnly = (a.durations ?? []).some(
-        (d) => resolveDurationSale(d).mode === 'benefit_only'
-      )
-      const benefit = normalizeBenefit(a.memberBenefit)
-      const opensDoor =
-        !!benefit &&
-        (benefit.effect === 'included' || benefit.effect === 'spend_credits') &&
-        benefit.subscriptionTypeIds.length > 0
-      if (hasBenefitOnly) {
+      // ASKED PER LENGTH, because the rule is per length. Checking the
+      // activity-wide field alone would pass an appointment whose 90-minute row
+      // names a plan that no longer exists, and — worse — would report
+      // `appointment_no_way_in` against a length whose OWN rule opens it fine.
+      let anyNoWayIn = false
+      for (const d of resolveAppointmentDurations(a)) {
+        const rule = resolveDurationBenefit(a, d.minutes)
+        checkBenefit(rule, `${a.name} · ${d.minutes} min`, 'activity', a.id)
+        // UX-70's own failure mode: a length sold ONLY through the member
+        // benefit (`benefitOnly`), with no benefit that actually covers it, is
+        // bookable by NOBODY — the appointment twin of
+        // `gated_no_newcomer_path`. Only an INCLUDED benefit is a way in: a
+        // percentage off a price that does not exist opens nothing (see the
+        // resolver's appointment arm).
+        if (resolveDurationSale(d).mode !== 'benefit_only') continue
+        const benefit = normalizeBenefit(rule)
+        const opensDoor =
+          !!benefit &&
+          (benefit.effect === 'included' || benefit.effect === 'spend_credits') &&
+          benefit.subscriptionTypeIds.length > 0
         // Those types ARE where a credit pack gets spent, so they count for
         // `credits_unusable` exactly as a subscription-gated class does.
         if (opensDoor) benefit!.subscriptionTypeIds.forEach((id) => acceptedTypeIds.add(id))
-        else
-          warnings.push({
-            code: 'appointment_no_way_in',
-            severity: 'error',
-            subjectName: a.name,
-            subjectKind: 'activity',
-            subjectId: a.id,
-          })
+        else anyNoWayIn = true
+      }
+      // ONE warning for the activity, not one per length. The health list is
+      // read as a to-do and the fix is the same visit either way; a row per
+      // length would bury the other activities behind one misconfigured
+      // appointment.
+      if (anyNoWayIn) {
+        warnings.push({
+          code: 'appointment_no_way_in',
+          severity: 'error',
+          subjectName: a.name,
+          subjectKind: 'activity',
+          subjectId: a.id,
+        })
       }
       continue
     }
+    checkBenefit(a.memberBenefit, a.name, 'activity', a.id)
     const rule = resolveActivityAccessRule(a)
     // 'open' is the only tier a newcomer can always walk into. BOTH gated tiers
     // ('members' and 'subscription') refuse a stranger — resolveClassCoverage

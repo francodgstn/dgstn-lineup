@@ -31,7 +31,7 @@ export const assetRegisterManifest: PluginManifest = {
       href: '/plugins/asset-register',
       labelKey: 'assetRegisterNavLabel',
       icon: 'Boxes',
-      section: 'grow',
+      section: 'manage',
     },
   ],
 }

@@ -12,7 +12,7 @@
 // NO `accessRule` here — appointments dropped the access gate entirely; money
 // (`durations` + `memberBenefit`) is the only gate. See the module header of
 // `appointments/window.ts`.
-import type { ActivityMemberBenefit } from './activity'
+import type { ActivityMemberBenefit, ActivityDurationBenefit } from './activity'
 import type { Benefit } from './benefit'
 import type { BookingContactField } from './team'
 
@@ -35,6 +35,11 @@ export interface ListAvailabilityActivity {
   activityName: string
   durations: ListAvailabilityDuration[]
   memberBenefit: ActivityMemberBenefit | Benefit | null
+  /** Per-duration member benefits (the per-length pricing that landed on
+   *  main while this type was being introduced) — verbatim from the activity,
+   *  null when the activity has none; the picker mirrors the resolver for
+   *  display and the server re-resolves at booking. */
+  durationBenefits: ActivityDurationBenefit[] | null
   /** Per-activity override of the team's cancellation terms. Display-only;
    *  falls back to the team default (TeamPublicProfile.bookingCancellationPolicy). */
   cancellationPolicy: string | null

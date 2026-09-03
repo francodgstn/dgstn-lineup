@@ -330,13 +330,21 @@ paths don't read it, appointment session docs/mirrors don't carry it).
 `cancelBooking` handles both kinds.
 
 **Paid appointments** put a base price per duration (`Activity.durations:
-[{minutes, priceAmount?}]`) and the member benefit in ONE rule per activity:
-`Activity.memberBenefit: {subscriptionTypeIds, kind: 'included'|'discount',
-discountPercent?}` — holders of a listed type book free (`included`; credit
-packs spend a credit) or pay `discountPercent` off every priced duration
-(`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
-no benefit, everyone pays base — the benefit is data, never implied, but it is
-one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
+[{minutes, priceAmount?}]`) **and one member rule per duration**
+(`Activity.durationBenefits: [{minutes, benefit}]`) — holders of a listed type
+book that length free (`included`; credit packs spend a credit), at
+`percent_off`, or at a `fixed_price` (all clamped to Stripe's 0.50 floor, never
+free-via-discount). **THE ONE READER is `resolveDurationBenefit(activity,
+minutes)`** — never touch the fields directly: `durationBenefits` present ⇒ it
+is the whole answer and a missing entry means no rule; absent ⇒ the LEGACY
+activity-wide `Activity.memberBenefit` still applies to every length, so an
+un-re-edited appointment behaves as before and **no backfill is owed** (the
+first per-length save absorbs the old rule onto every length and clears it).
+This is NOT the per-duration × per-type `subscriptionPricing` matrix cut in
+2026-07 — that was a grid of prices; this is the same one rule, asked once per
+length, because `fixed_price` on an activity charged the same for 30 and 90
+minutes. A public ONE-LINE summary (shop card, site chip, pricing table) states
+a benefit only when every length agrees, else the price range alone.
 Resolver: **`resolvePaymentOptions(snapshot, target, context?)`** — the ONE
 shared coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`,
 pure, client-safe) that answers `covered | spend_credits | pay(amount,

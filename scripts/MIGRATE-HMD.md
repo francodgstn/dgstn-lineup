@@ -91,6 +91,7 @@ pnpm migrate:hmd \
 | `--target-emulator` | Write to local Firestore emulator instead of a real project |
 | `--org-admin-email <email>` | Email of the org creator + org_admin (default: `franco.dgstn@gmail.com`) |
 | `--dry-run` | Log writes without committing |
+| `--overwrite` | Re-apply the current transforms to docs that already exist on the target (default: skip them) — see **Re-running over a populated target** below |
 | `--only <pass>` | Run a single pass (see pass names below) |
 | `--from-team <teamId>` | Resume contacts/sessions passes from a specific team |
 | `--verify` | Run verification after migration |
@@ -108,6 +109,52 @@ pnpm migrate:hmd --source-creds ./keys/hmd-prod-sa.json --target-emulator --only
 ```bash
 pnpm migrate:hmd ... --only contacts --from-team <teamId>
 ```
+
+---
+
+## Re-running over a populated target — read this first
+
+**Every pass is skip-if-exists, so by default a re-run is an INSERT-MISSING
+operation, not an APPLY-TRANSFORMS one.** Re-running the migration against a
+target that already holds a previous run therefore delivers **none** of the
+transform fixes shipped since that target was last migrated. It does not warn,
+and `--verify` does not catch it: verification compares **counts**, the counts
+still match, and it prints "All counts OK" over stale content.
+
+This is not hypothetical. A full re-run against staging on 2026-08-30 reported
+success while leaving 23 events typed `fighting_cup` and 1947 check-ins stamped
+with it — the exact remap `mapSourceEventType` exists to perform — because pass
+08's remap lives in the `else` branch of its skip guard. It cascaded: pass 09's
+cup passes select their input with `where('type','==','hmd_fighting_cup')`, found
+zero events, and wrote nothing, so `checkin_data.categories` stayed empty for
+every cup competitor. The same run skipped all 1634 contacts, so the ranking
+changes in `transforms/contacts.ts` never landed either.
+
+**Use `--overwrite` whenever a transform has changed since the target was last
+migrated.** The tell that you needed it: a pass reporting a large `skipped` count
+where a fresh target reports a large `wrote` count.
+
+```bash
+pnpm migrate:hmd --source-creds ./keys/hmd-prod-sa.json   --target-creds ./keys/linyup-staging-sa.json --overwrite
+```
+
+It re-writes migrated source documents — contacts, activities, session series,
+events, check-ins, referrals, team subcollections, places — so **any edit made to
+one of those through the app is replaced by the source's version.** That is the
+point of the flag, and the reason it is not the default.
+
+These stay guarded even under `--overwrite`, because their target state is
+authored locally and the source has no copy to give back. **This list is the
+census** — `config.ts` points here rather than restating it, so a new guard is
+added in one place:
+
+- the org doc + installed plugins (pass 00)
+- the **team doc** (pass 02) — it carries the Connect/payments block,
+  `bookingSettings` and `plan`
+- the **session doc** (pass 06) — `bookings_count` is maintained by
+  `trackBookings` from the live bookings subcollection
+- the org admin's `team_members` row (pass 11) and the org website draft/published
+  docs (pass 13)
 
 ---
 

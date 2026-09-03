@@ -19,7 +19,7 @@ export async function pass04SessionSeries(
       const tgtRef = tgt.collection('session_series').doc(d.id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
+        if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
       }
       bw.set(tgtRef, transformSessionSeries(d.data() as Record<string, unknown>))
     }

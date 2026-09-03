@@ -547,7 +547,7 @@ export async function seedStoreCourses(
 }
 
 // ── SHOP · Promo codes ────────────────────────────────────────────────────────
-// One live code per storefront tenant, so /offer/promo-codes is not an empty
+// One live code per storefront tenant, so /manage/promo-codes is not an empty
 // screen and a demo checkout can actually show a discount being applied
 // (Franco's decision 3, 2026-08-19).
 //
