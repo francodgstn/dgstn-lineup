@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { ChevronDown, Globe, Menu, X } from 'lucide-react'
+import { ChevronDown, Globe, Menu, Moon, Sun, X } from 'lucide-react'
 import type {
   SiteMeta,
   SiteMenuItem,
@@ -12,7 +12,7 @@ import type {
   OrgSiteTeamRef,
   SocialLink,
 } from '@linyup/shared'
-import { surfaceThemePreset } from '@linyup/shared'
+import { resolveThemePreset } from '@linyup/shared'
 import { deriveSiteMenu } from '@linyup/shared'
 import { buildPalette, FONT_STACK, ctaHref } from './theme'
 import { SectionBlock, sectionNavLabel, bookProps, SOCIAL_ICONS, type RenderCtx } from './sections'
@@ -75,12 +75,34 @@ export default function WebsiteRenderer({
   const t = useTranslations('Site')
   const [systemDark, setSystemDark] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  /**
+   * A VISITOR'S OWN CHOICE, which outranks their system setting.
+   *
+   * Null means "follow the system", which is the state every visitor starts in
+   * — the toggle offers an override, it does not replace the default. Kept per
+   * SITE rather than globally: a visitor who prefers one studio's page dark has
+   * said nothing about another studio's.
+   *
+   * Read in an effect, never during render: localStorage does not exist on the
+   * server, and seeding state from it directly is a hydration mismatch on every
+   * visitor who has ever used the control.
+   */
+  const [override, setOverride] = useState<'light' | 'dark' | null>(null)
 
   // SUBSCRIBE WHENEVER THE ANSWER COULD MATTER — which is any adaptive preset,
   // not just the legacy `theme: 'auto'`. Guarding on the old field alone would
   // have left a preset-themed site frozen at "light" for a viewer in dark mode:
   // `buildPalette` asks for `systemDark`, and nothing would ever have set it.
-  const themePreset = surfaceThemePreset(site.meta.themePreset)
+  // Resolved through the SAME door buildPalette uses, so a CUSTOM adaptive theme
+  // (which is not in the registry, so `surfaceThemePreset` would miss it) still
+  // subscribes to the system preference and still enables the toggle.
+  const themePreset = resolveThemePreset({
+    presetId: site.meta.themePreset,
+    light: site.meta.themeLight,
+    dark: site.meta.themeDark,
+    single: site.meta.themeSingle,
+    lighting: site.meta.themeLighting,
+  })
   const followsSystem = themePreset ? themePreset.adaptive : site.meta.theme === 'auto'
   useEffect(() => {
     if (!followsSystem) return
@@ -91,7 +113,33 @@ export default function WebsiteRenderer({
     return () => mq.removeEventListener('change', handler)
   }, [followsSystem])
 
-  const palette = buildPalette(site.meta, systemDark)
+  // The toggle only exists on a theme with two halves to move between, so the
+  // stored preference is only ever read there too — a site that later switches
+  // to a fixed look ignores a leftover value rather than acting on it.
+  const toggleEnabled = !!site.meta.themeToggle && followsSystem
+  const storageKey = `linyup.site.scheme.${site.slug}`
+  useEffect(() => {
+    if (!toggleEnabled) return
+    try {
+      const v = window.localStorage.getItem(storageKey)
+      if (v === 'light' || v === 'dark') setOverride(v)
+    } catch {
+      // A private window, or storage the browser refuses. The site renders on
+      // the system preference, which is the same thing it did before.
+    }
+  }, [toggleEnabled, storageKey])
+
+  function chooseScheme(next: 'light' | 'dark') {
+    setOverride(next)
+    try {
+      window.localStorage.setItem(storageKey, next)
+    } catch {
+      // Nothing to do — the choice still applies for this page view.
+    }
+  }
+
+  const effectiveDark = toggleEnabled && override ? override === 'dark' : systemDark
+  const palette = buildPalette(site.meta, effectiveDark)
   const font = FONT_STACK[site.meta.font] ?? FONT_STACK.sans
   const ctx: RenderCtx = {
     palette,
@@ -359,6 +407,33 @@ export default function WebsiteRenderer({
             )}
           </nav>
 
+          {/* THE VISITOR'S SCHEME SWITCH — outside the nav, deliberately.
+              `hasMenu`'s nav is `@3xl:flex`, so anything inside it is DESKTOP
+              ONLY. The first cut put this there beside the locale switcher and
+              it vanished below that width — a control a phone visitor could
+              never reach, which is most of them (Franco, 2026-09-03).
+
+              It renders only where it can do something: `toggleEnabled`
+              requires the studio to have asked for it AND a theme with two
+              halves, so this is never a button with nothing to switch to.
+
+              ONE BUTTON THAT FLIPS, not a three-way light/dark/auto. A visitor
+              does not think "follow my system", they think the page is too
+              bright. Auto is where everyone starts. */}
+          <div className="flex items-center gap-1">
+            {toggleEnabled && (
+              <button
+                type="button"
+                onClick={() => chooseScheme(effectiveDark ? 'light' : 'dark')}
+                aria-label={t(effectiveDark ? 'schemeToLight' : 'schemeToDark')}
+                title={t(effectiveDark ? 'schemeToLight' : 'schemeToDark')}
+                className="flex h-9 w-9 items-center justify-center rounded-md border transition-opacity hover:opacity-70"
+                style={{ borderColor: palette.border, color: palette.muted }}
+              >
+                {effectiveDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            )}
+
           {/* Mobile hamburger */}
           {hasMenu && (
             <button
@@ -372,6 +447,7 @@ export default function WebsiteRenderer({
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           )}
+          </div>
         </div>
 
         {/* Mobile menu panel */}

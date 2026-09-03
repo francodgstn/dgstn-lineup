@@ -390,6 +390,41 @@ export interface SiteMeta {
    * until the studio picks one (no backfill, no deploy ordering).
    */
   themePreset?: SurfaceThemePresetId
+  /**
+   * The studio's own colour, read ONLY when `themePreset` is 'custom'. Both
+   * halves of the page are derived from it — see `types/themeDerive.ts`.
+   *
+   * NOT the accent. `accentColor` is what must be noticed (a button, a link);
+   * this is what everything else is made of. Keeping them apart is what lets a
+   * deep-green studio have a green PAGE with an orange call to action, which
+   * the fixed presets could not express at all.
+   */
+  /**
+   * Custom theme — the studio's own colours. Read only when `themePreset` is
+   * 'custom'; the colour you pick IS the page background (see themeDerive.ts).
+   */
+  /** The light-page colour, and the whole site when `themeSingle`. */
+  themeLight?: string
+  /** The dark-page colour. Absent ⇒ a correlate of `themeLight`. */
+  themeDark?: string
+  /** One colour, one look for everyone — no separate dark version. */
+  themeSingle?: boolean
+  /** A soft gradient instead of a flat background. */
+  themeLighting?: boolean
+  /**
+   * Show visitors a light/dark switch in the site header.
+   *
+   * OFF BY DEFAULT, and absent means off. A studio that has chosen how its site
+   * looks has not asked for a control that lets every visitor choose again, and
+   * a toggle appearing on a live site because a field was added is a change
+   * nobody made.
+   *
+   * It renders only on an ADAPTIVE theme — see `WebsiteRenderer`. On a theme
+   * that is deliberately one look ('ink', or any fixed preset) there is no
+   * second half to switch to, so the control would be a button that does
+   * nothing.
+   */
+  themeToggle?: boolean
   /** LEGACY, and only read while `themePreset` is absent. It crosses with
    *  `background`: "auto" with a fixed background follows the viewer for the
    *  text and not for the page. That is the bug presets exist to remove. */

@@ -35,6 +35,8 @@
 // deploy ordering, and a studio that had a look it liked keeps it until it picks
 // a preset. Once it does, the preset wins and the legacy fields are ignored.
 
+import { deriveCustomPreset, neutralSurface } from './themeDerive'
+
 /** Stable machine identifier. Stored in Firestore — a rename is a migration. */
 export type SurfaceThemePresetId =
   | 'paper'
@@ -42,7 +44,13 @@ export type SurfaceThemePresetId =
   | 'sand'
   | 'forest'
   | 'ocean'
-  | 'mono'
+  | 'rose'
+  | 'violet'
+  | 'slate'
+  // DERIVED, not a member of SURFACE_THEME_PRESETS. Its palettes are computed
+  // from the tenant's own colours — see `themeDerive.ts` and `resolveThemePreset`
+  // below, which is the ONE place the two kinds meet.
+  | 'custom'
 
 /** One half of a preset: what the page looks like in one colour scheme. */
 export interface SurfacePalette {
@@ -87,61 +95,91 @@ export interface SurfaceThemePreset {
  * The presets, in picker order. Neutral first: most studios want their own
  * colour to be the only colour, and the accent is what carries it.
  */
-export const SURFACE_THEME_PRESETS: readonly SurfaceThemePreset[] = [
-  {
-    // The default look, and the one that answers "make it work in dark mode".
-    id: 'paper',
-    nameKey: 'paper',
-    light: { background: '#ffffff', scheme: 'dark', surface: '#f8fafc' },
-    dark: { background: '#0b0f19', scheme: 'light', surface: '#151b2b' },
-    defaultAccent: '#6366f1',
-    adaptive: true,
-  },
-  {
-    // Dark by choice, in both modes — the look a lot of gyms and clubs want.
-    id: 'ink',
-    nameKey: 'ink',
-    light: { background: '#0f1115', scheme: 'light', surface: '#191d25' },
-    dark: { background: '#0f1115', scheme: 'light', surface: '#191d25' },
-    defaultAccent: '#f59e0b',
-    adaptive: false,
-    fixedScheme: 'dark',
-  },
-  {
-    id: 'sand',
-    nameKey: 'sand',
-    light: { background: '#faf6f0', scheme: 'dark', surface: '#f2eadf' },
-    dark: { background: '#1b1712', scheme: 'light', surface: '#26201a' },
-    defaultAccent: '#b45309',
-    adaptive: true,
-  },
-  {
-    id: 'forest',
-    nameKey: 'forest',
-    light: { background: '#f3f8f4', scheme: 'dark', surface: '#e6f0e8' },
-    dark: { background: '#0c1512', scheme: 'light', surface: '#15211c' },
-    defaultAccent: '#15803d',
-    adaptive: true,
-  },
-  {
-    id: 'ocean',
-    nameKey: 'ocean',
-    light: { background: '#f2f7fb', scheme: 'dark', surface: '#e5eef6' },
-    dark: { background: '#08131d', scheme: 'light', surface: '#101f2b' },
-    defaultAccent: '#0369a1',
-    adaptive: true,
-  },
-  {
-    // Maximum contrast, no tint — for a studio whose own brand supplies all the
-    // colour there should be.
-    id: 'mono',
-    nameKey: 'mono',
-    light: { background: '#ffffff', scheme: 'dark', surface: '#f4f4f5' },
-    dark: { background: '#000000', scheme: 'light', surface: '#111111' },
-    defaultAccent: '#111111',
-    adaptive: true,
-  },
-]
+export const SURFACE_THEME_PRESETS: readonly SurfaceThemePreset[] = (() => {
+  // The surface is NEUTRAL for every preset, from the one rule custom themes use
+  // — so a card comes out of the page here exactly as it does there, and there
+  // is no second definition to drift. A preset declares only its page colour and
+  // which text sits on it; `pal` fills in the card colour (Franco, 2026-09-03).
+  const pal = (background: string, scheme: 'light' | 'dark'): SurfacePalette => ({
+    background,
+    scheme,
+    surface: neutralSurface(background),
+  })
+  return [
+    {
+      // The default, and the neutral one. `mono` used to sit beside this with the
+      // same near-white light page; it was a second name for one look, so it is
+      // gone (Franco, 2026-09-03).
+      id: 'paper',
+      nameKey: 'paper',
+      light: pal('#ffffff', 'dark'),
+      dark: pal('#0b0d12', 'light'),
+      defaultAccent: '#6366f1',
+      adaptive: true,
+    },
+    {
+      // Dark by choice, in both modes — the look a lot of gyms and clubs want.
+      id: 'ink',
+      nameKey: 'ink',
+      light: pal('#0f1115', 'light'),
+      dark: pal('#0f1115', 'light'),
+      defaultAccent: '#f59e0b',
+      adaptive: false,
+      fixedScheme: 'dark',
+    },
+    {
+      // Each pair is ONE HUE: the dark page is the light page taken much darker,
+      // so the two versions read as the same theme at two times of day. The CARD
+      // on each is neutral, so it lifts off the coloured page.
+      id: 'sand',
+      nameKey: 'sand',
+      light: pal('#faf5ec', 'dark'),
+      dark: pal('#171310', 'light'),
+      defaultAccent: '#b45309',
+      adaptive: true,
+    },
+    {
+      id: 'forest',
+      nameKey: 'forest',
+      light: pal('#f0f7f2', 'dark'),
+      dark: pal('#0b1410', 'light'),
+      defaultAccent: '#15803d',
+      adaptive: true,
+    },
+    {
+      id: 'ocean',
+      nameKey: 'ocean',
+      light: pal('#eef6fc', 'dark'),
+      dark: pal('#08131d', 'light'),
+      defaultAccent: '#0369a1',
+      adaptive: true,
+    },
+    {
+      id: 'rose',
+      nameKey: 'rose',
+      light: pal('#fdf2f6', 'dark'),
+      dark: pal('#180f14', 'light'),
+      defaultAccent: '#e11d76',
+      adaptive: true,
+    },
+    {
+      id: 'violet',
+      nameKey: 'violet',
+      light: pal('#f5f3ff', 'dark'),
+      dark: pal('#130f1f', 'light'),
+      defaultAccent: '#7c3aed',
+      adaptive: true,
+    },
+    {
+      id: 'slate',
+      nameKey: 'slate',
+      light: pal('#f5f7fa', 'dark'),
+      dark: pal('#0d1117', 'light'),
+      defaultAccent: '#475569',
+      adaptive: true,
+    },
+  ]
+})()
 
 export const DEFAULT_SURFACE_THEME_PRESET_ID: SurfaceThemePresetId = 'paper'
 
@@ -152,6 +190,47 @@ export function surfaceThemePreset(
 ): SurfaceThemePreset | null {
   if (!id) return null
   return SURFACE_THEME_PRESETS.find((p) => p.id === id) ?? null
+}
+
+/** What a tenant stored about its theme. The fields travel together because
+ *  they are one choice — see `resolveThemePreset`. */
+export interface ThemeSelection {
+  presetId?: string | null
+  /** Custom: the light-page colour (and the whole site when `single`). */
+  light?: string | null
+  /** Custom: the dark-page colour. Absent ⇒ a correlate of `light`. */
+  dark?: string | null
+  /** Custom: one colour, one look for everyone. */
+  single?: boolean | null
+  /** Custom: a soft gradient instead of a flat background. */
+  lighting?: boolean | null
+}
+
+/**
+ * THE ONE PLACE A STORED THEME BECOMES A PRESET.
+ *
+ * Both kinds resolve here: a registry id looks up, `'custom'` derives. Every
+ * renderer calls this rather than `surfaceThemePreset`, so there is no surface
+ * where a custom theme could be handled differently from a fixed one — the
+ * failure this whole module exists to prevent, one level up.
+ *
+ * Returns null for "nothing chosen", exactly as `surfaceThemePreset` does, so
+ * the legacy `theme` + `background` fallback in each renderer is reached the
+ * same way it was before custom themes existed. A `'custom'` selection whose
+ * base will not parse ALSO returns null: falling back to the studio's previous
+ * look is honest, where falling back to `paper` would silently redesign the page.
+ */
+export function resolveThemePreset(sel: ThemeSelection): SurfaceThemePreset | null {
+  if (sel.presetId === 'custom') {
+    if (!sel.light) return null
+    return deriveCustomPreset({
+      light: sel.light,
+      dark: sel.dark,
+      single: !!sel.single,
+      lighting: !!sel.lighting,
+    })
+  }
+  return surfaceThemePreset(sel.presetId)
 }
 
 /**
