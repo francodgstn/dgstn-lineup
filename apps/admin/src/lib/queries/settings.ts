@@ -1,8 +1,10 @@
 import 'server-only'
 import {
   APP_SETTINGS_COLLECTION,
+  MOBILE_SETTINGS_DOC,
   PUBLIC_SETTINGS_DOC,
   type AnnouncementStyle,
+  type MobileAppSettings,
   type PlatformAnnouncement,
 } from '@linyup/shared'
 import { adminDb } from '@/lib/firebase-admin'
@@ -113,5 +115,39 @@ export async function getAnnouncementStatus(): Promise<AnnouncementStatus> {
     style: d.announcement_style ?? 'info',
     updatedMs: d.announcement_updated_at?.toMillis?.() ?? null,
     updatedBy: d.announcement_updated_by ?? null,
+  }
+}
+
+export interface MobileSettingsStatus {
+  minSupportedVersion: string | null
+  updateMessage: string | null
+  storeUrlIos: string | null
+  storeUrlAndroid: string | null
+  updatedMs: number | null
+  updatedBy: string | null
+}
+
+// The member app's policy (app_settings/mobile, MobileAppSettings). A missing
+// doc is "no gate" — exactly what the app reads it as.
+export async function getMobileSettingsStatus(): Promise<MobileSettingsStatus> {
+  const snap = await adminDb.collection(APP_SETTINGS_COLLECTION).doc(MOBILE_SETTINGS_DOC).get()
+  if (!snap.exists) {
+    return {
+      minSupportedVersion: null,
+      updateMessage: null,
+      storeUrlIos: null,
+      storeUrlAndroid: null,
+      updatedMs: null,
+      updatedBy: null,
+    }
+  }
+  const d = snap.data() as MobileAppSettings
+  return {
+    minSupportedVersion: d.min_supported_version ?? null,
+    updateMessage: d.update_message ?? null,
+    storeUrlIos: d.store_url_ios ?? null,
+    storeUrlAndroid: d.store_url_android ?? null,
+    updatedMs: d.updated_at?.toMillis?.() ?? null,
+    updatedBy: d.updated_by ?? null,
   }
 }

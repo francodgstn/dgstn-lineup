@@ -219,6 +219,10 @@ Password `linyup123` for all of them (the seed prints the table):
 `studio@linyup.com` (studio owner — use this for owner-gated features),
 `coach@`, `org@`, `free@`, `manager@`, `coach2@linyup.com`.
 
+Member app / web Space (a CONTACT, passwordless): `app.review@example.com`,
+code `123456`, on the review studio `linyup-demo` — the same studio production
+provisions from the console. Everything else: `docs/test-accounts.md`.
+
 ## Traps, with their symptoms
 
 - **Every callable returns `internal`, nothing else is wrong.** The functions

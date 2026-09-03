@@ -61,6 +61,31 @@ interface ContactSessionOptions {
   allowedEmail?: string
 }
 
+/**
+ * THE ONE answer to "may this email sign in as this contact?": the address is
+ * the contact's PRIMARY email, or one of its `login_emails` (a parent signing
+ * in to a child's profile, a shared family address). Case- and
+ * whitespace-insensitive on both sides.
+ *
+ * Read by `buildContactSession` (every session mint) and by
+ * `switchActiveContact` (a signed-in member moving to a sibling contact) —
+ * which used to check the primary email ONLY, so a parent who had signed in
+ * through `login_emails` could see both children in the picker and switch to
+ * neither. Never add a third copy of this rule.
+ */
+export function contactAcceptsLoginEmail(
+  contactData: { email?: unknown; login_emails?: unknown },
+  email: string | null | undefined
+): boolean {
+  if (typeof email !== 'string') return false
+  const wanted = email.toLowerCase().trim()
+  if (!wanted) return false
+  const primary = typeof contactData.email === 'string' ? contactData.email.toLowerCase().trim() : null
+  if (primary === wanted) return true
+  const loginEmails = Array.isArray(contactData.login_emails) ? contactData.login_emails : []
+  return loginEmails.some((e) => typeof e === 'string' && e.toLowerCase().trim() === wanted)
+}
+
 interface ContactSession {
   customToken: string
   sessionExpires: number
@@ -88,13 +113,9 @@ export async function buildContactSession(
   const contactEmail = typeof contactEmailRaw === 'string' ? contactEmailRaw.toLowerCase().trim() : null
 
   if (options.allowedEmail) {
-    const allowedEmail = options.allowedEmail.toLowerCase().trim()
     // The authenticated email must be the contact's PRIMARY email or one of its
-    // login-email allow-list entries (e.g. a parent signing in to a child's profile).
-    const loginEmails = Array.isArray(contactData.login_emails)
-      ? (contactData.login_emails as unknown[]).map((e) => String(e).toLowerCase().trim())
-      : []
-    if (contactEmail !== allowedEmail && !loginEmails.includes(allowedEmail)) {
+    // login-email allow-list entries — `contactAcceptsLoginEmail`, the one rule.
+    if (!contactAcceptsLoginEmail({ email: contactEmail, login_emails: contactData.login_emails }, options.allowedEmail)) {
       throw new HttpsError('permission-denied', 'Contact email does not match the authenticated session email')
     }
   }

@@ -270,33 +270,11 @@ export const FirestoreService = {
     }
   },
 
-  // Get all active teams for selection on login
-  async getActiveTeams(): Promise<TeamPublicProfile[]> {
-    try {
-      // Query the public_profile subcollection across all teams
-      // Structure: teams/{teamId}/public_profile/{docId}
-      const publicProfileSnapshot = await getDocs(
-        collectionGroup(db, PUBLIC_PROFILE_SUBCOLLECTION)
-      );
-
-      return publicProfileSnapshot.docs
-        .filter(doc => {
-          // Only include documents from teams collection
-          // Path format: teams/{teamId}/public_profile/{docId}
-          const pathParts = doc.ref.path.split('/');
-          return pathParts[0] === TEAMS_COLLECTION;
-        })
-        .map(doc => {
-          // Extract teamId from the document path
-          const pathParts = doc.ref.path.split('/');
-          const teamId = pathParts[1];
-          return mapPublicProfileMirror(teamId, doc.data());
-        });
-    } catch (error) {
-      console.error('Error fetching active teams:', error);
-      return [];
-    }
-  },
+  // (`getActiveTeams` — an anonymous, UNFILTERED read of every public_profile
+  // mirror on the platform (sessions, activities, courses, everything), made on
+  // every login-screen mount just to name studios — is gone. The names now come
+  // from `sendContactVerificationCode`'s `teamSummaries`, which the server
+  // resolves for exactly the teams the email belongs to.)
 
   // Get QR code data for check-in (calls getContactQR cloud function)
   async getContactQR(): Promise<{

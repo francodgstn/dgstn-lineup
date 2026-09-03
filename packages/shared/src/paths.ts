@@ -43,6 +43,8 @@ export const GLOBAL_SETTINGS_DOC = 'global_settings'
 // a SEPARATE doc from global_settings so the public read rule never exposes the
 // private operator/SMTP config.
 export const PUBLIC_SETTINGS_DOC = 'public'
+/** app_settings/mobile — the member app's world-readable policy (MobileAppSettings). */
+export const MOBILE_SETTINGS_DOC = 'mobile'
 
 // Signup gating (limited-launch). Both are Admin-SDK only (PII / security).
 // signup_allowlist: emails permitted to create a Linyup account while public

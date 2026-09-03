@@ -12,6 +12,7 @@ import { bucketRateLimit } from '../utils/rateLimit'
 import { planStatusIsInactive } from '../utils/plan'
 import { APP_CHECK_ENFORCE_MOBILE, monitorAppCheck } from '../utils/appCheck'
 import { assertVerifiableCodeById } from './verificationCode'
+import { resolveAllowedTeamIds, selectLoginCandidates } from './loginCandidates'
 
 // Provisional shop registrations purge after this window unless a payment confirms
 // them (see Contact.provisional + dailyTasks/purgeProvisionalContacts).
@@ -187,23 +188,20 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_
       .get(),
   ])
 
-  // Dedupe by doc id; keep only active (non-archived, non-deleted) contacts.
-  // When teamId is set, restrict to that team; otherwise accept all teams
-  // (optionally narrowed by the code doc's teamIds list).
-  const allowedTeamIds: string[] | null =
-    !teamId && Array.isArray(codeData.teamIds) && codeData.teamIds.length > 0
-      ? codeData.teamIds
-      : null
-
-  const byId = new Map<string, admin.firestore.QueryDocumentSnapshot>()
-  for (const doc of [...primarySnap.docs, ...allowSnap.docs]) {
-    const d = doc.data()
-    if (teamId && d.teamId !== teamId) continue
-    if (allowedTeamIds && !allowedTeamIds.includes(d.teamId)) continue
-    if (d.archived_at != null || d.deleted_at != null) continue
-    byId.set(doc.id, doc)
-  }
-  let activeContacts = [...byId.values()]
+  // Dedupe, scope to the code's team(s), drop archived/deleted — the pure
+  // decision lives in ./loginCandidates.ts (and is tested there).
+  const asCandidate = (doc: admin.firestore.QueryDocumentSnapshot) => ({
+    id: doc.id,
+    teamId: doc.data().teamId as string | null | undefined,
+    archived_at: doc.data().archived_at,
+    deleted_at: doc.data().deleted_at,
+    doc,
+  })
+  let activeContacts = selectLoginCandidates(
+    primarySnap.docs.map(asCandidate),
+    allowSnap.docs.map(asCandidate),
+    { teamId, allowedTeamIds: resolveAllowedTeamIds(teamId, codeData.teamIds) }
+  ).map((c) => c.doc)
 
   // ── The member-app plan gate (mobile client only) ─────────────────────────
   // Drop every match whose team's plan lacks `member_app` BEFORE the
@@ -291,10 +289,13 @@ export const loginContactWithCode = onCall({ enforceAppCheck: APP_CHECK_ENFORCE_
     return {
       requiresContactSelection: true,
       email,
+      // POST-verification, so the team may be named: the app's picker groups
+      // contacts by studio when a family address spans several.
       matchedContacts: activeContacts.map((doc) => ({
         id: doc.id,
         firstname: doc.data().firstname ?? null,
         lastname: doc.data().lastname ?? null,
+        teamId: (doc.data().teamId as string | undefined) ?? null,
       })),
     }
   }

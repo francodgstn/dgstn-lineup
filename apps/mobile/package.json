@@ -15,7 +15,8 @@
     "web": "pnpm run shared:build && expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "test:e2e": "maestro test .maestro"
   },
   "dependencies": {
     "@linyup/shared": "workspace:*",

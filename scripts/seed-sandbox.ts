@@ -97,6 +97,7 @@ import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
 import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
+import { printMemberAppLogin, seedMobileSettings, seedReviewTenant } from './lib/mobile'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // Emulator convenience: the Auth host is required alongside Firestore — default
@@ -128,7 +129,6 @@ const auth = admin.auth()
 const db = admin.firestore()
 db.settings({ ignoreUndefinedProperties: true })
 
-const STUDENT_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // matches generateAuthToken
 const DEMO_PASSWORD = 'linyup123'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -2571,20 +2571,6 @@ async function seedDemoTeam(profile: SectorProfile) {
     updated_by: 'seed-sandbox',
   })
 
-  // ── student auth user (contact-session identity matching buildContactSession) ───
-  const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
-  const studentContactId = contactIds[studentIdx]
-  const studentUid = `contact:${teamId}:${studentContactId}`
-  const sessionExpires = Date.now() + STUDENT_SESSION_MS
-  const studentEmail = `${slugEmail(pool[studentIdx])}.${teamId}@example.com`
-  await upsertAuthUser({
-    uid: studentUid,
-    email: studentEmail,
-    displayName: `${pool[studentIdx].firstname} ${pool[studentIdx].lastname}`,
-    password: DEMO_PASSWORD,
-    claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
-  })
-
   // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
   // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
   // one for this team; silently leaves the team payment-less otherwise. Last, so
@@ -3157,9 +3143,8 @@ async function upsertAuthUser(opts: {
   email: string
   displayName: string
   password: string
-  claims?: Record<string, unknown>
 }) {
-  const { uid, email, displayName, password, claims } = opts
+  const { uid, email, displayName, password } = opts
   try {
     await auth.createUser({ uid, email, password, displayName, emailVerified: true })
   } catch (e: unknown) {
@@ -3172,7 +3157,6 @@ async function upsertAuthUser(opts: {
       throw e
     }
   }
-  if (claims) await auth.setCustomUserClaims(uid, claims)
 }
 
 function slugEmail(c: PoolEntry): string {
@@ -3248,6 +3232,12 @@ async function main() {
     await seedDemoTeam(profile)
   }
 
+  // The member app's test login — the same review studio the production
+  // console provisions, with its fixed code (scripts/lib/mobile.ts). The nightly
+  // reseed refreshes its window, so on the sandbox it never lapses.
+  const memberApp = await seedReviewTenant({ db, seededBy: 'seed-sandbox' })
+  await seedMobileSettings({ db, seededBy: 'seed-sandbox' })
+
   console.log('\n✅ Demo playground seeded successfully!\n')
   console.log('   ┌──────────┬──────────────────────────┬────────────────────────┬────────────┐')
   console.log('   │ Sector   │ Team                     │ Login                  │ Password   │')
@@ -3264,6 +3254,7 @@ async function main() {
     console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
   reportSeedConnectAccounts()
+  printMemberAppLogin(memberApp)
   console.log('')
 }
 

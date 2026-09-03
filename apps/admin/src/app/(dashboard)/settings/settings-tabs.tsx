@@ -15,6 +15,7 @@ const TABS = [
   { href: '/settings/announcement', label: 'Announcement' },
   { href: '/settings/notices', label: 'Notices' },
   { href: '/settings/demo-tenant', label: 'Demo tenant' },
+  { href: '/settings/mobile', label: 'Member app' },
 ]
 
 export function SettingsTabs() {

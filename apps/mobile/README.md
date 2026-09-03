@@ -120,6 +120,12 @@ pnpm dev:mobile:emulators        # Terminal 2 — this app, against the emulator
 time, naming the env file to fill — rather than running against it with a
 placeholder and failing later as `auth/invalid-api-key`.
 
+**Sign in as** `app.review@example.com`, code `123456` — the review studio
+(`linyup-demo`) every seeded environment provisions; `docs/test-accounts.md`
+has every other login. Builds older than `app_settings/mobile.
+min_supported_version` (operator console → Member app) open on an
+update-required screen; the gate fails open.
+
 Scripts (see `package.json`): `start` / `start:clear` / `start:prod` (staging
 / production), `start:emulators` / `start:emulators:web` (local emulators),
 `android` / `ios` (native builds), `typecheck`, `lint` (`expo lint`), `test`
@@ -132,7 +138,13 @@ with no error anywhere.
 `pnpm test` runs Jest (`jest-expo` preset) over pure logic only — the
 public-profile mapper, the appointment-benefit badge helper, the mobile
 telemetry payload shape, the affiliation-term locale pick, the session-mirror
-type constant. No emulator, no rendering.
+type constant, the min-version decision. No emulator, no rendering.
+
+`pnpm test:e2e` runs the Maestro smoke flow (`.maestro/login.yaml`: sign in
+with the review login, land on the profile) against a build on a device or
+simulator — needs the Maestro CLI; not wired into CI. The login chain's
+server-side decisions are tested in
+`packages/functions/src/auth/loginChain.test.ts`.
 
 ## Releases
 
