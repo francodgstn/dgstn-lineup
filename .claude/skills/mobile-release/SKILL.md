@@ -160,3 +160,11 @@ Apple/Google (see the roadmap §7), plus the prod key.
   `@linyup/shared`.
 - `expo config` throws on an unknown `FIREBASE_PROJECT_ID` — every profile's
   env must name a project the `environments` map in `app.config.js` knows.
+- **ANY `app.config.js` edit invalidates BOTH platforms' fingerprints**, even a
+  strictly platform-specific one. @expo/fingerprint takes the whole evaluated
+  config as ONE `expoConfig` source and does not filter it per platform —
+  verified: the ANDROID fingerprint's config blob contains `ios.supportsTablet`.
+  So an iOS-only change costs an Android rebuild on the next lane run (the lane
+  finds no build matching the new fingerprint, so it builds instead of updating).
+  Expected, not a fault; `fingerprint.config.js` already skips the two parts that
+  would otherwise churn on every push (`extra` and the version fields).

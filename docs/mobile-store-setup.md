@@ -61,10 +61,11 @@ moment the first build is uploaded.
 
 ## Decisions to take before touching a console
 
-**iPad.** `app.config.js` sets `ios.supportsTablet: true`, and Apple then
-requires a full iPad screenshot set on top of iPhone, forever, for every
-listing update. If iPad is not a target, set it to `false` now — it halves the
-screenshot work permanently and is a one-line change.
+**iPad — DECIDED 2026-09-03: no.** `ios.supportsTablet` is `false`. Declaring
+iPad support obliges the App Store listing to carry a full iPad screenshot set
+on top of iPhone, forever, on every listing update — and this is a phone app: a
+QR check-in scanner, a booking list, a profile. Reversing it is one line plus
+that screenshot set.
 
 **Store name.** The listing name is not the bundle id and does not have to be
 "Linyup" alone; it is what members search for. Decide before creating the

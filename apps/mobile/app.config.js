@@ -178,7 +178,12 @@ export default ({ config }) => {
       backgroundColor: '#ffffff',
     },
     ios: {
-      supportsTablet: true,
+      // FALSE deliberately. Declaring iPad support obliges Apple's listing to
+      // carry a full iPad screenshot set, forever, on every listing update —
+      // and the member app is a phone app: a QR check-in scanner, a booking
+      // list, a profile. Nothing here wants a tablet canvas. Turning this on
+      // later is a one-line change plus that screenshot set.
+      supportsTablet: false,
       bundleIdentifier: variant.bundleId,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
