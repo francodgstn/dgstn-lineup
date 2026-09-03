@@ -207,7 +207,7 @@ construction rather than by a check somebody can forget. And the comparison is
   than the incumbent.
 
 The asymmetry has a reason, not a preference. `appliedBenefit` answers *which
-membership priced this booking* — provenance, read downstream by `/offer/pricing`
+membership priced this booking* — provenance, read downstream by `/manage/pricing`
 for the member badge and by `createAppointmentCheckout` for the booking's
 `subscription_type_id`. `appliedPromo` answers *did a code change the price* — an
 event. A benefit set exactly at base **did** price the booking; a promo at exactly
@@ -1106,7 +1106,7 @@ be one edit away from not being a cap.
 decision, and the honest consequence is worth stating plainly rather than
 discovering:
 
-> A studio will eventually open `/offer/promo-codes` and see a campaign reporting
+> A studio will eventually open `/manage/promo-codes` and see a campaign reporting
 > **fully redeemed with uses left unsold**. That is **contested, not exhausted**:
 > reservations are held by people currently in checkout (or who abandoned one),
 > and they release themselves when their checkout can no longer be paid.
@@ -1330,7 +1330,7 @@ cash basis, and it is why the payment-row stamp below is not decoration.
    - **A gift-card full-cover purchase has no payment row at all** (no Stripe
      session, no `member_payments` document), so a promo used on one is recorded
      only in `usage_count` and the redemptions ledger.
-3. **`/offer/pricing`** — `PriceCell.pay.promoCode`, and `fromResult` falls back
+3. **`/manage/pricing`** — `PriceCell.pay.promoCode`, and `fromResult` falls back
    through `appliedPromo.baseAmount` and `appliedPromo.supersededBenefit` so the
    member badge is not lost the moment a code beats the benefit.
 4. **No campaign analytics module** — no attribution dashboard, no cohort lift, no
@@ -1338,7 +1338,7 @@ cash basis, and it is why the payment-row stamp below is not decoration.
 
 ## Surfaces
 
-### Admin — `/offer/promo-codes`
+### Admin — `/manage/promo-codes`
 
 In `sectionOffer` of the nav, after Pricing, with **`minPlan: 'studio'`** — so it
 is **visible but locked**, driving the upsell modal. `requiresPlan` would hide the

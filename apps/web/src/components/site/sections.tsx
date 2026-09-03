@@ -60,9 +60,13 @@ import {
   compareActivities,
   mergeAvailabilitySlots,
   resolveActivityAccessRule,
+  normalizeBenefit,
+  resolveDurationBenefit,
   resolveDurationSale,
   type ActivityAccessRule,
+  type ActivityDurationBenefit,
   type ActivityMemberBenefit,
+  type Benefit,
 } from '@linyup/shared'
 import {
   resolveActivityTerms,
@@ -465,7 +469,10 @@ interface ActivityEntry {
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
+  /** APPOINTMENT-ONLY. Read WITH `memberBenefit`, through
+   *  `resolveDurationBenefit` — never on its own. */
+  durationBenefits?: ActivityDurationBenefit[]
 }
 
 // Benefit chips stay GENERIC (no plan names — the website has no
@@ -513,6 +520,7 @@ function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
     dropIn: a.dropIn,
     durations: a.durations,
     memberBenefit: a.memberBenefit,
+    durationBenefits: a.durationBenefits,
     accessRule: a.accessRule,
   })
     .filter(
@@ -673,6 +681,9 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               trialPriceAmount: typeof data.trialPriceAmount === 'number' ? (data.trialPriceAmount as number) : null,
               durations: Array.isArray(data.durations) ? (data.durations as ActivityEntry['durations']) : undefined,
               memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              durationBenefits: Array.isArray(data.durationBenefits)
+                ? (data.durationBenefits as ActivityDurationBenefit[])
+                : undefined,
             }
           })
           .filter((a) => a.name)
@@ -1017,12 +1028,33 @@ function pricingCell(
 ): Cell {
   if (a.activityType === 'appointment') {
     // An appointment has NO access gate — the price is the gate — so a plan
-    // never unlocks one; it can only make it cheaper (Activity.memberBenefit).
-    const benefit = a.memberBenefit
-    const covered = benefit?.subscriptionTypeIds?.includes(planId) === true
-    if (covered && benefit?.kind === 'included') return { kind: 'yes' }
-    if (covered && benefit?.kind === 'discount')
-      return { kind: 'text', text: t('tableDiscount', { percent: benefit.discountPercent ?? 0 }) }
+    // never unlocks one; it can only make it cheaper.
+    //
+    // ONE CELL, SEVERAL LENGTHS. The rule is per length, and this table has one
+    // cell per (plan, activity) on a page a stranger reads. So the cell states
+    // a benefit only when EVERY length agrees; where they differ it falls
+    // through to the "from CHF …" figure, which is true whatever the plan does,
+    // and the picker quotes the real per-length price.
+    //
+    // Through `normalizeBenefit`, not `benefit.kind`: a per-length rule is
+    // always stored in the generalized shape, and the legacy read below used to
+    // see `effect` and report NOT COVERED for a plan that books free.
+    const lengths = a.durations?.length ? a.durations : [{ minutes: 60 }]
+    const rules = lengths.map((d) => normalizeBenefit(resolveDurationBenefit(a, d.minutes)))
+    const first = rules[0] ?? null
+    const unanimous = rules.every((b) => JSON.stringify(b) === JSON.stringify(first))
+    const benefit = unanimous ? first : null
+    if (benefit?.subscriptionTypeIds.includes(planId)) {
+      if (benefit.effect === 'included' || benefit.effect === 'spend_credits') {
+        return { kind: 'yes' }
+      }
+      if (benefit.effect === 'percent_off' && typeof benefit.percent === 'number') {
+        return { kind: 'text', text: t('tableDiscount', { percent: benefit.percent }) }
+      }
+      if (benefit.effect === 'fixed_price' && typeof benefit.amount === 'number') {
+        return { kind: 'text', text: formatCurrency(benefit.amount, currency) }
+      }
+    }
     // `resolveDurationSale` rather than a raw price test: a benefit_only length
     // (UX-70) has no individual price, so it must not produce a "from" figure.
     const priced = (a.durations ?? [])
@@ -1217,6 +1249,9 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   ? (d.data().durations as ActivityEntry['durations'])
                   : undefined,
                 memberBenefit: (d.data().memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+                durationBenefits: Array.isArray(d.data().durationBenefits)
+                  ? (d.data().durationBenefits as ActivityDurationBenefit[])
+                  : undefined,
               }) as ActivityEntry
           )
           .filter((a) => a.name)

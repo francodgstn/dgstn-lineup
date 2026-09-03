@@ -9,6 +9,6 @@ export default async function Page({
   params: Promise<{ locale: string; courseId: string }>
 }) {
   const { locale, courseId } = await params
-  const to = `/offer/online-courses/${courseId}`
+  const to = `/manage/online-courses/${courseId}`
   redirect((locale === 'en' ? to : `/${locale}${to}`) as Route)
 }

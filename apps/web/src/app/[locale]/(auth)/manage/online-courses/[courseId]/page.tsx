@@ -980,7 +980,7 @@ function SettingsTab({
             <AlertDialogAction
               onClick={async () => {
                 await deleteCourse(courseId)
-                router.push('/offer/online-courses' as Route)
+                router.push('/manage/online-courses' as Route)
               }}
             >{t('delete')}</AlertDialogAction>
           </AlertDialogFooter>
@@ -1014,7 +1014,7 @@ export default function CourseBuilderPage() {
   if (!course) {
     return (
       <div className="max-w-3xl space-y-4">
-        <Link href={'/offer/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+        <Link href={'/manage/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
           <ChevronLeft className="h-4 w-4" />{t('backToCourses')}
         </Link>
         <p className="text-sm text-muted-foreground">{t('notFound')}</p>
@@ -1024,7 +1024,7 @@ export default function CourseBuilderPage() {
 
   return (
     <div className="max-w-5xl space-y-5">
-      <Link href={'/offer/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+      <Link href={'/manage/online-courses' as Route} className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
         <ChevronLeft className="h-4 w-4" />{t('backToCourses')}
       </Link>
 

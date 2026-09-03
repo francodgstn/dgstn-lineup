@@ -48,7 +48,7 @@ export async function pass06Sessions(
         const pRef = tgt.collection('sessions').doc(d.id).collection('participants').doc(pd.id)
         if (!cfg.dryRun) {
           const existing = await pRef.get()
-          if (existing.exists) { bw.skip(); continue }
+          if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
         }
         bw.set(pRef, transformParticipant(pd.id, pd.data() as Record<string, unknown>, teamId))
       }
@@ -63,7 +63,7 @@ export async function pass06Sessions(
         const bRef = tgt.collection('sessions').doc(d.id).collection('bookings').doc(bd.id)
         if (!cfg.dryRun) {
           const existing = await bRef.get()
-          if (existing.exists) { bw.skip(); continue }
+          if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
         }
         bw.set(bRef, transformBooking(bd.id, bd.data() as Record<string, unknown>, teamId))
       }
@@ -71,6 +71,11 @@ export async function pass06Sessions(
       // Write session doc — skip if already exists but still update counts via merge
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
+        // NOT under --overwrite, deliberately. `bookings_count` on a live
+        // session is written by trackBookings from the bookings subcollection
+        // (see CLAUDE.md → "ONE SEAT WRITER"); re-setting the whole doc from the
+        // source would stamp a stale absolute count over the live one and can
+        // resell a held seat. The counts merged here are the source's own.
         if (existing.exists) {
           bw.merge(tgtRef, { bookings_count: bookingsCount, trial_bookings_count: trialBookingsCount })
           continue

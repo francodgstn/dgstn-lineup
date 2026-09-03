@@ -24,7 +24,7 @@
  * absolute:
  *
  *   this form   accessRule.type, isFreeTrial, dropIn, trialEnabled,
- *               trialPriceAmount
+ *               trialPriceAmount, durations
  *   the matcher accessRule.subscriptionTypeIds, memberBenefit
  *   the dialog  everything else — and it no longer names any field above
  *
@@ -32,9 +32,15 @@
  * a FIELD PATH and never touches the sibling id list. It cannot clobber a list
  * it cannot address.
  *
- * APPOINTMENTS HAVE NO ARM HERE. An appointment's price is its gate, its
- * durations carry their own prices, and it has neither a drop-in nor a trial —
- * so it gets the matcher alone.
+ * APPOINTMENTS HAVE NO ACCESS ARM HERE. An appointment's price is its gate and
+ * it has neither a drop-in nor a trial — so it gets the SESSION LENGTHS and the
+ * matcher, and none of the class controls.
+ *
+ * The lengths arrived on 2026-09-02, from the dialog's Details tab: an
+ * appointment's price is attached to its LENGTH, so the two are one control and
+ * splitting them across two tabs asked the studio to answer one question twice.
+ * The dialog now renders that editor while CREATING only — see
+ * `AppointmentDurationsEditor`.
  */
 
 import { useEffect, useState } from 'react'
@@ -44,6 +50,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { toast } from 'sonner'
 import {
   ACTIVITIES_COLLECTION,
+  benefitOpensDoorAt,
   isAppointmentActivity,
   resolveActivityAccessRule,
   type Activity,
@@ -57,6 +64,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ActivityPlanLinks } from '@/components/offer/ActivityPlanLinks'
+import {
+  AppointmentDurationsEditor,
+  durationPriceProblem,
+  toActivityDurations,
+  toDurationFormValues,
+  type DurationFormValue,
+} from '@/components/activities/AppointmentDurationsEditor'
 
 type AccessTier = 'open' | 'members' | 'subscription'
 
@@ -71,6 +85,11 @@ interface Draft {
   trialPrice: string
   dropInEnabled: boolean
   dropInPrice: string
+  /** APPOINTMENT-ONLY, and read from the STORED lengths rather than from
+   *  `resolveAppointmentDurations`: the fallback 60-minute entry is what a
+   *  booking gate assumes, not something the studio chose, and seeding the
+   *  editor with it would have the next Save write it down as if they had. */
+  durations: DurationFormValue[]
 }
 
 function draftOf(a: Activity): Draft {
@@ -80,6 +99,7 @@ function draftOf(a: Activity): Draft {
     trialPrice: a.trialPriceAmount != null ? String(a.trialPriceAmount) : '',
     dropInEnabled: a.dropIn?.enabled ?? false,
     dropInPrice: a.dropIn?.priceAmount != null ? String(a.dropIn.priceAmount) : '',
+    durations: toDurationFormValues(a.durations),
   }
 }
 
@@ -89,7 +109,11 @@ function same(a: Draft, b: Draft): boolean {
     a.trialEnabled === b.trialEnabled &&
     a.trialPrice === b.trialPrice &&
     a.dropInEnabled === b.dropInEnabled &&
-    a.dropInPrice === b.dropInPrice
+    a.dropInPrice === b.dropInPrice &&
+    // Compared by VALUE, not by reference — the draft is rebuilt on every
+    // keystroke, so a reference check would report every appointment dirty
+    // forever and arm the Save button on a form nobody touched.
+    JSON.stringify(a.durations) === JSON.stringify(b.durations)
   )
 }
 
@@ -129,6 +153,10 @@ export function ActivityPricingForm({
   }, [activity.id, JSON.stringify(draftOf(activity))])
 
   const isAppointment = isAppointmentActivity(activity)
+  // Read from the STORED activity, which is what the matcher below writes and
+  // what the resolver will read — never from the draft, which holds lengths
+  // and prices but no rules.
+  const benefitOpensDoor = (minutes: number) => benefitOpensDoorAt(activity, minutes)
   // Read off the DRAFT tier, not the stored one: picking "Any member" should
   // reveal the plan table there and then, the same way the course's sell
   // switch reveals its rate columns.
@@ -143,7 +171,10 @@ export function ActivityPricingForm({
    * does not.
    */
   const draftActivity: Activity = isAppointment
-    ? activity
+    ? // The DRAFT lengths, for the same reason: `rateHasAPriceToApplyTo` reads
+      // them, so pricing a length and then reaching for the plan table found
+      // every rate column dimmed until the form had been saved once.
+      { ...activity, durations: toActivityDurations(draft.durations) }
     : {
         ...activity,
         accessRule: {
@@ -159,7 +190,14 @@ export function ActivityPricingForm({
     draft.dropInEnabled && !(draft.dropInPrice.trim() !== '' && parsePrice(draft.dropInPrice) >= 0.5)
   const trialPriceInvalid =
     draft.trialPrice.trim() !== '' && !(parsePrice(draft.trialPrice) >= 0.5)
-  const invalid = dropInPriceInvalid || trialPriceInvalid
+  // Through the editor's own predicate, so a length saved from here can never
+  // be one the create dialog would have refused.
+  const durationPriceInvalid = isAppointment && draft.durations.some(durationPriceProblem)
+  // An appointment with no length at all falls back to one unpriced 60-minute
+  // slot everywhere it is read (`resolveAppointmentDurations`). That is a
+  // working state, not an error — so it is not refused here; it is simply what
+  // the studio gets until they pick a length.
+  const invalid = dropInPriceInvalid || trialPriceInvalid || durationPriceInvalid
   const dirty = !same(draft, stored)
   /** EITHER half being touched arms the one button. */
   const anyDirty = dirty || !!links?.dirty
@@ -175,22 +213,33 @@ export function ActivityPricingForm({
         await links.run()
         return
       }
-      await updateDoc(doc(db, ACTIVITIES_COLLECTION, activity.id), {
-        // A FIELD PATH, not the whole map: `accessRule.subscriptionTypeIds` is
-        // the matcher's and must survive every save from here.
-        'accessRule.type': draft.accessTier,
-        isFreeTrial: draft.accessTier === 'open',
-        dropIn: {
-          enabled: draft.dropInEnabled,
-          ...(draft.dropInPrice ? { priceAmount: parsePrice(draft.dropInPrice) } : {}),
-        },
-        trialEnabled: draft.trialEnabled,
-        // Cleared on an open tier — the field is hidden there (the trial door
-        // grants nothing extra on a free-to-book class), so a leftover price
-        // must not survive as inert data the UI cannot show.
-        trialPriceAmount:
-          draft.trialPrice && draft.accessTier !== 'open' ? parsePrice(draft.trialPrice) : null,
-      })
+      // AN APPOINTMENT WRITES ONLY ITS LENGTHS. The class keys below are not
+      // merely irrelevant to it — `accessRule` and `dropIn` are read by nothing
+      // on an appointment path, so writing them would store settings no surface
+      // can show or change (see ActivityMemberBenefit's history note).
+      await updateDoc(
+        doc(db, ACTIVITIES_COLLECTION, activity.id),
+        isAppointment
+          ? { durations: toActivityDurations(draft.durations) }
+          : {
+              // A FIELD PATH, not the whole map: `accessRule.subscriptionTypeIds` is
+              // the matcher's and must survive every save from here.
+              'accessRule.type': draft.accessTier,
+              isFreeTrial: draft.accessTier === 'open',
+              dropIn: {
+                enabled: draft.dropInEnabled,
+                ...(draft.dropInPrice ? { priceAmount: parsePrice(draft.dropInPrice) } : {}),
+              },
+              trialEnabled: draft.trialEnabled,
+              // Cleared on an open tier — the field is hidden there (the trial door
+              // grants nothing extra on a free-to-book class), so a leftover price
+              // must not survive as inert data the UI cannot show.
+              trialPriceAmount:
+                draft.trialPrice && draft.accessTier !== 'open'
+                  ? parsePrice(draft.trialPrice)
+                  : null,
+            }
+      )
       refreshQueries(qc, ['activities'])
       // "Set a price" is a derived setup step keyed on `dropIn.enabled`.
       void invalidateSetupChecklist()
@@ -335,6 +384,26 @@ export function ActivityPricingForm({
           </div>
 
         </>
+      )}
+
+      {/* THE LENGTHS AND WHAT EACH COSTS — first, because everything below it
+          is a rule ABOUT these prices. A plan cannot be said to include or
+          discount a session length that has not been chosen yet. */}
+      {isAppointment && (
+        <div className="rounded-lg border p-3">
+          <AppointmentDurationsEditor
+            value={draft.durations}
+            onChange={(next) => set('durations', next)}
+            currency={currency}
+            canEdit={canEdit}
+            benefitOpensDoor={benefitOpensDoor}
+            errorFor={(i) =>
+              draft.durations[i] && durationPriceProblem(draft.durations[i])
+                ? t('durationPriceValidation')
+                : undefined
+            }
+          />
+        </div>
       )}
 
       {/* WHERE THE MATCHER WOULD BE, on a class no plan can bear on. An open

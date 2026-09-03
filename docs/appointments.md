@@ -212,31 +212,51 @@ by paying up front through Stripe Connect — the same rail as the class drop-in
 (`docs/payment-contact-studio.md`), but **not** the class `dropIn` config, which
 stays class-only. Appointments price the duration itself.
 
-### The pricing model — base price per duration, ONE benefit rule per activity
+### The pricing model — a price AND a member rule, both per session length
 
-The coach sells TIME, so the base price is per duration; the member benefit is
-ONE rule for the whole activity — never per duration, never per type-×-duration
-(`packages/shared/src/types/activity.ts`):
+The coach sells TIME, so the base price is per duration — and so is the rule
+about that price (`packages/shared/src/types/activity.ts`):
 
 ```ts
 durations: [
   { minutes: 30, priceAmount: 45 },   // base price, major units
   { minutes: 60, priceAmount: 85 },   // null/absent = unpriced → free for anyone
 ]
-memberBenefit: {                      // the ONE rule — optional
-  subscriptionTypeIds: ['sub-elite', 'sub-premium'],
-  kind: 'included',                   // or 'discount' + discountPercent: 20
-}
+durationBenefits: [                   // one optional rule PER LENGTH
+  { minutes: 30, benefit: { subscriptionTypeIds: ['sub-elite'], effect: 'included' } },
+  { minutes: 60, benefit: { subscriptionTypeIds: ['sub-elite'], effect: 'fixed_price', amount: 60 } },
+]
+memberBenefit: { … }                  // LEGACY — the activity-wide rule
 ```
 
-- **The benefit is data, never implied — but it is now ONE rule.** Holders of
-  any listed type: `kind: 'included'` → every priced duration is free (a
-  credit-pack type spends a credit); `kind: 'discount'` → `discountPercent` off
-  every priced duration. **Absent `memberBenefit` = no benefit** — everyone,
-  subscribers included, pays base. (History: until 2026-07 this was a
-  per-duration × per-subscription-type `subscriptionPricing` matrix, plus a form
-  that pre-filled entries from the access rule; the persona test showed the
-  algebra confused real coaches, and it was cut for this one rule.)
+- **THE ONE READER IS `resolveDurationBenefit(activity, minutes)`.** Never touch
+  either field directly. `durationBenefits` present ⇒ it is the whole answer and
+  a missing entry means "no rule for this length"; absent ⇒ the legacy
+  activity-wide `memberBenefit` applies to every length, exactly as before. So
+  an appointment nobody has re-edited behaves identically, and **no backfill is
+  owed**: the first per-length save absorbs the old rule onto every length the
+  activity has and clears `memberBenefit`
+  (`activityPlanEdgeUpdate`), the same absorption-on-first-write the course gate
+  does with its own legacy spelling.
+- **The benefit is data, never implied.** Holders of any listed type:
+  `included` → that length is free (a credit-pack type spends a credit);
+  `percent_off` → that percentage off it; `fixed_price` → that amount for it.
+  **No rule = no benefit** — everyone, subscribers included, pays base.
+- **Why it went back to being per length (2026-09-02).** One rule for the whole
+  activity could not express `fixed_price` at all: "members pay CHF 40" charged
+  the same for thirty minutes and for ninety, an amount that cannot be right for
+  both — offered by the editor and honoured by the resolver, with no way to say
+  the true thing. **This is not the matrix that was cut in 2026-07.** That one
+  was per duration × per subscription type — a grid of PRICES, which is what
+  produced "who pays base price if only Premium can book?". This is the same ONE
+  rule the studio already writes, asked once per length; the second axis is
+  still the rule's own `subscriptionTypeIds`, not a cell.
+- **A public one-line summary is unanimous or absent.** The shop card, the
+  website's activity chip and the site's pricing table each have ONE cell for an
+  appointment, so they state a benefit only when every length agrees and
+  otherwise fall back to the price range (`resolveActivityTerms`,
+  `pricingCell`). "Included with Premium" when only the 30-minute length is
+  included is a lie told to a stranger.
 - **Effective price for a caller** — the appointment arm of the ONE shared
   coverage/quote resolver (`resolvePaymentOptions(snapshot, { kind:
   'appointment', duration, benefit }, context?)` in
