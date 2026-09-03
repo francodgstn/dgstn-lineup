@@ -104,6 +104,12 @@ The one-time staging setup (project, key, token, first build) is a runbook
 for a local session: `docs/mobile-eas-setup.md`. Run 2026-09-03 — the EAS
 project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
 
+**The staging half is COMPLETE and both halves of the lane are proven on
+`main`**: the project, the `EXPO_TOKEN` robot (`linyup-eas-robot`), the key
+in both channels, a finished `preview` APK, and EAS updates landing on the
+`staging` branch at a runtime version that APK matches. What remains is all
+Apple/Google (see the roadmap §7), plus the prod key.
+
 - `EXPO_TOKEN` — GitHub repository secret (the CI's EAS identity).
 - `EAS_PROJECT_ID` — the project id is now the DEFAULT in `app.config.js`
   (`extra.eas.projectId` + `updates.url` are live, so OTA is armed). The env
@@ -135,6 +141,18 @@ project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
   EMPTY stderr, and expo-github-action reports only "failed with exit code
   1". Nothing anywhere names the cause. An EAS environment variable does not
   cover this — it is not in scope for that local read.
+- **A green lane does not mean a green build.** The action starts builds with
+  `--no-wait`, so the job goes green the moment the build is QUEUED. The first
+  run after the key fix reported success while its build failed four minutes
+  later, and nothing in GitHub ever says so — the commit comment carries a
+  link, not an outcome. After any lane run that STARTS a build (rather than
+  publishing an update), check EAS: `eas build:list --platform android
+  --limit 3`, or `--json` for the `error` field, which is the only place the
+  reason appears.
+- Gradle failures on EAS can be transient. Two builds of the SAME fingerprint
+  errored with `EAS_BUILD_UNKNOWN_GRADLE_ERROR` and a third finished, same
+  native inputs. Identical fingerprint + different outcome = infrastructure,
+  not code; re-run before investigating.
 - A stale `packages/shared/dist` on the EAS builder: `eas-build-post-install`
   builds shared; if that script is removed, Metro fails to resolve
   `@linyup/shared`.
