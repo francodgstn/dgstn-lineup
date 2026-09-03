@@ -33,7 +33,7 @@ const environments = {
     databaseURL: 'https://linyup-staging.firebaseio.com',
     projectId: 'linyup-staging',
     storageBucket: 'linyup-staging.firebasestorage.app',
-    messagingSenderId: '', // TODO: set from Firebase console
+    messagingSenderId: '157648925506',
     webAppUrl: 'https://app-stg.linyup.com',
   },
   'linyup-sandbox': {
@@ -135,10 +135,12 @@ export default ({ config }) => {
     apiKey: process.env.FIREBASE_API_KEY || 'demo-api-key',
   }
 
-  // The owner runs `eas init` later, which writes this into `extra.eas.projectId`.
-  // Until then, `updates.url` stays undefined (OTA is inert, same as today) rather
-  // than pointing at a project id that does not exist.
-  const easProjectId = process.env.EAS_PROJECT_ID ?? ''
+  // `eas init` created @francodagostino/linyup and printed this id. The config is
+  // dynamic, so EAS cannot write it itself — it lives here. The env override stays:
+  // CI, or a second account, can still redirect a build at another project — `||`
+  // rather than `??` because the env templates ship an EMPTY `EAS_PROJECT_ID=`,
+  // and an empty string is not nullish: `??` would silently disable OTA.
+  const easProjectId = process.env.EAS_PROJECT_ID || 'f941b285-002a-4bdb-8c42-8c3e5edfab66'
 
   return {
     ...config,

@@ -82,14 +82,19 @@ project (the one the Apple/Google accounts will later be attached to).
 ```bash
 cd apps/mobile
 npx eas-cli init          # or: npx eas-cli project:init
+# non-interactive: it refuses to CREATE without --force, which is the
+# difference between linking an existing project and making a new one
 ```
 
 Because `app.config.js` is dynamic, `eas init` **cannot write the id into the
 config**. It prints the project id (a UUID) and, if the account is an
 organisation, may ask for `owner`. Then, in `app.config.js`:
 
-- make the id the default: `const easProjectId = process.env.EAS_PROJECT_ID ?? '<the uuid>'`
-  (keep the env override — CI and a second account can still redirect it);
+- make the id the default: `const easProjectId = process.env.EAS_PROJECT_ID || '<the uuid>'`
+  (keep the env override — CI and a second account can still redirect it).
+  **`||`, not `??`**: `.env.example` and every `.env.*` copied from it ship an
+  empty `EAS_PROJECT_ID=`, and an empty string is not nullish — with `??` the
+  staging target silently loses `updates.url` and OTA goes inert again;
 - if `eas init` asked for an owner, add `owner: '<account slug>'` next to `slug`.
 
 Verify: `FIREBASE_PROJECT_ID=demo-linyup npx expo config --type public --json | jq '.extra.eas, .updates'`
@@ -173,9 +178,17 @@ the branch, open a PR, let the `Mobile` check job pass, merge. The push to
 `main` runs the `staging` lane: with the token and the project in place the
 `continuous-deploy-fingerprint` step either publishes an OTA update to the
 `staging` branch or starts a `preview` build, and comments the result on the
-commit. Two inputs the workflow header asks to verify on this first run: the
-action's `auto-submit-builds` input name (release lane only) and that the
+commit. Both inputs the workflow header asked about are now settled, in the
+header itself: `auto-submit-builds` is the action's real input name, and the
 `preview` EAS environment carries `FIREBASE_API_KEY` (step 5).
+
+**On the very first run there is nothing to update, so the lane BUILDS** —
+which is why the staging lane is pinned to `platform: android`. Step 7's
+"Android first, iOS when the owner is at the keyboard" is a property of the
+workflow, not just of the manual build: an iOS internal build with no ad hoc
+provisioning profile fails, and with `platform: all` it would fail on every
+run on `main`. That input is the one thing to widen once the Apple account
+and `eas device:create` are done.
 
 If the lane fails on `eas update`/`eas build` with an auth error, the token is
 wrong or scoped to another account; if it fails computing the fingerprint,
