@@ -72,8 +72,11 @@ jobs:
       - name: Lint
         run: pnpm --filter @linyup/mobile run lint
 
+      # No `-- --ci`: pnpm hands the `--` to Jest as a test-path pattern (zero
+      # matches, red job — the first run on main). Jest reads CI=true, which
+      # GitHub sets, and behaves as --ci from that alone.
       - name: Unit tests
-        run: pnpm --filter @linyup/mobile run test -- --ci
+        run: pnpm --filter @linyup/mobile run test
 
       - name: Typecheck
         run: pnpm --filter @linyup/mobile run typecheck
