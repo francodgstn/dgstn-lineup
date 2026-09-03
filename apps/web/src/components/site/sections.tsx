@@ -2280,7 +2280,7 @@ function FeaturesBlock({ section, ctx }: { section: FeaturesSection; ctx: Render
           {items.map((item, i) => (
             <div
               key={i}
-              className="rounded-xl border p-5"
+              className="rounded-xl border p-5 shadow-sm"
               style={{ background: palette.surface, borderColor: palette.border }}
             >
               {item.icon && (
@@ -2367,7 +2367,7 @@ function FaqBlock({ section, ctx }: { section: FaqSection; ctx: RenderCtx }) {
   const [open, setOpen] = useState(0)
   if (items.length === 0) return null
   return (
-    <section id={section.id} className="py-20" style={{ background: palette.surface }}>
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
       <div className="mx-auto max-w-3xl px-6">
         <Heading text={section.heading} palette={palette} />
         <div className="mt-8 space-y-2">
@@ -2376,8 +2376,8 @@ function FaqBlock({ section, ctx }: { section: FaqSection; ctx: RenderCtx }) {
             return (
               <div
                 key={i}
-                className="overflow-hidden rounded-xl border"
-                style={{ background: palette.bg, borderColor: palette.border }}
+                className="overflow-hidden rounded-xl border shadow-sm"
+                style={{ background: palette.surface, borderColor: palette.border }}
               >
                 <button
                   type="button"
