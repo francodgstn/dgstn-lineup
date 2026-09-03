@@ -23,9 +23,12 @@ Paste this into a local session to run it:
   APK / iOS internal, channel `staging`, EAS environment `preview`) and `store`
   (channel `production`, EAS environment `production`). Both non-prod profiles
   pin `FIREBASE_PROJECT_ID=linyup-staging` in `env` — that value is a plain
-  literal, which is fine for a project id and is exactly why the **API key must
-  NOT go there** (`eas.json` does not interpolate `${…}`; a `"${FIREBASE_API_KEY}"`
-  string would be baked into the app as-is).
+  literal. **CORRECTED 2026-09-03:** this file used to say the API key must NOT
+  go there. That was wrong and it cost the first run on `main`. The real rule is
+  narrower — never write `"${FIREBASE_API_KEY}"`, because `eas.json` does not
+  interpolate `${…}` and bakes in that literal string. The VALUE belongs there,
+  because it is the only thing in scope when `eas build` evaluates
+  `app.config.js` locally. See step 5.
 - `apps/mobile/app.config.js` reads `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`
   and `EAS_PROJECT_ID` from the environment and **refuses a real project
   without a key** at config time (a clear error, not a runtime
@@ -121,10 +124,25 @@ pnpm dev:mobile            # Metro; open in Expo Go or a dev client, sign in wit
 
 ### 5. EAS environment variables — the API key for builds
 
-The key must reach EAS builds through **EAS environment variables**, one per
-environment the profiles name. It is public config, so `plaintext` visibility
-is correct (a `secret` would hide it from `expo config` on the builder, which
-needs to read it):
+The key must reach **two** places. They look redundant and are not — they serve
+different commands, and the setup is broken if either is missing.
+
+**a. `eas.json`'s `env` block**, per non-prod profile, as a literal value.
+This is the only thing in scope when `eas build` evaluates `app.config.js`
+**on your machine**, before it uploads anything: eas-cli sets
+`EXPO_NO_DOTENV=1` there, so no `.env` applies, and server-side variables are
+not resolved yet. Since `app.config.js` refuses a real project without a key,
+omitting this makes every `eas build` die in about a second — and die
+*silently*: `expo config --json` exits 1 with empty stderr, and
+`expo-github-action` surfaces only "failed with exit code 1". Nothing names
+the cause. (Verified by probe: the config sees exactly `EXPO_NO_DOTENV` and
+`FIREBASE_PROJECT_ID` during that read.)
+
+**b. EAS environment variables**, one per environment the profiles name.
+These reach the BUILDER, and they are what `eas update --environment`
+resolves — so the OTA half of the lane needs them even though the build half
+does not. Public config, so `plaintext` visibility is correct (a `secret`
+would hide it from `expo config` on the builder, which needs to read it):
 
 ```bash
 cd apps/mobile
@@ -135,8 +153,9 @@ done
 npx eas-cli env:list --environment preview       # FIREBASE_API_KEY present
 ```
 
-Do **not** create the `production` one here — that is the prod key and a
-separate, deliberate step.
+Do **not** create the `production` one here, and do not add a key to the
+`store` profile's `env` — that is the prod key and a separate, deliberate
+step. Both halves are owed before the release lane can build.
 
 ### 6. The CI token — `EXPO_TOKEN`
 
