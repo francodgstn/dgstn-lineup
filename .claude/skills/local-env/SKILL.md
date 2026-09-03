@@ -50,6 +50,7 @@ ports; slot N adds `N × 10000` to every port.
 | emulator UI | 4000 | 14000 | 24000 | 34000 |
 | functions | 5001 | 15001 | 25001 | 35001 |
 | firestore | 8080 | 18080 | 28080 | 38080 |
+| metro (Expo) | 8081 | 18081 | 28081 | 38081 |
 | auth | 9099 | 19099 | 29099 | 39099 |
 | storage | 9199 | 19199 | 29199 | 39199 |
 
@@ -64,7 +65,7 @@ There is no slot 4: it would put auth on `:49099`, inside Windows' dynamic port
 range, and a stack that works until the day the OS happened to take the port
 first is worse than one slot fewer.
 
-## A fresh worktree: `init` first
+## A fresh checkout: `pnpm bootstrap` (which runs `init`)
 
 A worktree is a clean checkout of tracked files, and **everything the local
 stack needs to run is untracked**. It is not there, git will not tell you it is
@@ -75,21 +76,29 @@ missing, and each absence surfaces as something that looks like a code bug:
 | `apps/web/.env.local` | `auth/invalid-api-key`, or the app silently talking to a real project |
 | `apps/admin/.env.local` | operator console rejects every login |
 | `packages/functions/.env.local` | **every callable returns a bare `internal`** — see below |
+| `apps/mobile/.env.staging` | `pnpm dev:mobile` refuses at config time (it names the file) |
+| `packages/shared/dist`, `packages/functions/dist` | `X is not a function`, or last week's behaviour — see traps |
 | `scripts/leads/.env.local`, `scripts/leads/{lead}/` | `pnpm lead:seed` cannot find the profile |
 | `keys/` | `pnpm migrate:hmd` has no source credentials |
 
 ```bash
-node scripts/local-env.mjs init
+pnpm bootstrap
 ```
 
-copies each of them from the main checkout (never overwriting one that is
-already there), claims the lowest free slot, writes `firebase.local.json`, and
-patches a managed block into `apps/web/.env.local` and `apps/admin/.env.local`
-pointing them at this slot. Both generated files are gitignored.
+copies every env file from the committed `*.example` beside it (emulator-first;
+`scripts/bootstrap.mjs` owns that list), builds shared + functions when their
+`dist` is missing or older than `src`, and — once, when `.local-env.json` is
+absent — runs `init`, which imports the untracked files only the main checkout
+has (`IMPORTS` in `local-env.mjs`: the env files above, the mobile staging key,
+lead profiles, `keys/`; never overwriting one that is already there), claims the
+lowest free slot, writes `firebase.local.json`, and patches a managed block into
+`apps/web/.env.local`, `apps/admin/.env.local` and `apps/mobile/.env.local`
+pointing them at this slot. Every generated file is gitignored. The SessionStart
+hook in `.claude/settings.json` runs the same bootstrap for every agent session.
 
 To make a worktree talk to the **main checkout's** emulator instead — occasionally
 what you want for a read-only look at seeded data — delete the managed block
-from the two `.env.local` files. Do not do it to save starting a suite: the
+from the `.env.local` files. Do not do it to save starting a suite: the
 functions you would be exercising are the main checkout's build, not yours.
 
 ## Starting
@@ -100,7 +109,9 @@ Always `status` first. Then, for **slot 0** (the main checkout):
 pnpm emulators:seed
 ```
 
-and in separate terminals `pnpm dev:web` (:3000), `pnpm dev:admin` (:3002).
+and in separate terminals `pnpm dev:web` (:3000), `pnpm dev:admin` (:3002),
+`pnpm dev:mobile:emulators` (Metro :8081, Expo against this stack; the app
+reads the slot's emulator ports from `apps/mobile/.env.local`).
 Datasets are alternatives, not additions — pick one:
 
 | Command | Data | Destructive |
@@ -129,6 +140,9 @@ pnpm --filter @linyup/admin exec next dev --turbopack --port 13002
 $env:PORT=13000; pnpm dev:web                                              # PowerShell
 ```
 
+and the member app, whose Metro port must move too or Expo prompts
+interactively for the next free one: `pnpm dev:mobile:emulators -- --port 18081`.
+
 Then seed it: `node scripts/local-env.mjs reset --slot 1 --yes`.
 
 **Always launch through `scripts/emulators-run.mjs`, never `firebase
@@ -143,8 +157,10 @@ stopped.
 
 "All emulators ready!" is compatible with a completely non-functional stack.
 
-1. `node scripts/local-env.mjs status` — the slot shows `RUNNING`, no `! STALE`,
-   no `! EMPTY`, and the app rows answer HTTP.
+1. `node scripts/local-env.mjs status` — the slot shows `RUNNING`, no `! STALE`
+   (neither kind: an emulator older than the functions build, or a `dist`
+   older than its `src` in the header), no `! EMPTY`, and the app rows answer
+   HTTP.
 2. The seed output ends in `✅ Ready` and contains no `Enter a string value`
    line (that is the `defineString` prompt below, firing).
 3. The functions registry is non-empty — `status` reports `functions N loaded`.
@@ -217,6 +233,11 @@ Password `linyup123` for all of them (the seed prints the table):
 - **Your change is built but the app behaves like the old code.** The functions
   emulator does not reload `dist`. `status` flags this as `! STALE`. Restart
   the slot; rebuilding alone changes nothing.
+- **`resolveSomething is not a function`, or a shared resolver behaving like
+  last week.** `@linyup/shared` resolves to its BUILT `dist/`, and nothing
+  rebuilds it on its own — `pnpm install` does not, `dev:web` does not, a
+  filtered `typecheck` does not. `status` prints `! STALE packages/shared/dist`
+  in its header; `pnpm bootstrap` rebuilds exactly what is stale.
 - **The app behaves like a branch you are not on.** You are pointed at another
   checkout's slot. `status` names the owner.
 - **`pnpm --filter @linyup/web build` fails on a missing `@tiptap/...` module in

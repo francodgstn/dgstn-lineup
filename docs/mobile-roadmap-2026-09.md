@@ -168,11 +168,16 @@ QR-only app unless configured.
 2. **EAS + CI lanes**: profiles/channels/env vars, the three lanes above,
    rules tests + concurrency in `verify`, a `mobile-release` skill, ops-agent
    refresh.
-3. **Dev bootstrap**: one idempotent `pnpm setup` generating every env file
-   from committed emulator-first templates and building shared + functions;
-   root `postinstall` shared build; Metro in the slot model; mobile reads
-   emulator ports from `EXPO_PUBLIC_*`; SessionStart hook for cloud sessions;
-   root README.
+3. **Dev bootstrap** (`claude/mobile-step3-dev-bootstrap`): one idempotent
+   `pnpm bootstrap` (`setup` is a pnpm built-in) copying every env file from a
+   committed emulator-first template and building shared + functions when
+   their `dist` is missing or older than `src` (`scripts/lib/distState.mjs`,
+   also what `local-env status` warns from); Metro in the slot model; mobile
+   reads emulator ports from `EXPO_PUBLIC_*_EMULATOR_PORT`; `app.config.js`
+   refuses a real project without a key; `fingerprint.config.js` so the
+   OTA-vs-build decision ignores `extra` and version fields; SessionStart hook
+   running the bootstrap; devcontainer + root README. No root `postinstall`
+   (§6).
 4. **Accounts + tests**: review-access + known test contact seeded everywhere;
    the app sends `teamId` once a studio is chosen (replacing the unfiltered
    `collectionGroup('public_profile')` discovery); sandbox in the config map;
@@ -217,6 +222,19 @@ Collected during autonomous execution; none blocks the current steps.
   ranking systems are mirrored onto each team's `public_profile` at team-sync
   time; an org edit does not re-sync member teams until they next write.
   Acceptable for now; a fan-out trigger is the fix if it bites.
+- **No root `postinstall` building `@linyup/shared`** (step 3 deviated from
+  the plan here). Every `pnpm install` would then also build on the App
+  Hosting buildpack — whose pnpm handling has already broken once this month
+  (`package.json` → `engines.pnpm`) — and twice on EAS (its
+  `eas-build-post-install` already builds shared). Instead `pnpm bootstrap`
+  builds only when `dist` is older than `src`, the SessionStart hook runs it
+  for every agent session, the mobile `start*` scripts build first, and
+  `local-env status` prints `! STALE`. Add the `postinstall` if a stale
+  `dist` still bites a human developer after this.
+- **SessionStart hook runs `pnpm bootstrap --quiet` in every checkout**,
+  including the owner's own sessions: on a ready checkout it prints at most
+  one line (the missing mobile key) and rebuilds nothing. Remove the hook from
+  `.claude/settings.json` if that is unwanted.
 
 ---
 

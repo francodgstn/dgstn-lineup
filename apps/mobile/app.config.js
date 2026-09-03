@@ -5,8 +5,14 @@
  * Only FIREBASE_API_KEY needs to be provided via environment.
  *
  * Usage:
- *   pnpm start          -> loads .env.staging  (linyup-staging)
- *   pnpm run start:prod -> loads .env.production (linyup-prod)
+ *   pnpm start                -> loads .env.staging    (linyup-staging — the default target)
+ *   pnpm run start:prod       -> loads .env.production (linyup-prod)
+ *   pnpm run start:emulators  -> demo-linyup + the local emulators; the emulator PORTS
+ *                                come from .env.local (EXPO_PUBLIC_*_EMULATOR_PORT, written
+ *                                by scripts/local-env.mjs for this checkout's port slot)
+ *
+ * Expo loads .env / .env.local itself before this file runs; the dotenv-cli
+ * prefix in package.json only adds the per-target file on top.
  */
 const { version } = require('./package.json')
 
@@ -62,6 +68,32 @@ export default ({ config }) => {
 
   const useEmulators =
     projectId === 'demo-linyup' || process.env.EXPO_PUBLIC_USE_EMULATORS === 'true'
+
+  // A real project with no key would run against it with the placeholder below
+  // and fail later, as auth/invalid-api-key, with nothing to say which env file
+  // was wrong. Refuse here, where the fix can be named. (CI's config check and
+  // the EAS environments both set a key; the emulator needs none.)
+  if (!hasRealKey && !useEmulators) {
+    throw new Error(
+      `FIREBASE_API_KEY is empty for ${projectId}. Set it in apps/mobile/.env.${
+        projectId === 'linyup-prod' ? 'production' : 'staging'
+      } (template: apps/mobile/.env.example; EAS builds: the environment's variables), ` +
+        'or run `pnpm dev:mobile:emulators` for the local stack.'
+    )
+  }
+
+  // Where the emulators listen, from the app's point of view. Slot 0 is the
+  // documented default; a worktree on slot N gets N×10000 added (local-env).
+  const emulatorPort = (name, fallback) => {
+    const raw = process.env[`EXPO_PUBLIC_${name}_EMULATOR_PORT`]
+    const n = Number(raw)
+    return raw && Number.isInteger(n) && n > 0 ? n : fallback
+  }
+  const emulatorPorts = {
+    firestore: emulatorPort('FIRESTORE', 8080),
+    auth: emulatorPort('AUTH', 9099),
+    functions: emulatorPort('FUNCTIONS', 5001),
+  }
 
   const { webAppUrl, ...envFirebaseConfig } = envConfig
 
@@ -136,6 +168,7 @@ export default ({ config }) => {
     extra: {
       firebase: firebaseConfig,
       useEmulators,
+      emulatorPorts,
       webAppUrl,
       eas: {
         projectId: easProjectId,

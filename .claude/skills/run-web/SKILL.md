@@ -13,25 +13,24 @@ gotchas at the bottom are the ones actually hit, with their symptoms.
 
 ```bash
 pnpm install
-pnpm --filter @linyup/shared build      # functions tests/emulator resolve @linyup/shared from dist
-pnpm --filter @linyup/functions build   # the emulator serves packages/functions/dist
+pnpm bootstrap     # env files from their templates (emulator-first), shared + functions
+                   # built when dist is missing/stale, port slot 0 claimed. Idempotent —
+                   # the SessionStart hook has usually run it already; re-running is free.
 ```
+
+`pnpm bootstrap` writes `apps/web/.env.local`, `apps/admin/.env.local`,
+`packages/functions/.env.local`, `apps/landing/.env` and
+`apps/mobile/.env.staging` from the committed `*.example` beside each; it never
+overwrites one that exists. Everything below about their CONTENT is what those
+templates already say — read on only when something still misbehaves.
 
 Java is required for the Firestore emulator (`java -version` — the container
 ships OpenJDK; the JAVA_TOOL_OPTIONS proxy banner it prints is noise, and it
 also appears as a bogus "Unexpected rules runtime error" warning — ignore both).
 
-`apps/web/.env.local` (gitignored — create it):
-
-```bash
-NEXT_PUBLIC_USE_EMULATORS=true
-NEXT_PUBLIC_FIREBASE_API_KEY=fake-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=demo-linyup.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-linyup
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-linyup.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000
-NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:demo
-```
+`apps/web/.env.local` in emulator mode carries `NEXT_PUBLIC_USE_EMULATORS=true`
+plus placeholder Firebase client values for `demo-linyup` (the emulators
+validate none of them; a non-empty API key only keeps the SDK from throwing).
 
 ## 2. THE gotcha: functions params must ALL be in an env file
 
@@ -42,28 +41,11 @@ succeeds, the CLI says nothing, and the registry ends up EMPTY — every
 callable 404s, which the browser reports as a CORS error on
 `http://localhost:5001/...` (misleading; it's a 404 with no CORS headers).
 
-Create `packages/functions/.env.local` (gitignored) with a line for EVERY
-param. Current set (paste block):
-
-```bash
-MAIL_ENABLED=false
-MAIL_SYSTEM_FROM=hello@linyup.com
-MAIL_SYSTEM_NAME=Linyup
-MAIL_MANAGED_STUDIO_FROM=studios@linyup.com
-MESSAGING_DEFAULT_MODE=live
-SMS_ENABLED=false
-TEST_SMS_NUMBER=
-TEST_MODE=false
-TEST_EMAIL=
-HOSTING_URL=http://localhost:3000
-VERTEX_LOCATION=global
-CLOUDFLARE_ZONE_ID=
-CLOUDFLARE_CNAME_TARGET=connect.linyup.com
-OPERATOR_EMAILS=
-```
-
-The paste block goes stale as params are added; the OWNER of the list is the
-source — re-derive it with:
+`packages/functions/.env.local` (gitignored) must carry a line for EVERY
+param. `pnpm bootstrap` copies it from `packages/functions/.env.local.example`,
+which is kept complete — when a param is added to the source, add it to the
+template in the same change. A paste block used to live here and went stale;
+the OWNER of the list is the source — re-derive it with:
 
 ```bash
 grep -rhoE "define(String|Secret|Int|Bool)\('[A-Z_]+'" packages/functions/src --include='*.ts' | sort -u

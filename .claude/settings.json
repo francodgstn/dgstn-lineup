@@ -38,5 +38,19 @@
       "Bash(rm -rf*)",
       "PowerShell(Remove-Item * -Recurse -Force)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/bootstrap.mjs --quiet",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
   }
 }
