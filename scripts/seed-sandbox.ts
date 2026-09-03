@@ -1812,22 +1812,37 @@ async function seedDemoTeam(profile: SectorProfile) {
   // the ONE member-benefit rule. No access rule — the price is the gate. The
   // availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
-  // Per-duration BASE pricing (major units, CHF). The member benefit is ONE rule
-  // for the whole activity (`Activity.memberBenefit`, never per duration). The
-  // sandbox demos `kind: 'discount'` (seed-emulator/-staging demo 'included'):
-  // monthly-plan holders get 20% off EVERY priced duration (30 min → 36,
-  // 60 min → 68); every other subscription pays base — the benefit is explicit
-  // data, never implied. Every sandbox profile defines a monthly plan, so the
-  // id below always resolves.
+  // Per-duration BASE pricing (major units, CHF), and ONE MEMBER RULE PER
+  // LENGTH (`Activity.durationBenefits`). The rule is per length because the
+  // price is: a single activity-wide rule could not say "the short one is
+  // included, the long one is cheaper", and could not express a fixed member
+  // price at all (one amount cannot be right for 30 and 60 minutes alike).
+  //
+  // THE SEEDS DEMO DIFFERENT EFFECTS ON PURPOSE, so a click-through meets each
+  // of them: this one gives monthly-plan holders their 30-minute check-in free
+  // and 20% off the 60-minute session (85 → 68). Every sandbox profile defines
+  // a monthly plan, so the id below always resolves.
+  //
+  // The legacy activity-wide
+  // `memberBenefit` is deliberately NOT written anywhere here — its fallback is
+  // covered by a unit test, not by seed data a studio might mistake for the
+  // shape the product writes today.
   const appointmentDurations = [
     { minutes: 30, priceAmount: 45 },
     { minutes: 60, priceAmount: 85 },
   ]
-  const appointmentMemberBenefit = {
-    subscriptionTypeIds: [subIdOf('monthly')],
-    kind: 'discount',
-    discountPercent: 20,
-  }
+  const appointmentMonthly = subIdOf('monthly')
+  const appointmentDurationBenefits = [
+    { minutes: 30, benefit: { subscriptionTypeIds: [appointmentMonthly], effect: 'included' } },
+    {
+      minutes: 60,
+      benefit: {
+        subscriptionTypeIds: [appointmentMonthly],
+        effect: 'percent_off',
+        percent: 20,
+      },
+    },
+  ]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1840,7 +1855,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerId: uid,
       providerName: ownerName,
       durations: appointmentDurations,
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
@@ -1863,14 +1878,15 @@ async function seedDemoTeam(profile: SectorProfile) {
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
-      // both mirrored verbatim, exactly as syncActivityPublicProfile does
-      // (public-safe: the subscription-type ids are already public in the shop).
+      // Duration menu ("from CHF 45" on public cards) + the per-length member
+      // rules, both mirrored verbatim, exactly as syncActivityPublicProfile
+      // does (public-safe: the subscription-type ids are already public in the
+      // shop).
       durations: appointmentDurations.map((d) => ({
         minutes: d.minutes,
         priceAmount: d.priceAmount ?? null,
       })),
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ────

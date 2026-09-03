@@ -543,10 +543,16 @@ an appointment activity (with a priced `durations` menu), one or more
 `availability` docs, and a few **booked** appointments — never open slots, since
 nothing is pre-generated. Shared builders live in `scripts/lib/appointments.ts` so
 every seed emits the shape `bookAppointment` would (no `accessRule`/`isFreeTrial`
-on appointment session docs or mirrors). Both `memberBenefit` kinds have demo
-data: **emulator + staging** seed `kind: 'included'` (the top tier books free —
-Monthly on coach, Elite on studio/org), **sandbox** seeds `kind: 'discount'`
-(monthly holders get 20% off every priced duration). Each generic seed also
+on appointment session docs or mirrors). Every seed writes the
+per-length shape (`durationBenefits`) and **never** the legacy activity-wide
+field, and each demos a DIFFERENT pair so a click-through meets all three
+effects: **emulator** gives the top tier the 30-minute free and the 60-minute at
+a flat 60 (`included` + `fixed_price`), **staging** gives it free + 25% off
+(`included` + `percent_off`), **sandbox** gives monthly holders their 30-minute
+check-in free and 20% off the 60-minute. A lead profile still states ONE rule and
+the seeder applies it to every length — see `LeadAppointmentMemberBenefitDef` for
+why that shape did not change. The legacy fallback is covered by a unit test, not
+by seed data. Each generic seed also
 gates ONE class with the full ordinary offer — subscription access +
 `trialEnabled` + `dropIn` (MMA in emulator/staging, Advanced BJJ in the sandbox
 grappling team) — and none seeds a "Drop-in" subscription PLAN any more (the
