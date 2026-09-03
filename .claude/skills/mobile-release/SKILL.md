@@ -162,11 +162,27 @@ Apple/Google (see the roadmap §7), plus the prod key.
   `@linyup/shared`.
 - `expo config` throws on an unknown `FIREBASE_PROJECT_ID` — every profile's
   env must name a project the `environments` map in `app.config.js` knows.
-- **ANY `app.config.js` edit invalidates BOTH platforms' fingerprints**, even a
-  strictly platform-specific one. @expo/fingerprint takes the whole evaluated
-  config as ONE `expoConfig` source and does not filter it per platform —
-  verified: the ANDROID fingerprint's config blob contains `ios.supportsTablet`.
-  So an iOS-only change costs an Android rebuild on the next lane run (the lane
-  finds no build matching the new fingerprint, so it builds instead of updating).
-  Expected, not a fault; `fingerprint.config.js` already skips the two parts that
-  would otherwise churn on every push (`extra` and the version fields).
+- **A CONFIG EDIT COSTS A REBUILD, and the scoping you wrote it with does not
+  survive.** Both config files are hashed WHOLE, so a change aimed at one
+  platform or one profile invalidates every fingerprint. Two mechanisms, both
+  measured on 2026-09-03, both of which look like bugs until you know:
+
+  | Edit | Hashed as | What actually happens |
+  |---|---|---|
+  | `app.config.js` | one `expoConfig` source, no platform filter | an `ios.*` field rebuilds ANDROID — the Android fingerprint's config blob contains `ios.supportsTablet` |
+  | `eas.json` | one `easBuild` file source, no profile filter | a `store`-only `env` change rebuilds `preview` |
+
+  The lane then finds no build matching the new fingerprint and BUILDS instead
+  of publishing an update. Expected, not a fault.
+
+  **So batch config changes.** Three separate config commits on 2026-09-03
+  produced three Android builds back to back, and because EAS runs them on a
+  queue they serialised — the third (the one actually wanted) started last. Each
+  merge also strands the previously installed APK: OTA updates only reach a
+  build whose fingerprint matches, so a tester on the older APK silently stops
+  receiving them. One commit, one rebuild, one reinstall.
+
+  `fingerprint.config.js` already skips the two parts that would otherwise churn
+  on EVERY push (`extra` and the version fields). What is left genuinely
+  describes the native project, so there is nothing further to skip — the answer
+  is fewer config commits, not more `sourceSkips`.
