@@ -8,7 +8,7 @@ interface ProfileHeaderProps {
   contact: Contact;
   initials: string;
   onShowQR: () => void;
-  onScanDojoQR: () => void;
+  onScanTeamQR: () => void;
   onEditProfile: () => void;
 }
 
@@ -16,7 +16,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   contact,
   initials,
   onShowQR,
-  onScanDojoQR,
+  onScanTeamQR,
   onEditProfile,
 }) => {
   const theme = useTheme();
@@ -89,7 +89,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       >
         <Menu.Item
           leadingIcon="qrcode-scan"
-          onPress={() => { setMenuVisible(false); onScanDojoQR(); }}
+          onPress={() => { setMenuVisible(false); onScanTeamQR(); }}
           title="Scan team QR"
         />
         <Menu.Item

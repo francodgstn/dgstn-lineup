@@ -3,6 +3,17 @@ import { HttpsError } from 'firebase-functions/v2/https'
 import { planIsAtLeast, type SaasPlan } from '@linyup/shared'
 
 /**
+ * A subscription in a state where NO feature check may pass — the ONE rule
+ * `requirePlan` and the member-app gate (`memberAppAccessForPlan`,
+ * auth/loginContactWithCode.ts) share. A trial, or any status other than the
+ * two below, reads as active; an absent status is a trial.
+ */
+export function planStatusIsInactive(status: string | null | undefined): boolean {
+  const s = status ?? 'trial'
+  return s === 'past_due' || s === 'cancelled'
+}
+
+/**
  * Throws HttpsError('permission-denied') if the team's plan is below minPlan.
  * Also rejects inactive plans (past_due, cancelled) unless `allowTrial` is true
  * (trial is considered active for all feature checks).
@@ -26,9 +37,7 @@ export async function requirePlan(teamId: string, minPlan: SaasPlan): Promise<vo
   const data = snap.data()!
   // Unknown/legacy teams fail closed: treat a missing plan as Free (lowest tier).
   const plan: SaasPlan = data.plan ?? 'free'
-  const status: string = data.plan_status ?? 'trial'
-
-  if (status === 'past_due' || status === 'cancelled') {
+  if (planStatusIsInactive(data.plan_status)) {
     throw new HttpsError(
       'permission-denied',
       'Your subscription is inactive. Please update your billing.',

@@ -48,7 +48,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.header}>
           <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-            Scan Dojo QR
+            Scan studio QR
           </Text>
           <IconButton icon="close" size={24} onPress={onClose} />
         </View>
@@ -63,7 +63,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
               variant="bodyMedium"
               style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}
             >
-              Camera permission is required to scan the dojo QR code.
+              Camera permission is required to scan your studio&apos;s check-in QR code.
             </Text>
             <Button mode="contained" onPress={requestPermission}>
               Grant Permission
@@ -84,7 +84,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
               variant="bodyMedium"
               style={[styles.hint, { color: '#ffffff' }]}
             >
-              Point the camera at the dojo QR code
+              Point the camera at your studio&apos;s QR code
             </Text>
           </View>
         )}

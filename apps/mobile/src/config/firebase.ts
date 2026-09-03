@@ -28,6 +28,12 @@ const FUNCTIONS_REGION = 'europe-west6'; // Zurich, Switzerland
 const firebaseConfig = Constants.expoConfig?.extra?.firebase;
 const useEmulators = Constants.expoConfig?.extra?.useEmulators === true;
 
+/** The environment's web app origin (Space / admin) — set per environment in
+ *  app.config.js's `environments` map. Used to point a member at
+ *  `{webAppUrl}/public/{slug}/space` when their studio's plan does not
+ *  include the mobile app. */
+export const webAppUrl: string = Constants.expoConfig?.extra?.webAppUrl ?? 'https://app.linyup.com';
+
 if (!firebaseConfig) {
   throw new Error(
     'Firebase configuration not found. Ensure FIREBASE_* environment variables are set in eas.json or .env file.'
@@ -72,7 +78,6 @@ if (useEmulators) {
   connectFirestoreEmulator(db, host, 8080);
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFunctionsEmulator(functionsInstance, host, 5001);
-  // eslint-disable-next-line no-console
   console.log(`[firebase] Using emulators at ${host} (firestore:8080, auth:9099, functions:5001)`);
 }
 

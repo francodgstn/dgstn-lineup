@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Button,
   Chip,
-  Icon,
   Modal,
   Portal,
   Surface,
@@ -263,9 +262,7 @@ const CheckinHistoryRow: React.FC<{
   indicators: PerformanceIndicator[];
 }> = ({ checkin, indicators }) => {
   const theme = useTheme();
-  const date = checkin.taken_at?.toDate
-    ? checkin.taken_at.toDate()
-    : new Date(checkin.taken_at);
+  const date = checkin.taken_at.toDate();
   const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
   const abbreviated = indicators
@@ -507,7 +504,7 @@ const TrendChart: React.FC<{ checkins: PerformanceCheckin[]; indicators: Perform
         {data.map((c, i) => {
           const show = data.length <= 5 || i === 0 || i === data.length - 1 || i === Math.floor((data.length - 1) / 2);
           if (!show) return null;
-          const date = c.taken_at?.toDate ? c.taken_at.toDate() : new Date(c.taken_at);
+          const date = c.taken_at.toDate();
           const label = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
           const anchor: 'start' | 'middle' | 'end' = i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle';
           return (
@@ -579,7 +576,7 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const latestCoachCheckin = checkins.find(s => {
     if (s.filled_by !== 'coach') return false;
-    const d = s.taken_at?.toDate ? s.taken_at.toDate() : new Date(s.taken_at);
+    const d = s.taken_at.toDate();
     return d >= sevenDaysAgo;
   });
 

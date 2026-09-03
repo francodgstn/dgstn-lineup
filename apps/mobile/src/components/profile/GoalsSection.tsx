@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
@@ -94,9 +94,7 @@ interface EvaluationItemProps {
 
 const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
   const theme = useTheme();
-  const date = eval_.evaluated_at?.toDate
-    ? eval_.evaluated_at.toDate()
-    : new Date(eval_.evaluated_at);
+  const date = eval_.evaluated_at.toDate();
   const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
@@ -253,7 +251,7 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
           </View>
         ) : (
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            Recorded against the goal's current status ({STATUS_LABELS[currentStatus]}) — your coach set this goal, so only they can move its status.
+            Recorded against the goal&apos;s current status ({STATUS_LABELS[currentStatus]}) — your coach set this goal, so only they can move its status.
           </Text>
         )}
 
@@ -949,13 +947,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
         initialTitle={editingGoal?.title}
         initialDescription={editingGoal?.description}
         initialCategories={editingGoal?.categories}
-        initialTargetDate={
-          editingGoal?.target_date?.toDate
-            ? editingGoal.target_date.toDate()
-            : editingGoal?.target_date
-              ? new Date(editingGoal.target_date)
-              : null
-        }
+        initialTargetDate={editingGoal?.target_date ? editingGoal.target_date.toDate() : null}
         onDismiss={() => setEditingGoal(null)}
         onSubmit={handleEditGoal}
       />

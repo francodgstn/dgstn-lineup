@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
-import { AvailabilityActivity, AvailabilityCoach, Contact } from '../../types';
+import { ListAvailabilityActivity, ListAvailabilityCoach, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
+import { activityHasMemberBenefit, durationIsBenefitOnly } from '../../utils/appointmentAccess';
 
 interface Props {
   visible: boolean;
@@ -51,11 +52,11 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [coaches, setCoaches] = useState<AvailabilityCoach[]>([]);
+  const [coaches, setCoaches] = useState<ListAvailabilityCoach[]>([]);
 
   const [step, setStep] = useState<Step>('coach');
-  const [selectedCoach, setSelectedCoach] = useState<AvailabilityCoach | null>(null);
-  const [selectedActivity, setSelectedActivity] = useState<AvailabilityActivity | null>(null);
+  const [selectedCoach, setSelectedCoach] = useState<ListAvailabilityCoach | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<ListAvailabilityActivity | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -101,13 +102,13 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
     };
   }, [visible, teamId]);
 
-  const selectCoach = (coach: AvailabilityCoach) => {
+  const selectCoach = (coach: ListAvailabilityCoach) => {
     setSelectedCoach(coach);
     setSelectedActivity(null);
     setStep('activity');
   };
 
-  const selectActivity = (activity: AvailabilityActivity) => {
+  const selectActivity = (activity: ListAvailabilityActivity) => {
     setSelectedActivity(activity);
     setSelectedDuration(activity.durations[0]?.minutes ?? 60);
     setSelectedDay(activity.days[0]?.dayMs ?? null);
@@ -258,7 +259,11 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
               </View>
             ) : (
               selectedCoach.activities.map((activity) => {
-                const isGated = activity.accessRule.type !== 'open';
+                // Appointments have NO access gate — money (durations +
+                // memberBenefit) is the only gate. This badge is informational
+                // only: it flags that SOME durations carry a member benefit,
+                // never that booking is restricted (see utils/appointmentAccess.ts).
+                const hasMemberBenefit = activityHasMemberBenefit(activity);
                 const durations = activity.durations.map((d) => d.minutes);
                 const durationLabel =
                   durations.length > 1
@@ -277,16 +282,16 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                           <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
                             {activity.activityName}
                           </Text>
-                          {isGated && (
+                          {hasMemberBenefit && (
                             <View
                               style={[
                                 styles.lockBadge,
                                 { backgroundColor: theme.dark ? 'rgba(217,119,6,0.2)' : '#FEF3C7' },
                               ]}
                             >
-                              <Icon source="lock-outline" size={10} color={theme.dark ? '#FBBF24' : '#B45309'} />
+                              <Icon source="star-outline" size={10} color={theme.dark ? '#FBBF24' : '#B45309'} />
                               <Text style={{ color: theme.dark ? '#FBBF24' : '#B45309', fontSize: 10, fontWeight: '700' }}>
-                                Members only
+                                Members benefit
                               </Text>
                             </View>
                           )}
@@ -336,8 +341,13 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                     DURATION
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {selectedActivity.durations.map(({ minutes: d }) => {
+                    {selectedActivity.durations.map((duration) => {
+                      const d = duration.minutes;
                       const active = d === selectedDuration;
+                      // NOT SOLD INDIVIDUALLY (UX-70) — bookable only through
+                      // the member benefit. Informational label only; the
+                      // price is still the gate, this is not a second one.
+                      const benefitOnly = durationIsBenefitOnly(duration);
                       return (
                         <TouchableRipple key={d} onPress={() => setSelectedDuration(d)} borderless style={styles.chipWrap}>
                           <View
@@ -355,7 +365,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                                 fontSize: 12,
                               }}
                             >
-                              {fmtDuration(d)}
+                              {fmtDuration(d)}{benefitOnly ? ' · members' : ''}
                             </Text>
                           </View>
                         </TouchableRipple>

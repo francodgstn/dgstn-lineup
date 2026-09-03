@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   TEAMS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SITE_PUBLISHED_COLLECTION,
   FORMS_COLLECTION,
@@ -23,6 +24,8 @@ import {
   normalizeKioskConfig,
   resolveAppointmentDurations,
   resolveDurationSale,
+  effectiveRankingSystems,
+  pickPublicGamificationSettings,
   PUBLIC_LOCALES,
   type CustomFieldDefinition,
 } from '@linyup/shared'
@@ -35,6 +38,7 @@ import type {
   GiftCardSettings,
   PublicRequiredWaiver,
   RequiredWaiverEntry,
+  RankingSystem,
   SaasPlan,
   UiLanguage,
 } from '@linyup/shared'
@@ -80,8 +84,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Batched with the team's `org_id`, which this trigger is standing on: two
   // round trips for three plugins rather than nine reads. See
   // `resolveActivePluginInstalls`.
-  const [pluginInstalls, sitePublishedSnap] = await Promise.all([
-    resolveActivePluginInstalls(teamId, (data.org_id as string | undefined) ?? null, [
+  const orgId = (data.org_id as string | undefined) ?? null
+
+  const [pluginInstalls, sitePublishedSnap, orgSnap] = await Promise.all([
+    resolveActivePluginInstalls(teamId, orgId, [
       'website',
       'kiosk',
       'custom-forms',
@@ -89,7 +95,15 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
       'gamification',
     ]),
     db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
+    // Read with the admin SDK: the org doc is members-only under
+    // firestore.rules, but this trigger runs server-side and only ever copies
+    // the two PUBLIC-safe fields below onto the mirror. NOTE: an org-only
+    // write (ranking_systems/affiliation_term edited with no team write) does
+    // NOT re-trigger this sync — see the comment on the mirrored fields below
+    // and TeamPublicProfile.ranking_systems' doc comment.
+    orgId ? db.doc(`${ORGANIZATIONS_COLLECTION}/${orgId}`).get() : Promise.resolve(null),
   ])
+  const orgData = orgSnap?.exists ? orgSnap.data() : undefined
 
   // site: website plugin active AND a published site exists
   // kiosk: entrance-tablet surface — live whenever the plugin install is active.
@@ -365,6 +379,22 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,
     gamificationEnabled,
+    // The EFFECTIVE ranking systems — team's own, unless the org has
+    // configured any, in which case the org's list wins for every member team
+    // (`effectiveRankingSystems`, the ONE rule). See
+    // TeamPublicProfile.ranking_systems for the staleness limitation.
+    ranking_systems: effectiveRankingSystems(
+      data.ranking_systems as RankingSystem[] | undefined,
+      orgData?.ranking_systems as RankingSystem[] | undefined
+    ),
+    // The org's affiliation-concept label, or null when independent / unset —
+    // see TeamPublicProfile.affiliation_term.
+    affiliation_term:
+      (orgData?.affiliation_term as Partial<Record<'en' | 'de' | 'fr' | 'it', string>> | undefined) ?? null,
+    // The studio's own badge thresholds + coach badges — ONLY those two: the
+    // stored bag also holds the scoring configuration, which stays private.
+    // See pickPublicGamificationSettings and TeamPublicProfile.gamification_settings.
+    gamification_settings: pickPublicGamificationSettings(data.settings?.gamification),
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',

@@ -141,14 +141,10 @@ describe('contact alerts — alertIsActive', () => {
 //
 // A hand copy is EXACTLY how this bug happened the first time: mobile's
 // predicate was a copy that drifted, and nothing noticed. So the copy is
-// pinned. If you change the shared resolver, change the mirror; if the mirror
-// is allowed to differ, say why HERE rather than deleting the assertion.
-//
-// Compared with semicolons stripped: the two trees have different lint
-// configs, and that is not drift.
+// pinned. The mirror is gone since 2026-09 (the app depends on @linyup/shared
+// and re-exports the resolver); the block below now pins that it STAYS gone.
 
 const ROOT = join(__dirname, '..', '..', '..', '..')
-const SHARED_RESOLVER = join(ROOT, 'packages', 'shared', 'src', 'utils', 'contactAlerts.ts')
 const MOBILE_RESOLVER = join(ROOT, 'apps', 'mobile', 'src', 'utils', 'contactAlerts.ts')
 
 /** One exported function, comments and formatting removed. */
@@ -166,27 +162,41 @@ function fnBody(src: string, name: string): string | null {
     .trim()
 }
 
-describe('the mobile mirror has not drifted from the shared resolver', () => {
-  const shared = readFileSync(SHARED_RESOLVER, 'utf8')
+describe('the mobile app cannot drift from the shared resolver', () => {
+  // Until 2026-09 apps/mobile carried a hand-mirrored COPY of the resolver and
+  // this block pinned the copy byte-for-byte to the original. The copy is gone:
+  // the app depends on @linyup/shared and re-exports the three predicates that
+  // decide whether an alert FIRES. So the invariant is no longer "the copies
+  // match" but "there is no copy" — a local implementation of any of the
+  // three would be the drift re-appearing, and this is what fails it.
   const mobile = readFileSync(MOBILE_RESOLVER, 'utf8')
 
-  // `readAlert` is deliberately NOT pinned: the mobile copy also carries
-  // `alert_type`, which AlertsCard reads for its icon and which no shared
-  // caller needs. The three below decide whether an alert FIRES, which is the
-  // thing that must never differ between the two apps again.
-  for (const name of ['alertSchedule', 'alertIsFired', 'alertIsActive']) {
-    it(`${name} is identical in both trees`, () => {
-      const a = fnBody(shared, name)
-      const b = fnBody(mobile, name)
-      assert.ok(a, `${name} not found in packages/shared`)
-      assert.ok(b, `${name} not found in apps/mobile — did the mirror lose it?`)
-      assert.equal(b, a, `${name} has drifted between the shared resolver and the mobile mirror`)
-    })
-  }
+  it('re-exports the fire predicates from @linyup/shared', () => {
+    assert.match(
+      mobile,
+      /export\s*\{[^}]*\balertSchedule\b[^}]*\}\s*from\s*'@linyup\/shared'/,
+      'alertSchedule must be re-exported from @linyup/shared, not reimplemented'
+    )
+    for (const name of ['alertIsFired', 'alertIsActive']) {
+      assert.match(
+        mobile,
+        new RegExp(`export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*'@linyup\\/shared'`),
+        `${name} must be re-exported from @linyup/shared, not reimplemented`
+      )
+    }
+  })
 
-  it('the mirror still reads BOTH document shapes', () => {
-    // The one property whose loss reproduces the original bug exactly.
-    assert.match(mobile, /schedule_type\s*\?\?\s*raw\.schedule\?\.type/)
-    assert.match(mobile, /schedule_value\s*\?\?\s*raw\.schedule\?\.value/)
+  it('defines no local implementation of them', () => {
+    for (const name of ['alertSchedule', 'alertIsFired', 'alertIsActive']) {
+      assert.equal(fnBody(mobile, name), null, `${name} is implemented locally in apps/mobile — that is the drift coming back`)
+    }
+  })
+
+  // `readAlert` is the one deliberate local wrapper: it adds `alert_type`,
+  // which AlertsCard reads for its icon, on top of the shared reader — so the
+  // two-document-shape logic still lives in exactly one place.
+  it('readAlert wraps the shared reader rather than re-parsing the document', () => {
+    assert.match(mobile, /sharedReadAlert\(id,\s*raw\)/)
+    assert.doesNotMatch(mobile, /schedule_type\s*\?\?\s*raw\.schedule\?\.type/)
   })
 })

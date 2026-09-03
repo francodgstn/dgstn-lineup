@@ -219,7 +219,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
 
         <View style={styles.detailsSection}>
           <Text variant="titleMedium" style={[styles.className, { color: theme.colors.onSurface }]} numberOfLines={1}>
-            {session.activityName || 'Kickboxing Session'}
+            {session.activityName || 'Session'}
           </Text>
           <View style={styles.infoRow}>
             <Icon source="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
@@ -230,7 +230,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
           <View style={styles.infoRow}>
              <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
              <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-               {session.locationName || 'Main Dojo'}
+               {session.location || 'Studio'}
              </Text>
           </View>
         </View>

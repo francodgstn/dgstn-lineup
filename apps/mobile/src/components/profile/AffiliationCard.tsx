@@ -50,6 +50,7 @@ const PillHandle: React.FC<{
 
 export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   contact,
+  teamProfile,
   collapsed,
   onToggleCollapse,
   onShowStatusModal,
@@ -87,7 +88,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   const age = calculateAge(contact.birthdate);
   const genderLabel = formatGender(contact.gender);
 
-  const rankTitle = rankInfo?.label ?? 'NO BELT';
+  const rankTitle = rankInfo?.label ?? 'NO RANK';
   const studentName = [contact.firstname, contact.lastname].filter(Boolean).join(' ').toUpperCase();
   const rankSub = `MEMBER: ${studentName}`;
   const affiliationSummary = contact.affiliation_summary;
@@ -145,8 +146,8 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
           {/* Header Row */}
           <View style={styles.headerRow}>
             <View>
-              <Text variant="labelSmall" style={styles.orgLabel}>
-                HWALMOODO & KOREAN-DRAGON
+              <Text variant="labelSmall" style={styles.orgLabel} numberOfLines={1}>
+                {(teamProfile?.name ?? 'LINYUP').toUpperCase()}
               </Text>
               <Text variant="labelSmall" style={styles.orgSubLabel}>
                 {affiliationTerm.toUpperCase()} CARD

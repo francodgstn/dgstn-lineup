@@ -1123,7 +1123,7 @@ service cloud.firestore {
       allow update: if (canWriteContact(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
-                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at', 'mobile_app'])))
                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count', 'notes_count']);
       allow delete: if (canAccessContact(resource)
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
@@ -1311,10 +1311,19 @@ service cloud.firestore {
         // the exclusion has to live here, same reasoning as `contact_notes` above.
         // Every other permission goals grants (full staff CRUD, admin) is already
         // duplicated on that explicit match; nothing is lost by removing it here.
+        //
+        // `subscription_history` is excluded for the SAME reason: rules are
+        // additive, so without this exclusion the catch-all's blanket
+        // `canWriteContact` grant would override the explicit
+        // `/subscription_history/{historyId}` match's `allow create, update: if
+        // false` — a staff member could create/update a period row directly and
+        // race `onContactSubscriptionChange`'s reconciliation. `delete` is
+        // unaffected either way (both matches allow it for staff).
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
                       && subcollection != 'plan_purchases'
                       && subcollection != 'goals'
+                      && subcollection != 'subscription_history'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 

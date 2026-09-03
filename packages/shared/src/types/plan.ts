@@ -262,7 +262,7 @@ export type PlanFeature =
   | 'appointments'
   | 'custom_domain'
   // Studio
-  | 'student_app'
+  | 'member_app'
   | 'gamification'
   | 'outreach_templates'
   | 'automation_flows'
@@ -332,7 +332,10 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'custom_domain',
     // The member app is available from Coach up (a basic booking/check-in portal
     // on Coach, enriched by add-ons). Never offered on Free. (2026-06 overhaul.)
-    'student_app',
+    // NOTE: this feature flag is what `loginContactWithCode` checks (mobile
+    // client only) to decide whether a contact's team even offers the app —
+    // see memberAppAccessForPlan in auth/loginContactWithCode.ts.
+    'member_app',
   ],
   studio: [
     'contacts',
@@ -348,7 +351,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'goals',
     'appointments',
     'custom_domain',
-    'student_app',
+    'member_app',
     'gamification',
     'outreach_templates',
     'automation_flows',
@@ -377,7 +380,7 @@ export const PLAN_FEATURES: Record<SaasPlan, PlanFeature[]> = {
     'goals',
     'appointments',
     'custom_domain',
-    'student_app',
+    'member_app',
     'gamification',
     'outreach_templates',
     'automation_flows',

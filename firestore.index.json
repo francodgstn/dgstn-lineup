@@ -1426,25 +1426,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "doc_type",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "start",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "public_profile",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "teamId",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "start",
           "order": "ASCENDING"
         }

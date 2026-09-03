@@ -10,6 +10,7 @@ import { FirestoreService } from '../services/firestore';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { useAppUpdates } from '../hooks/useAppUpdates';
+import { buildMobileAppTelemetry } from '../utils/mobileAppTelemetry';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -22,15 +23,14 @@ export const AppNavigator: React.FC = () => {
   const { isAuthenticated, isInitializing, contact } = useAuth();
   const appState = useRef(AppState.currentState);
   const { checkForUpdates } = useAppUpdates();
-  const appVersion = Constants.expoConfig?.version;
-  const otaDiagnostics = {
-    ota_runtime_version: Updates.runtimeVersion ?? null,
-    ota_channel: Updates.channel ?? null,
-    ota_is_embedded: Updates.isEmbeddedLaunch,
-    ota_update_id: Updates.updateId ?? null,
-  };
+  const mobileAppTelemetry = buildMobileAppTelemetry(Constants.expoConfig?.version, {
+    runtimeVersion: Updates.runtimeVersion ?? null,
+    channel: Updates.channel ?? null,
+    isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+    updateId: Updates.updateId ?? null,
+  });
 
-  // Update last_seen_at + app_version whenever the app comes to the foreground
+  // Update last_seen_at + mobile_app telemetry whenever the app comes to the foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (
@@ -39,7 +39,7 @@ export const AppNavigator: React.FC = () => {
       ) {
         checkForUpdates();
         if (contact?.id) {
-          FirestoreService.updateLastSeen(contact.id, appVersion, otaDiagnostics).catch(() => undefined);
+          FirestoreService.updateLastSeen(contact.id, mobileAppTelemetry).catch(() => undefined);
         }
       }
       appState.current = nextState;
@@ -48,7 +48,7 @@ export const AppNavigator: React.FC = () => {
     // Also record on first mount (app open from cold start)
     checkForUpdates();
     if (contact?.id) {
-      FirestoreService.updateLastSeen(contact.id, appVersion, otaDiagnostics).catch(() => undefined);
+      FirestoreService.updateLastSeen(contact.id, mobileAppTelemetry).catch(() => undefined);
     }
 
     return () => subscription.remove();

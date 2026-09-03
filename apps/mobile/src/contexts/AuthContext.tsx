@@ -5,6 +5,14 @@ import { StorageService } from '../services/storage';
 import { FirestoreService } from '../services/firestore';
 import { Contact } from '../types';
 
+/** A studio a matched contact belongs to, whose plan does not include the
+ *  member app (loginContactWithCode's `appNotIncluded` result). */
+export interface AppNotIncludedTeam {
+  teamId: string;
+  teamName: string | null;
+  slug: string | null;
+}
+
 interface AuthContextType {
   // Email entry step
   email: string | null;
@@ -19,6 +27,11 @@ interface AuthContextType {
   teamSummaries: { id: string; name: string }[] | null;
   selectContact: (contactId: string, stayLoggedIn?: boolean) => Promise<{ success: boolean; error?: string }>;
 
+  // Every match existed, but none of their teams' plans include the member
+  // app — no session was minted. See LoginScreen for how this is shown.
+  appNotIncludedTeams: AppNotIncludedTeam[] | null;
+  clearAppNotIncluded: () => void;
+
   // Profile step
   contact: Contact | null;
   isLoading: boolean;
@@ -31,6 +44,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** A user-facing error message never carries diagnostics — those go to
+ *  `console.error` for the developer, never into a string shown on screen
+ *  (an error's `.stack` is exactly the kind of thing that used to leak here). */
+function userMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message || fallback;
+  }
+  return fallback;
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [email, setEmail] = useState<string | null>(null);
   const [codeId, setCodeId] = useState<string | null>(null);
@@ -38,6 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [contact, setContact] = useState<Contact | null>(null);
   const [matchedContacts, setMatchedContacts] = useState<Contact[] | null>(null);
   const [teamSummaries, setTeamSummaries] = useState<{ id: string; name: string }[] | null>(null);
+  const [appNotIncludedTeams, setAppNotIncludedTeams] = useState<AppNotIncludedTeam[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const isLoggingOut = useRef(false);
@@ -149,13 +173,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setVerifiedCode(null);
       setMatchedContacts(null);
       setTeamSummaries(null);
+      setAppNotIncludedTeams(null);
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending code:', error);
       return {
         success: false,
-        error: error.message || 'Failed to send verification code'
+        error: userMessage(error, 'Failed to send verification code'),
       };
     } finally {
       setIsLoading(false);
@@ -184,11 +209,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Save stayLoggedIn preference
       await StorageService.saveStayLoggedIn(stayLoggedIn);
 
+      // Every match existed, but none of their teams' plans include the
+      // member app — the app names the studio and points at its web Space
+      // instead of pretending the account does not exist.
+      if (result.appNotIncluded) {
+        setAppNotIncludedTeams(result.teams ?? []);
+        return { success: true };
+      }
+
       // If multiple contacts and user needs to select
       if (result.requiresContactSelection && result.matchedContacts) {
         setVerifiedCode(normalizedCode);
         setMatchedContacts(result.matchedContacts);
         return { success: true };
+      }
+
+      if (result.requiresSignup) {
+        return {
+          success: false,
+          error: 'No membership found for this email. Ask your studio to add you as a contact.',
+        };
       }
 
       if (result.customToken && result.contact) {
@@ -208,13 +248,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true };
       }
 
-      return { success: false, error: 'Could not load contact data' };
-    } catch (error: any) {
-      const extraInfo = `Code: ${error.code || 'N/A'}\nStack: ${error.stack || 'N/A'}`;
-      console.error('Error verifying code:', error, extraInfo);
+      return { success: false, error: 'Could not sign in. Please try again.' };
+    } catch (error) {
+      console.error('Error verifying code:', error);
       return {
         success: false,
-        error: (error.message || 'Failed to verify code') + '\n' + extraInfo
+        error: userMessage(error, 'Failed to verify code'),
       };
     } finally {
       setIsLoading(false);
@@ -223,7 +262,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const selectContact = async (contactId: string, stayLoggedIn: boolean = true): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('[AuthContext] selectContact called with:', contactId, 'stayLoggedIn:', stayLoggedIn);
       setIsLoading(true);
 
       // Save stayLoggedIn preference
@@ -233,8 +271,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (!hasVerificationContext) {
         const switchResult = await FirestoreService.switchContact(contactId);
-
-        console.log('[AuthContext] switchContact result:', switchResult);
 
         if (switchResult && switchResult.customToken && switchResult.contact) {
           await signInWithCustomToken(auth, switchResult.customToken);
@@ -249,16 +285,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setMatchedContacts(null);
           setTeamSummaries(null);
           setContact(switchResult.contact);
-          console.log('[AuthContext] Contact switched via existing session');
           return { success: true };
         } else {
-          console.error('[AuthContext] Failed to switch contact via existing session', switchResult);
+          console.error('[AuthContext] Failed to switch contact via existing session');
           return { success: false, error: 'Failed to switch contact. Please try logging in again.' };
         }
       }
 
       const result = await FirestoreService.verifyCode(codeId!, verifiedCode!, contactId);
-      console.log('[AuthContext] verifyCode response for contact selection:', result);
 
       if (Object.prototype.hasOwnProperty.call(result, 'teamSummaries')) {
         setTeamSummaries(result.teamSummaries ?? null);
@@ -277,18 +311,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMatchedContacts(null);
         setTeamSummaries(null);
         setContact(result.contact);
-        console.log('[AuthContext] Contact state updated, isAuthenticated should now be true');
         return { success: true };
       } else {
         console.error('[AuthContext] Failed to finalize contact selection');
         return { success: false, error: 'Failed to authenticate. Please try again.' };
       }
-    } catch (error: any) {
-      const extraInfo = `Code: ${error.code || 'N/A'}\nStack: ${error.stack || 'N/A'}`;
-      console.error('[AuthContext] Error selecting contact:', error, extraInfo);
+    } catch (error) {
+      console.error('[AuthContext] Error selecting contact:', error);
       return {
         success: false,
-        error: (error.message || 'An unexpected error occurred. Please try again.') + '\n' + extraInfo
+        error: userMessage(error, 'An unexpected error occurred. Please try again.'),
       };
     } finally {
       setIsLoading(false);
@@ -305,6 +337,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setContact(null);
     setMatchedContacts(null);
     setTeamSummaries(null);
+    setAppNotIncludedTeams(null);
     // Reset flag after state updates are batched
     setTimeout(() => {
       isLoggingOut.current = false;
@@ -334,6 +367,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const clearAppNotIncluded = () => setAppNotIncludedTeams(null);
+
   return (
     <AuthContext.Provider
       value={{
@@ -344,6 +379,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         matchedContacts,
         teamSummaries,
         selectContact,
+        appNotIncludedTeams,
+        clearAppNotIncluded,
         contact,
         isLoading,
         isInitializing,
