@@ -499,7 +499,7 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       done: false,
     },
     {
-      // THE LAST LOOK BEFORE ANYBODY PAYS. /offer/pricing renders every price
+      // THE LAST LOOK BEFORE ANYBODY PAYS. /manage/pricing renders every price
       // as a member actually meets it — the plan, the per-class price, the
       // member rate on top of it — which is the one thing no individual editor
       // can show, because each of them only knows its own half.
@@ -509,7 +509,7 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       // would be the third lying step (Franco, 2026-08-23).
       key: 'pricingReview',
       section: 'doors',
-      href: '/offer/pricing',
+      href: '/manage/pricing',
       ack: 'review',
       done: false,
     },

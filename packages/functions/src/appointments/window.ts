@@ -28,12 +28,15 @@ import {
   TEAMS_COLLECTION,
   GUEST_SNAPSHOT,
   appointmentSlotBlocked,
+  normalizeBenefit,
   resolveAppointmentDurations,
+  resolveDurationBenefit,
   resolveDurationSale,
   resolvePaymentOptions,
   type Activity,
   type BookingContactField,
   type ActivityDuration,
+  type ActivityDurationBenefit,
   type ActivityMemberBenefit,
   type Availability,
   type Benefit,
@@ -81,13 +84,18 @@ function conflicts(startMs: number, durMs: number, busy: BusyInterval[], bufferM
 
 // Loaded/derived shape of a `type: 'appointment'` activity — the *what*.
 // No accessRule here any more — appointments dropped the access gate entirely;
-// money (durations + memberBenefit) is the only gate.
+// money (durations + the member rule on each) is the only gate.
 interface ActivityInfo {
   id: string
   name: string
   /** Priced duration menu (resolveAppointmentDurations default applied). */
   durations: ActivityDuration[]
+  /** BOTH halves travel together, always — `resolveDurationBenefit` needs the
+   *  pair to tell "no rule for this length" from "this tenant predates
+   *  per-length rules". Sending one without the other is how a reader silently
+   *  falls back to the wrong reading. */
   memberBenefit?: ActivityMemberBenefit | Benefit
+  durationBenefits?: ActivityDurationBenefit[]
   /** Per-activity cancellation-policy override; the picker falls back to the
    *  team default it already has (TeamPublicProfile.bookingCancellationPolicy).
    *  Display-only, and the same text the confirmation email appends — the point
@@ -107,6 +115,7 @@ function toActivityInfo(id: string, a: Activity): ActivityInfo | null {
     name: a.name || 'Appointment',
     durations,
     memberBenefit: a.memberBenefit,
+    durationBenefits: a.durationBenefits,
     cancellationPolicy: a.cancellationPolicy?.trim() || null,
     contactFields: a.contactFields,
   }
@@ -271,6 +280,7 @@ export const listAvailability = onCall(async (request): Promise<ListAvailability
     activityName: string
     durations: ActivityDuration[]
     memberBenefit?: ActivityMemberBenefit | Benefit
+    durationBenefits?: ActivityDurationBenefit[]
     cancellationPolicy: string | null
     contactFields: BookingContactField[] | null
     location: string | null
@@ -329,6 +339,7 @@ export const listAvailability = onCall(async (request): Promise<ListAvailability
             activityName: info.name,
             durations: info.durations,
             memberBenefit: info.memberBenefit,
+            durationBenefits: info.durationBenefits,
             cancellationPolicy: info.cancellationPolicy ?? null,
             contactFields: info.contactFields ?? null,
             location: tpl.location ?? null,
@@ -371,6 +382,7 @@ export const listAvailability = onCall(async (request): Promise<ListAvailability
           // (resolveEffectiveAppointmentPrice) for display; the server always
           // re-resolves authoritatively at booking/checkout.
           memberBenefit: acc.memberBenefit ?? null,
+          durationBenefits: acc.durationBenefits ?? null,
           // Display-only; the picker falls back to the team-wide default.
           cancellationPolicy: acc.cancellationPolicy,
           // Extends the team-wide contact-field list on the guest step.
@@ -430,6 +442,10 @@ export const bookAppointment = onCall(async (request) => {
 
   const ctx = await loadAppointmentBookingContext({ teamId, providerId, activityId, startMs, durationMinutes })
   const caller = await resolveAppointmentCaller(request, { ...data, teamId })
+  // THE ONE READER, here as everywhere: the member rule for the length being
+  // booked, falling back to the activity-wide one on a tenant that predates
+  // per-length rules.
+  const durationRule = resolveDurationBenefit(ctx.activity, ctx.chosenDuration.minutes)
 
   // ── Price gate — the ONLY gate. The shared resolver answers covered /
   // spend_credits / pay for this caller (guests always land on base price).
@@ -437,13 +453,16 @@ export const bookAppointment = onCall(async (request) => {
     ? await loadContactPaymentSnapshot({
         teamId,
         contact: caller.authenticatedContact,
-        relevantTypeIds: ctx.activity.memberBenefit?.subscriptionTypeIds ?? [],
+        // The rule for THE LENGTH BEING BOOKED, not the activity's — an
+        // appointment carries one per session length now.
+        relevantTypeIds:
+          normalizeBenefit(durationRule)?.subscriptionTypeIds ?? [],
       })
     : GUEST_SNAPSHOT
   const priced = resolvePaymentOptions(snapshot, {
     kind: 'appointment',
     duration: ctx.chosenDuration,
-    benefit: ctx.activity.memberBenefit ?? null,
+    benefit: durationRule,
   })
   const priceOption = priced.options[0]
   if (priceOption?.type === 'pay') {

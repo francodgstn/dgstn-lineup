@@ -159,7 +159,7 @@ export async function pass11TeamSubcollections(
         const tgtRef = tgt.collection('teams').doc(teamId).collection(sub).doc(d.id)
         if (!cfg.dryRun) {
           const existing = await tgtRef.get()
-          if (existing.exists) { bw.skip(); continue }
+          if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
         }
 
         // Apply per-subcollection transforms before writing — see transformSubcollectionDoc.

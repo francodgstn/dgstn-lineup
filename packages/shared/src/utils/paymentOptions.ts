@@ -158,7 +158,7 @@ export type PaymentOption =
       amount: number
       source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
       /** WHICH MEMBERSHIP priced this. Read downstream — createAppointmentCheckout
-       *  stamps `subscription_type_id` from it and /offer/pricing renders the
+       *  stamps `subscription_type_id` from it and /manage/pricing renders the
        *  member badge from it — which is why a benefit set exactly AT base still
        *  stamps this (it did price the booking). Never present together with
        *  `appliedPromo`: at most one modifier ever prices the option. */

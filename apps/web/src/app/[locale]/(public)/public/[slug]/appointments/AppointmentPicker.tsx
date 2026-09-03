@@ -7,11 +7,13 @@ import { functions } from '@/lib/firebase'
 import {
   resolvePaymentOptions,
   resolveBookingContactFields,
+  resolveDurationBenefit,
   heldSubscriptionTypeIds,
   parseDateKey,
   parseDocId,
   parsePositiveInt,
   type ActivityMemberBenefit,
+  type ActivityDurationBenefit,
   type Benefit,
   type BookingContactField,
   type PublicFrom,
@@ -78,7 +80,12 @@ interface AvailActivity {
   activityId: string
   activityName: string
   durations: AvailDuration[]
+  /** The activity-wide rule — the LEGACY reading, and only correct while
+   *  `durationBenefits` is absent. Never read either directly: the pair goes
+   *  through `resolveDurationBenefit`, which is what makes a tenant mirrored
+   *  before per-length rules existed keep quoting the same price. */
   memberBenefit: ActivityMemberBenefit | Benefit | null
+  durationBenefits: ActivityDurationBenefit[] | null
   /** Per-activity override of the team's cancellation terms, from
    *  `listAvailability`. Display-only; falls back to the team default. */
   cancellationPolicy: string | null
@@ -1581,7 +1588,14 @@ function buildWindowBooking(
     onlineUrl: activity.onlineUrl,
     priceAmount: chosen?.priceAmount ?? null,
     benefitOnly: chosen?.benefitOnly === true,
-    memberBenefit: activity.memberBenefit,
+    // THE ONE READER, resolved for the CHOSEN length. Everything downstream —
+    // the quote, the "sign in for the member price" line, the checkout — reads
+    // this single already-resolved value, so no surface below can pick a
+    // different length's rule than the one being booked.
+    memberBenefit: resolveDurationBenefit(
+      activity,
+      chosen?.minutes ?? durationMinutes
+    ),
     cancellationPolicy: activity.cancellationPolicy,
     contactFields: activity.contactFields,
   }
