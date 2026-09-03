@@ -38,6 +38,12 @@ never be chosen. Keep runtime data in `extra`; never move native config there.
 Never bump `runtimeVersion` by hand; never set `updates.url` or
 `extra.eas.projectId` by hand (owner-set once via `eas init`).
 
+**Retiring a build that can no longer follow the backend** is a separate
+lever: operator console → `Settings → Member app` → minimum supported version
+(`app_settings/mobile`). Older builds open on an update-required screen with
+the store links. It fails OPEN on a malformed value; the console validates.
+Use it rarely — an OTA reaches every build on the same fingerprint without it.
+
 ## Cutting a release
 
 ```bash

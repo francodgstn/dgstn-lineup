@@ -178,11 +178,21 @@ QR-only app unless configured.
    OTA-vs-build decision ignores `extra` and version fields; SessionStart hook
    running the bootstrap; devcontainer + root README. No root `postinstall`
    (§6).
-4. **Accounts + tests**: review-access + known test contact seeded everywhere;
-   the app sends `teamId` once a studio is chosen (replacing the unfiltered
-   `collectionGroup('public_profile')` discovery); sandbox in the config map;
-   fossil users deleted; console action for `flags.internal`; mocha tests for
-   the three auth callables; a Maestro smoke flow; the min-version gate.
+4. **Accounts + tests** (`claude/mobile-step4-accounts-tests`): every seeded
+   environment provisions THE SAME review studio production does
+   (`scripts/lib/mobile.ts` → `provisionDemoTenant`) plus the fixed code, so
+   the member app has one test login everywhere (`docs/test-accounts.md`);
+   the unfiltered `collectionGroup('public_profile')` discovery is gone
+   (studio names come from `teamSummaries`; a re-sent code is scoped to the
+   chosen studio); fossil `contact:{teamId}:{contactId}` users deleted from
+   both cloud seeders; console action for `flags.internal` (account page)
+   and a `Settings → Member app` page for the min-version gate; the login
+   chain's decisions lifted into pure modules with mocha tests incl.
+   `login_emails` (`auth/loginChain.test.ts`) and `switchActiveContact` now
+   honours `login_emails` like the login does; `app_settings/mobile` rule +
+   rules test; the update-required screen (fails open); a Maestro smoke flow
+   (`apps/mobile/.maestro/login.yaml`, not in CI). Sandbox was already in the
+   config map since step 1.
 5. **Runtime tenant theming**: `bioLinkThemePreset` / accent / logo from the
    mirror into the Paper theme and the team card; hex literals migrated to
    tokens; an `APP_VARIANT` switch in `app.config.js` left at its default.
@@ -231,6 +241,20 @@ Collected during autonomous execution; none blocks the current steps.
   for every agent session, the mobile `start*` scripts build first, and
   `local-env status` prints `! STALE`. Add the `postinstall` if a stale
   `dist` still bites a human developer after this.
+- **The review-login code is a committed default (`123456`)** on the
+  emulator, staging and the sandbox (`REVIEW_ACCESS_CODE` overrides at seed
+  time; production is set from the console only). It opens one synthetic
+  contact on an internal, silent, payment-less studio in environments whose
+  owner passwords are already committed. Change the default, or make the
+  cloud seeders require the env var, if that trade is not wanted.
+- **`switchActiveContact` now accepts `login_emails`** (a parent signed in
+  through a child's allow-list can switch to the sibling), matching what
+  `buildContactSession` already allowed for the login itself. A widening,
+  deliberate, pinned by `loginChain.test.ts`; revert the one predicate call
+  if the old primary-only rule was intended.
+- **Maestro is not in CI.** The flow exists and runs locally against any
+  seeded environment; a device lane needs a Maestro Cloud (or EAS Workflows)
+  account and a `development` build per platform — an account decision.
 - **SessionStart hook runs `pnpm bootstrap --quiet` in every checkout**,
   including the owner's own sessions: on a ready checkout it prints at most
   one line (the missing mobile key) and rebuilds nothing. Remove the hook from

@@ -172,7 +172,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCodeId(result.codeId);
       setVerifiedCode(null);
       setMatchedContacts(null);
-      setTeamSummaries(null);
+      // The studios this email belongs to, named by the server — the ONLY
+      // source of team names on the login screen (see LoginScreen.teamNameMap).
+      setTeamSummaries(result.teamSummaries ?? null);
       setAppNotIncludedTeams(null);
 
       return { success: true };

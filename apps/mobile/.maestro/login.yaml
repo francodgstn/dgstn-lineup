@@ -1,0 +1,37 @@
+# The member app's smoke flow: sign in with the review studio's fixed code and
+# land on the profile. Runs against ANY seeded environment — the same
+# `linyup-demo` studio, reviewer contact and code exist on the emulator, staging
+# and the sandbox (scripts/lib/mobile.ts; docs/test-accounts.md) — and against
+# production during a review window, when the console has opened one.
+#
+#   maestro test apps/mobile/.maestro/login.yaml
+#   maestro test -e EMAIL=app.review@example.com -e CODE=123456 apps/mobile/.maestro/login.yaml
+#
+# Needs a build of the app on the device/simulator (a `development` or
+# `preview` EAS build, or `expo run:ios|android`), and the Maestro CLI
+# (https://maestro.mobile.dev). Not wired into CI: a device lane needs a
+# Maestro Cloud account, which is the owner's call (mobile roadmap §6).
+appId: com.dgstn.linyup
+env:
+  EMAIL: app.review@example.com
+  CODE: "123456"
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: login-email
+- tapOn:
+    id: login-email
+- inputText: ${EMAIL}
+- tapOn:
+    id: login-send
+# The code step: six hidden-input digits, auto-submitted when complete.
+- assertVisible:
+    id: login-code
+- tapOn:
+    id: login-code
+- inputText: ${CODE}
+- extendedWaitUntil:
+    visible:
+      id: profile-screen
+    timeout: 20000

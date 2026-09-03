@@ -58,8 +58,9 @@
  *
  *   Auth users:
  *   - one coach (owner) per team + a second coach for studio / org-team-b
- *   - one student per team — uid `contact:{teamId}:{contactId}` with custom
- *     claims { contactId, teamId, sessionExpires } matching generateAuthToken().
+ *   Contacts have NO auth users: a contact signs in through the passwordless
+ *   code flow, which mints its session on demand. The member app's test login
+ *   is the review studio (scripts/lib/mobile.ts, docs/test-accounts.md).
  */
 
 import admin from 'firebase-admin'
@@ -110,6 +111,7 @@ import {
 } from './lib/fixtures/engagement'
 import { seedTeamMoney } from './lib/fixtures/money'
 import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
+import { printMemberAppLogin, seedMobileSettings, seedReviewTenant } from './lib/mobile'
 
 const PROJECT_ID = 'linyup-staging'
 
@@ -118,8 +120,6 @@ admin.initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID })
 const auth = admin.auth()
 const db = admin.firestore()
 db.settings({ ignoreUndefinedProperties: true })
-
-const STUDENT_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // matches generateAuthToken
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1932,24 +1932,6 @@ async function seedTeam(opts: TeamSeed) {
   }
   // org member teams are billed through the org subscription (handled in seedOrg)
 
-  // ── student auth user (contact-session identity matching buildContactSession) ──────
-  const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
-  const studentContactId = contactIds[studentIdx]
-  const studentUid = `contact:${teamId}:${studentContactId}`
-  const sessionExpires = Date.now() + STUDENT_SESSION_MS
-  await upsertAuthUser({
-    uid: studentUid,
-    email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
-    displayName: `${pool[studentIdx].firstname} ${pool[studentIdx].lastname}`,
-    password: 'linyup123',
-    claims: {
-      contactId: studentContactId,
-      teamId,
-      sessionExpires,
-      email: `${slugEmail(pool[studentIdx])}.${teamId}@example.com`,
-    },
-  })
-
   // ── documents (all plans — minPlan 'free') ──────────────────────────────────
   // The money ledger — seeded after contacts, whose subscription assignment it
   // reads back. See scripts/lib/fixtures/money.ts for why seeded ledger rows
@@ -2269,9 +2251,8 @@ async function upsertAuthUser(opts: {
   email: string
   displayName: string
   password: string
-  claims?: Record<string, unknown>
 }) {
-  const { uid, email, displayName, password, claims } = opts
+  const { uid, email, displayName, password } = opts
   try {
     await auth.createUser({ uid, email, password, displayName, emailVerified: true })
   } catch (e: unknown) {
@@ -2284,7 +2265,6 @@ async function upsertAuthUser(opts: {
       throw e
     }
   }
-  if (claims) await auth.setCustomUserClaims(uid, claims)
 }
 
 function slugEmail(c: PoolEntry): string {
@@ -2441,6 +2421,11 @@ async function main() {
     teamIds: ['seed-org-team-a', 'seed-org-team-b'],
   })
 
+  // The member app's test login — the same review studio the production
+  // console provisions, with its fixed code (scripts/lib/mobile.ts).
+  const memberApp = await seedReviewTenant({ db, seededBy: 'seed-staging' })
+  await seedMobileSettings({ db, seededBy: 'seed-staging' })
+
   console.log('\n✅ Staging seeded successfully!\n')
   console.log('   ┌──────────────────────┬──────────────────────┬────────────┬──────────┐')
   console.log('   │ Plan                 │ Email                │ Password   │ Status   │')
@@ -2451,7 +2436,8 @@ async function main() {
   console.log('   └──────────────────────┴──────────────────────┴────────────┴──────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com)')
   console.log('   Member teams: Titan Combat Sports + Titan Striking Lab')
-  console.log('   Student logins use custom tokens (uid contact:{teamId}:{contactId}).\n')
+  printMemberAppLogin(memberApp)
+  console.log('')
 }
 
 main()

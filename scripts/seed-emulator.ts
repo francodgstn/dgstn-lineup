@@ -129,6 +129,7 @@ import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import { seedTeamFinance } from './lib/fixtures/finance'
 import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { partnerAppNames } from './lib/partnerApps'
+import { printMemberAppLogin, seedMobileSettings, seedReviewTenant } from './lib/mobile'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -3226,6 +3227,13 @@ async function main() {
   await seedStudioManager()
   await seedStudioCoach()
 
+  // The member app's test login: the SAME review studio production provisions
+  // from the console, plus its fixed sign-in code and the app's min-version
+  // policy. See scripts/lib/mobile.ts.
+  console.log('\n📱  Seeding the member-app review studio (linyup-demo)…')
+  const memberApp = await seedReviewTenant({ db, seededBy: 'seed-emulator' })
+  await seedMobileSettings({ db, seededBy: 'seed-emulator' })
+
   console.log('\n✅ Emulator seeded successfully!\n')
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
@@ -3238,6 +3246,7 @@ async function main() {
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
+  printMemberAppLogin(memberApp)
   console.log('   org@linyup.com is ALSO a manager of Iron Circle Gym — the two-studio')
   console.log('   login the scope switcher needs to be testable at all.')
   console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports')

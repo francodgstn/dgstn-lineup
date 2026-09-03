@@ -1010,6 +1010,10 @@ pnpm stripe:listen      # forward Stripe test webhooks (platform + Connect) to t
 pnpm functions:watch    # rebuild Cloud Functions on save (when editing functions)
 ```
 
+Test logins for every environment, web AND member app — including the review
+studio `linyup-demo` + fixed code that every seeder provisions — are in
+`docs/test-accounts.md`. Never re-derive one from a seeder's source.
+
 Quality / CI checks (run anytime): `pnpm build` · `pnpm lint` · `pnpm typecheck` ·
 `pnpm test` · `pnpm format`. Cloud/data ops live under `seed:*` / `reset:*` /
 `migrate:hmd` / `stripe:sync` / `emulators:export:*` — not part of day-to-day startup.

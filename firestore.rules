@@ -421,6 +421,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    // app_settings/mobile: the member app's world-readable policy (minimum
+    // supported version + store links, MobileAppSettings in @linyup/shared).
+    // Read BEFORE sign-in, so it must be open; operator-written only (console,
+    // Admin SDK). Every other app_settings doc — review_access above all, which
+    // holds a sign-in code — stays default-deny by having no match here.
+    match /app_settings/mobile {
+      allow read: if true;
+      allow write: if false;
+    }
     // signup_allowlist (emails are PII) and signup_invites are touched ONLY by
     // the Admin SDK (operator console + Cloud Functions, which bypass rules).
     match /signup_allowlist/{email} {

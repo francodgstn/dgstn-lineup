@@ -136,6 +136,8 @@ export interface AccountDetail {
    * somebody made" failure `comped_reason` exists to prevent.
    */
   comped: boolean
+  /** `flags.internal` — Linyup's own tenant, off the platform numbers. */
+  internal: boolean
   compedReason: string | null
   compedSinceMs: number | null
 }
@@ -309,6 +311,7 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
     activity,
     payments,
     comped: team.flags?.comped === true,
+    internal: team.flags?.internal === true,
     compedReason: team.flags?.comped_reason ?? null,
     compedSinceMs: team.flags?.comped_since?.toMillis?.() ?? null,
   }
@@ -351,6 +354,7 @@ async function getOrgDetail(id: string): Promise<AccountDetail | null> {
     activity: [],
     payments: null,
     comped: org.flags?.comped === true,
+    internal: org.flags?.internal === true,
     compedReason: org.flags?.comped_reason ?? null,
     compedSinceMs: org.flags?.comped_since?.toMillis?.() ?? null,
   }

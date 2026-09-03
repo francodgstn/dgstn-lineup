@@ -13,8 +13,6 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
-import { FirestoreService } from '../services/firestore';
-import { TeamPublicProfile } from '../types';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GradientBackground } from '../components/GradientBackground';
@@ -30,7 +28,6 @@ export const LoginScreen: React.FC = () => {
   const [code, setCode] = useState('');
   const [stayLoggedIn, setStayLoggedIn] = useState(true);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-  const [teams, setTeams] = useState<TeamPublicProfile[]>([]);
   const {
     sendCode,
     verifyCode,
@@ -55,13 +52,6 @@ export const LoginScreen: React.FC = () => {
   }, [isAuthenticated, navigation]);
 
   useEffect(() => {
-    // Load active teams on mount
-    const loadTeams = async () => {
-      const activeTeams = await FirestoreService.getActiveTeams();
-      setTeams(activeTeams);
-    };
-    loadTeams();
-
     // If we have matched contacts but no authenticated contact, jump to selection
     if (matchedContacts && matchedContacts.length > 0 && !isAuthenticated) {
       if (multipleTeamsAvailable) {
@@ -104,23 +94,18 @@ export const LoginScreen: React.FC = () => {
     setStep('contact-selection');
   }, [matchedContacts, step]);
 
+  // Studio names come from `sendContactVerificationCode`'s teamSummaries —
+  // the teams THIS email belongs to, named by the server. (The app used to read
+  // every public_profile mirror on the platform for this, on every mount.)
   const teamNameMap = useMemo(() => {
     const map = new Map<string, string>();
-
-    teams.forEach((team) => {
-      if (team.id) {
-        map.set(team.id, team.name);
-      }
-    });
-
     teamSummaries?.forEach((summary) => {
       if (summary.id) {
         map.set(summary.id, summary.name);
       }
     });
-
     return map;
-  }, [teams, teamSummaries]);
+  }, [teamSummaries]);
 
   const resolveTeamName = (teamId?: string | null) => {
     if (!teamId) {
@@ -146,20 +131,12 @@ export const LoginScreen: React.FC = () => {
       }
     });
 
-    if (counts.size === 0 && teams.length > 0) {
-      teams.forEach((team) => {
-        if (team.id) {
-          counts.set(team.id, counts.get(team.id) || 0);
-        }
-      });
-    }
-
     return Array.from(counts.entries()).map(([id, count]) => ({
       id,
       name: teamNameMap.get(id) || 'Team',
       contactCount: count
     }));
-  }, [matchedContacts, teamSummaries, teams, teamNameMap]);
+  }, [matchedContacts, teamSummaries, teamNameMap]);
 
   const filteredContacts = useMemo(() => {
     if (!matchedContacts) {
@@ -215,17 +192,20 @@ export const LoginScreen: React.FC = () => {
     }
   }, [code, isLoading, handleVerifyCode]);
 
-  const handleSendCode = async () => {
+  // Once a studio has been chosen, a re-sent code is requested FOR that studio:
+  // the server then scopes the match, the rate limit and the email's branding
+  // to it, instead of the cross-team lookup the first request has to make.
+  const handleSendCode = async (teamId?: string) => {
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
 
-    const result = await sendCode(email.trim());
+    const result = await sendCode(email.trim(), teamId || undefined);
     if (result.success) {
       setStep('code');
       setCode('');
-      setSelectedTeamId('');
+      setSelectedTeamId(teamId ?? '');
     } else {
       Alert.alert('Error', result.error || 'Failed to send verification code');
     }
@@ -364,14 +344,16 @@ export const LoginScreen: React.FC = () => {
             keyboardType="email-address"
             disabled={isLoading}
             style={styles.paperInput}
+            testID="login-email"
           />
 
           <Button
             mode="contained"
-            onPress={handleSendCode}
+            onPress={() => handleSendCode()}
             disabled={isLoading}
             style={styles.primaryButton}
             loading={isLoading}
+            testID="login-send"
           >
             Send Code
           </Button>
@@ -430,6 +412,7 @@ export const LoginScreen: React.FC = () => {
               editable={!isLoading}
               style={styles.hiddenInput}
               caretHidden
+              testID="login-code"
             />
           </View>
 
@@ -454,6 +437,15 @@ export const LoginScreen: React.FC = () => {
               Verify Code
             </Button>
           )}
+
+          <Button
+            mode="text"
+            onPress={() => handleSendCode(selectedTeamId)}
+            disabled={isLoading}
+            testID="login-resend"
+          >
+            Send a new code
+          </Button>
 
           <Button
             mode="text"

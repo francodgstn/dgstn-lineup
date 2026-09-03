@@ -1057,6 +1057,7 @@ export const ProfileScreen: React.FC = () => {
       <LoadingOverlay visible={isLoading && !isRefreshing} message="Updating..." />
 
       <ScrollView
+        testID="profile-screen"
         ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}

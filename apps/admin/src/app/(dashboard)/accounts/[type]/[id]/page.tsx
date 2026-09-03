@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 import { getMessagingInfo, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
 import { CompCard } from './comp-card'
+import { InternalCard } from './internal-card'
 import { ConnectToggle } from './connect-toggle'
 import { DisconnectConnect } from './disconnect-connect'
 import { MessagingPolicyCard } from './messaging-policy-card'
@@ -185,6 +186,11 @@ export default async function AccountDetailPage({
                 joins later inherits it.
               </p>
             )}
+            {/* Whether it is COUNTED, beside whether it is BILLED — the two
+                flags an operator sets on Linyup's own tenants. */}
+            <div className="mt-4">
+              <InternalCard kind={account.type} entityId={account.id} initialInternal={account.internal} />
+            </div>
           </CardContent>
         </Card>
 

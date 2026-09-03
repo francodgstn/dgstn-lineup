@@ -10,6 +10,8 @@ import { FirestoreService } from '../services/firestore';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { useAppUpdates } from '../hooks/useAppUpdates';
+import { useMinVersionGate } from '../hooks/useMinVersionGate';
+import { UpdateRequiredScreen } from '../screens/UpdateRequiredScreen';
 import { buildMobileAppTelemetry } from '../utils/mobileAppTelemetry';
 
 export type RootStackParamList = {
@@ -23,6 +25,10 @@ export const AppNavigator: React.FC = () => {
   const { isAuthenticated, isInitializing, contact } = useAuth();
   const appState = useRef(AppState.currentState);
   const { checkForUpdates } = useAppUpdates();
+  // Older than app_settings/mobile.min_supported_version → the update screen
+  // instead of the app. Fails open; re-read on every foreground, beside the
+  // OTA check, so a raised minimum lands without a restart.
+  const minVersion = useMinVersionGate();
   const mobileAppTelemetry = buildMobileAppTelemetry(Constants.expoConfig?.version, {
     runtimeVersion: Updates.runtimeVersion ?? null,
     channel: Updates.channel ?? null,
@@ -38,6 +44,7 @@ export const AppNavigator: React.FC = () => {
         nextState === 'active'
       ) {
         checkForUpdates();
+        minVersion.recheck();
         if (contact?.id) {
           FirestoreService.updateLastSeen(contact.id, mobileAppTelemetry).catch(() => undefined);
         }
@@ -53,6 +60,10 @@ export const AppNavigator: React.FC = () => {
 
     return () => subscription.remove();
   }, [contact?.id]);
+
+  if (minVersion.gate) {
+    return <UpdateRequiredScreen gate={minVersion.gate} />;
+  }
 
   if (isInitializing) {
     return (
