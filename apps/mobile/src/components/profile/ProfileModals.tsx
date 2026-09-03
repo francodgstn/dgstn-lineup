@@ -79,7 +79,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
             </View>
 
             <Text variant="bodyMedium" style={[styles.qrInstructions, { color: theme.colors.onSurfaceVariant }]}>
-              Show this QR code to your instructor for session check-in
+              Show this QR code to your studio for session check-in
             </Text>
 
             <View style={styles.qrContactInfo}>
@@ -181,7 +181,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
               <IconButton icon="close" size={24} onPress={onCloseGenderInfo} />
             </View>
             <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}>
-              This field is required for registration to kickboxing federations, tournaments, and other events. It does not define or classify gender identity within our community.
+              This field may be required for event, competition or federation registration. It does not define or classify gender identity within our community.
             </Text>
             <Button mode="contained" onPress={onCloseGenderInfo} style={styles.closeButton}>
               Close
@@ -256,7 +256,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                               {c.firstname} {c.lastname}
                             </Text>
                             <Text variant="bodySmall" style={{ color: isCurrent ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant, opacity: 0.8 }}>
-                              {c.teamName || 'Member'}
+                              Member
                             </Text>
                           </View>
                           {isCurrent && (

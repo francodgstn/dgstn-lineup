@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Alert, View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TextInput as RNTextInput } from 'react-native';
+import { Alert, Linking, View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TextInput as RNTextInput } from 'react-native';
 import {
   Button,
   Card,
@@ -18,6 +18,7 @@ import { TeamPublicProfile } from '../types';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GradientBackground } from '../components/GradientBackground';
+import { webAppUrl } from '../config/firebase';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 type LoginStep = 'email' | 'code' | 'team-selection' | 'contact-selection';
@@ -37,7 +38,9 @@ export const LoginScreen: React.FC = () => {
     matchedContacts,
     teamSummaries,
     selectContact,
-    isAuthenticated
+    isAuthenticated,
+    appNotIncludedTeams,
+    clearAppNotIncluded,
   } = useAuth();
   const navigation = useNavigation<LoginScreenNavigationProp>();
 
@@ -116,14 +119,8 @@ export const LoginScreen: React.FC = () => {
       }
     });
 
-    matchedContacts?.forEach((contact) => {
-      if (contact.teamId && contact.teamName) {
-        map.set(contact.teamId, contact.teamName);
-      }
-    });
-
     return map;
-  }, [teams, teamSummaries, matchedContacts]);
+  }, [teams, teamSummaries]);
 
   const resolveTeamName = (teamId?: string | null) => {
     if (!teamId) {
@@ -278,6 +275,71 @@ export const LoginScreen: React.FC = () => {
     </TouchableRipple>
   );
 
+  const handleBackFromAppNotIncluded = () => {
+    clearAppNotIncluded();
+    setStep('email');
+    setEmail('');
+    setCode('');
+  };
+
+  const handleOpenSpace = (slug: string | null) => {
+    if (!slug) return;
+    Linking.openURL(`${webAppUrl}/public/${slug}/space`).catch(() => undefined);
+  };
+
+  // Every matched contact existed, but none of their teams' plans include the
+  // member app — shown instead of falling through to the generic invalid-code
+  // path, which would be a confusing "no account" message for a real account
+  // behind a plan wall. Named per team so a member on several teams sees
+  // exactly which studio(s) are not included yet.
+  if (appNotIncludedTeams) {
+    return (
+      <GradientBackground>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+        >
+          <ScrollView contentContainerStyle={styles.centeredContent}>
+            {renderHeader(
+              'Not included in your plan',
+              appNotIncludedTeams.length === 1
+                ? `${appNotIncludedTeams[0].teamName ?? 'Your studio'} hasn't added the mobile app to their plan yet.`
+                : "These studios haven't added the mobile app to their plan yet."
+            )}
+
+            {appNotIncludedTeams.map((team) => (
+              <Card key={team.teamId} style={styles.contactCard} mode="contained">
+                <Card.Content>
+                  <Text variant="titleMedium">{team.teamName ?? 'Studio'}</Text>
+                  <Text
+                    variant="bodySmall"
+                    style={[styles.teamMeta, { color: theme.colors.onSurfaceVariant }]}
+                  >
+                    Ask your studio about upgrading, or use their web member area instead.
+                  </Text>
+                  {team.slug ? (
+                    <Button
+                      mode="text"
+                      compact
+                      onPress={() => handleOpenSpace(team.slug)}
+                      style={styles.inlineButton}
+                    >
+                      Open web member area
+                    </Button>
+                  ) : null}
+                </Card.Content>
+              </Card>
+            ))}
+
+            <Button mode="text" onPress={handleBackFromAppNotIncluded}>
+              Back to sign in
+            </Button>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </GradientBackground>
+    );
+  }
+
   if (step === 'email') {
     return (
       <GradientBackground>
@@ -286,7 +348,10 @@ export const LoginScreen: React.FC = () => {
         style={styles.container}
       >
         <ScrollView contentContainerStyle={styles.centeredContent} keyboardShouldPersistTaps="handled">
-          {renderHeader('Linyup Member', 'Sign in with the email registered by your team')}
+          {/* No studio is known yet at this step (email entry precedes any
+              team lookup), so this always reads "Linyup" — never HMD's old
+              hardcoded "Linyup Member". */}
+          {renderHeader('Linyup', 'Sign in with the email registered by your studio')}
 
           <TextInput
             mode="outlined"
@@ -312,7 +377,7 @@ export const LoginScreen: React.FC = () => {
           </Button>
 
           <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
-            Your email must be registered by your team manager or instructor before you can sign in. If you don't have access, please contact your master or instructor.
+            Your email must be registered by your studio before you can sign in. If you don&apos;t have access, please contact your studio.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -399,7 +464,7 @@ export const LoginScreen: React.FC = () => {
           </Button>
 
           <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
-            Code expires in 10 minutes
+            Code expires in 15 minutes
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

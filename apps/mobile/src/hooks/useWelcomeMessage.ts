@@ -5,14 +5,12 @@ const STORAGE_KEY = 'wm_last_idx';
 
 const MESSAGES = [
   'Train hard.',
-  'One more round.',
+  'One more session.',
   'Push past yesterday.',
   'Stronger every class.',
   'Every rep counts.',
   'Progress over perfection.',
   'Time to earn it.',
-  'Keep your guard up.',
-  'Ready to fight.',
   'Trust your training.',
   'Hold the vision.',
   'Trust the process.',

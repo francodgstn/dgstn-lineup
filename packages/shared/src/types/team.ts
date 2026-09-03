@@ -926,6 +926,26 @@ export interface GamificationSettings {
   coach_badges?: GamificationCoachBadge[]
 }
 
+/**
+ * The PUBLIC-safe slice of `teams/{id}.settings.gamification` — exactly the
+ * two fields `GamificationSettings` declares. The stored bag ALSO carries the
+ * studio's scoring configuration (`default_base_score`, `monthly_cap`,
+ * `streak_min_sessions`, `time_multipliers` — see the admin gamification
+ * page), which is not a member-facing setting and must never ride onto the
+ * world-readable `TeamPublicProfile.gamification_settings` mirror; a type cast
+ * erases nothing at runtime, so the narrowing has to be done by hand, here.
+ * Returns null when nothing public is configured and never emits an
+ * `undefined` value (the Admin SDK refuses them).
+ */
+export function pickPublicGamificationSettings(raw: unknown): GamificationSettings | null {
+  if (!raw || typeof raw !== 'object') return null
+  const { badge_thresholds, coach_badges } = raw as Partial<GamificationSettings>
+  const out: GamificationSettings = {}
+  if (badge_thresholds && typeof badge_thresholds === 'object') out.badge_thresholds = badge_thresholds
+  if (Array.isArray(coach_badges)) out.coach_badges = coach_badges
+  return Object.keys(out).length > 0 ? out : null
+}
+
 export interface TeamPublicProfile {
   name: string
   description?: string

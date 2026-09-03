@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal, StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Button, IconButton, Text, TextInput, useTheme, Surface, ActivityIndicator, Divider, TouchableRipple, Icon } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Contact, ContactResidence } from '../../types';
+import { Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 
 interface ProfileUpdateModalProps {
@@ -48,13 +48,12 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
     phone: contact.phone || '',
     birthplace: contact.birthplace || '',
     gender: contact.gender || '',
-    route: contact.residence?.route || '',
-    street_number: contact.residence?.street_number || '',
-    postal_code: contact.residence?.postal_code || '',
-    locality: contact.residence?.locality || '',
-    emergencyContactName: contact.emergencyContact?.name || '',
-    emergencyContactPhone: contact.emergencyContact?.phone || '',
-    taxnumber: contact.taxnumber || '',
+    route: contact.address?.route || '',
+    street_number: contact.address?.street_number || '',
+    postal_code: contact.address?.postal_code || '',
+    locality: contact.address?.locality || '',
+    emergencyContactName: contact.emergency_contacts?.[0]?.name || '',
+    emergencyContactPhone: contact.emergency_contacts?.[0]?.phone || '',
     weight: contact.weight?.toString() || '',
     note: '',
   });
@@ -73,8 +72,12 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
     setError(null);
 
     try {
-      // 1. Prepare contact details for submission
-      const contactDetails: Partial<Contact> = {
+      // 1. Prepare the update request payload. This is `requestContactUpdate`'s
+      // OWN wire contract (packages/functions/src/contacts/requestContactUpdate.ts),
+      // NOT `Partial<Contact>` — it predates the shared Contact type's field
+      // names (`residence`/`emergencyContact`, singular) and is unrelated to
+      // how the contact document itself is shaped once approved.
+      const contactDetails = {
         firstname: formData.firstname.trim(),
         lastname: formData.lastname.trim(),
         phone: formData.phone.trim(),
@@ -91,7 +94,6 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
           name: formData.emergencyContactName.trim(),
           phone: formData.emergencyContactPhone.trim(),
         },
-        taxnumber: formData.taxnumber.trim(),
         weight: formData.weight ? parseFloat(formData.weight) : undefined,
       };
 
@@ -197,13 +199,6 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
               )}
             </View>
             <TextInput
-              label="COD. FISC. • AHV/AVS • TAX ID"
-              value={formData.taxnumber}
-              onChangeText={val => handleChange('taxnumber', val)}
-              mode="outlined"
-              style={styles.input}
-            />
-            <TextInput
               label="Birthplace"
               value={formData.birthplace}
               onChangeText={val => handleChange('birthplace', val)}
@@ -222,11 +217,11 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
                 <IconButton
                   icon="information-outline"
                   size={20}
-                  onPress={() => setError("This field is required for registration to kickboxing federations, tournaments, and other events. It does not define or classify gender identity within our community.")}
+                  onPress={() => setError("This field may be required for event, competition or federation registration. It does not define or classify gender identity within our community.")}
                 />
               </View>
               <Text variant="bodySmall" style={[styles.helperText, { color: theme.colors.onSurfaceVariant }]}>
-                Required for federation registration.
+                May be required for event or federation registration.
               </Text>
             </View>
             <TextInput

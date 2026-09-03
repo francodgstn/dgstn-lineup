@@ -25,6 +25,7 @@ import {
   resolveAppointmentDurations,
   resolveDurationSale,
   effectiveRankingSystems,
+  pickPublicGamificationSettings,
   PUBLIC_LOCALES,
   type CustomFieldDefinition,
 } from '@linyup/shared'
@@ -38,7 +39,6 @@ import type {
   PublicRequiredWaiver,
   RequiredWaiverEntry,
   RankingSystem,
-  GamificationSettings,
   SaasPlan,
   UiLanguage,
 } from '@linyup/shared'
@@ -391,9 +391,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     // see TeamPublicProfile.affiliation_term.
     affiliation_term:
       (orgData?.affiliation_term as Partial<Record<'en' | 'de' | 'fr' | 'it', string>> | undefined) ?? null,
-    // The studio's own badge thresholds + coach badges — see
-    // GamificationSettings and TeamPublicProfile.gamification_settings.
-    gamification_settings: (data.settings?.gamification as GamificationSettings | undefined) ?? null,
+    // The studio's own badge thresholds + coach badges — ONLY those two: the
+    // stored bag also holds the scoring configuration, which stays private.
+    // See pickPublicGamificationSettings and TeamPublicProfile.gamification_settings.
+    gamification_settings: pickPublicGamificationSettings(data.settings?.gamification),
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',

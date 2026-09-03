@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const EMAIL_KEY = '@hmd_student_email';
-const CODE_ID_KEY = '@hmd_student_code_id';
-const SELECTED_CONTACT_ID_KEY = '@hmd_student_contact_id';
-const STAY_LOGGED_IN_KEY = '@hmd_student_stay_logged_in';
-const SESSION_EXPIRES_KEY = '@hmd_student_session_expires';
+const EMAIL_KEY = '@linyup_email';
+const CODE_ID_KEY = '@linyup_code_id';
+const SELECTED_CONTACT_ID_KEY = '@linyup_contact_id';
+const STAY_LOGGED_IN_KEY = '@linyup_stay_logged_in';
+const SESSION_EXPIRES_KEY = '@linyup_session_expires';
 
 export const StorageService = {
   // Email

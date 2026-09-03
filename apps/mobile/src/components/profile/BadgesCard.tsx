@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Icon, Surface, Text, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Contact, BadgeThresholds, CoachBadgeConfig, RankingSystem } from '../../types';
+import { Contact, GamificationBadgeThresholds, GamificationCoachBadge, RankingSystem } from '../../types';
 import { resolvePrimaryRank } from '../../utils/profileUtils';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -27,13 +27,13 @@ interface BadgeGroup {
 
 interface BadgesCardProps {
   contact: Contact;
-  badgeThresholds?: BadgeThresholds | null;
-  coachBadges?: CoachBadgeConfig[] | null;
+  badgeThresholds?: GamificationBadgeThresholds | null;
+  coachBadges?: GamificationCoachBadge[] | null;
   /** The tenant's effective ranking systems. Empty = no Rank badge group. */
   rankingSystems?: RankingSystem[];
 }
 
-const DEFAULT_THRESHOLDS: BadgeThresholds = {
+const DEFAULT_THRESHOLDS: GamificationBadgeThresholds = {
   attendance: { enabled: true, first_class: 1, dedicated: 10, committed: 50, centurion: 100, veteran: 200 },
   streak: { enabled: true, on_fire: 4, unstoppable: 8, legendary: 12 },
   score: { enabled: true, rising_star: 30, monthly_star: 60, superstar: 90 },
@@ -54,7 +54,7 @@ const COACH_BADGE_GRADIENTS: Record<string, [string, string]> = {
 const DEFAULT_COACH_GRADIENT: [string, string] = ['#6366F1', '#4338CA'];
 const DEFAULT_COACH_ICON = 'star-circle';
 
-const DEFAULT_COACH_BADGES: CoachBadgeConfig[] = [
+const DEFAULT_COACH_BADGES: GamificationCoachBadge[] = [
   { key: 'tournament_ready', label: 'Tournament', icon: 'sword-cross', description: 'Ready for competition' },
   { key: 'forms_expert', label: 'Forms Expert', icon: 'yin-yang', description: 'Excellence in traditional forms' },
   { key: 'kick_pro', label: 'Kick Pro', icon: 'karate', description: 'Strong kicking technique' },
@@ -78,8 +78,8 @@ const RANK_BADGE_FRACTIONS = { intermediate: 0.2, advanced: 0.5, blackBelt: 0.75
 
 const getBadgeGroups = (
   contact: Contact,
-  thresholds: BadgeThresholds,
-  coachBadgeList: CoachBadgeConfig[],
+  thresholds: GamificationBadgeThresholds,
+  coachBadgeList: GamificationCoachBadge[],
   rankingSystems: RankingSystem[],
 ): BadgeGroup[] => {
   const resolved = resolvePrimaryRank(contact, rankingSystems);
@@ -91,7 +91,7 @@ const getBadgeGroups = (
    *  "Reach Blue" for HMD and "Reach Purple" for a BJJ club, instead of naming
    *  one organisation's belts to everybody. */
   const labelAt = (f: number) => levels[Math.ceil(f * top)]?.label ?? '';
-  const sessions = contact.total_sessions_count ?? 0;
+  const sessions = contact.total_sessions ?? 0;
   const maxStreak = contact.max_streak ?? 0;
   const monthScore = contact.current_month_score ?? 0;
   const distinctActivities = contact.distinct_activities?.length ?? 0;
@@ -118,7 +118,7 @@ const getBadgeGroups = (
         { id: 'beginner', label: 'Beginner', description: 'Start your journey', icon: 'white-balance-sunny', gradient: ['#E0E0E0', '#BDBDBD'], earned: true },
         { id: 'intermediate', label: 'Intermediate', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.intermediate)}`, icon: 'shield-half-full', gradient: ['#FF9A3C', '#FF6B1B'], earned: fraction >= RANK_BADGE_FRACTIONS.intermediate },
         { id: 'advanced', label: 'Advanced', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.advanced)}`, icon: 'shield-star', gradient: ['#42A5F5', '#1565C0'], earned: fraction >= RANK_BADGE_FRACTIONS.advanced },
-        { id: 'black-belt', label: 'Black Belt', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.blackBelt)}`, icon: 'karate', gradient: ['#555555', '#1A1A1A'], earned: fraction >= RANK_BADGE_FRACTIONS.blackBelt },
+        { id: 'expert', label: 'Expert', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.blackBelt)}`, icon: 'shield-star', gradient: ['#555555', '#1A1A1A'], earned: fraction >= RANK_BADGE_FRACTIONS.blackBelt },
         { id: 'master', label: 'Master', description: `Reach ${levels[top]?.label ?? 'the highest grade'}`, icon: 'crown', gradient: ['#FFD700', '#F59E0B'], earned: position === top },
       ],
     })
@@ -210,7 +210,7 @@ const getBadgeGroups = (
 export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds, coachBadges, rankingSystems }) => {
   const theme = useTheme();
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
-  const mergedThresholds = useMemo<BadgeThresholds>(() => ({
+  const mergedThresholds = useMemo<GamificationBadgeThresholds>(() => ({
     attendance: { ...DEFAULT_THRESHOLDS.attendance, ...badgeThresholds?.attendance },
     streak: { ...DEFAULT_THRESHOLDS.streak, ...badgeThresholds?.streak },
     score: { ...DEFAULT_THRESHOLDS.score, ...badgeThresholds?.score },

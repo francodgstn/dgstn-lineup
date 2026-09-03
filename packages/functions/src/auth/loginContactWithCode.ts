@@ -9,6 +9,7 @@ import { CONTACTS_COLLECTION, TEAMS_COLLECTION, planHasFeature, type SaasPlan } 
 import { buildContactSession } from '../utils/contactSession'
 import { canCreateContact } from '../utils/contactCap'
 import { bucketRateLimit } from '../utils/rateLimit'
+import { planStatusIsInactive } from '../utils/plan'
 import { APP_CHECK_ENFORCE_MOBILE, monitorAppCheck } from '../utils/appCheck'
 import { assertVerifiableCodeById } from './verificationCode'
 
@@ -26,19 +27,22 @@ const REGISTRATIONS_PER_TEAM_PER_DAY = 20
 // gated at all. The WEB Space has no equivalent gate (its whole point is to be
 // the surface every plan gets), so this only ever runs for `client: 'mobile'`.
 //
-// Same "effective plan" rule `utils/plan.ts`'s `requirePlan` uses: a trial (or
-// any status other than `past_due`/`cancelled`) reads as active, so a trialing
-// team is never refused here for a billing reason it hasn't actually reached
-// yet — only a genuinely inactive subscription, or a tier below Coach, closes
-// the door.
+// Same "effective plan" rule `utils/plan.ts`'s `requirePlan` uses — shared
+// through `planStatusIsInactive`, not copied: a trial (or any status other
+// than `past_due`/`cancelled`) reads as active, so a trialing team is never
+// refused here for a billing reason it hasn't actually reached yet — only a
+// genuinely inactive subscription, or a tier below Coach, closes the door.
+//
+// Applied by BOTH callables that mint a contact session for a mobile caller:
+// this one at sign-in, and `switchActiveContact` when a signed-in member
+// switches to a sibling contact — the second door is what makes the first
+// one worth having.
 export function memberAppAccessForPlan(
   plan: SaasPlan | null | undefined,
   planStatus?: string | null
 ): boolean {
-  const effectivePlan: SaasPlan = plan ?? 'free'
-  const status = planStatus ?? 'trial'
-  if (status === 'past_due' || status === 'cancelled') return false
-  return planHasFeature(effectivePlan, 'member_app')
+  if (planStatusIsInactive(planStatus)) return false
+  return planHasFeature(plan ?? 'free', 'member_app')
 }
 
 /** The minimal shape `filterCandidatesForMemberApp` needs from a matched contact —
@@ -85,18 +89,22 @@ export async function filterCandidatesForMemberApp(
   candidates: MemberAppCandidate[],
   loadTeam: (teamId: string) => Promise<MemberAppTeamInfo | null>
 ): Promise<MemberAppFilterResult> {
-  const teamCache = new Map<string, MemberAppTeamInfo | null>()
-  async function team(teamId: string): Promise<MemberAppTeamInfo | null> {
-    if (!teamCache.has(teamId)) teamCache.set(teamId, await loadTeam(teamId))
-    return teamCache.get(teamId) ?? null
-  }
+  // Every DISTINCT team in ONE parallel round trip — a member on several
+  // studios is exactly the case where this list has more than one entry, and
+  // this sits on the login path.
+  const distinctTeamIds = [...new Set(candidates.map((c) => c.teamId))]
+  const teamCache = new Map<string, MemberAppTeamInfo | null>(
+    await Promise.all(
+      distinctTeamIds.map(async (teamId) => [teamId, await loadTeam(teamId)] as const)
+    )
+  )
 
   const eligible: MemberAppCandidate[] = []
   const droppedTeams: MemberAppTeamRef[] = []
   const droppedTeamIds = new Set<string>()
 
   for (const candidate of candidates) {
-    const info = await team(candidate.teamId)
+    const info = teamCache.get(candidate.teamId) ?? null
     if (info && memberAppAccessForPlan(info.plan, info.plan_status)) {
       eligible.push(candidate)
       continue
@@ -114,8 +122,9 @@ export async function filterCandidatesForMemberApp(
   return { eligible, droppedTeams }
 }
 
-/** The real `loadTeam` the callable uses — reads `teams/{teamId}` once. */
-async function loadTeamForMemberAppGate(teamId: string): Promise<MemberAppTeamInfo | null> {
+/** The real `loadTeam` the callable uses — reads `teams/{teamId}` once.
+ *  Exported for `switchActiveContact`, the other session-minting door. */
+export async function loadTeamForMemberAppGate(teamId: string): Promise<MemberAppTeamInfo | null> {
   const snap = await admin.firestore().collection(TEAMS_COLLECTION).doc(teamId).get()
   if (!snap.exists) return null
   const data = snap.data()!

@@ -1,400 +1,111 @@
-% HMD Student App Architecture Overview
+# Linyup mobile app — architecture
 
-# HMD Student App - System Architecture
+This describes what actually exists today. See `README.md` for setup and
+`docs/mobile-roadmap-2026-09.md` (repo root) for the plan this was scanned
+into and what's still ahead.
 
-## High-Level Architecture
+## Screens
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    STUDENT APP (React Native)               │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐         ┌──────────────┐                 │
-│  │ Login Screen │         │ Profile Screen               │
-│  │              │         │              │                 │
-│  │ • Token Input│         │ • Personal   │                 │
-│  │ • Validation │◄───────►│ • Team Info  │                 │
-│  │ • Error msgs │         │ • Refresh    │                 │
-│  └──────────────┘         │ • Logout     │                 │
-│         ▲                  └──────────────┘                 │
-│         │                                                   │
-│         │ Navigation (React Navigation)                    │
-│         │                                                   │
-│  ┌──────▼──────────────────────────────────────────┐       │
-│  │         AuthContext (State Management)          │       │
-│  │                                                 │       │
-│  │ • isAuthenticated                              │       │
-│  │ • contact (profile data)                       │       │
-│  │ • login() / logout() / refreshContact()        │       │
-│  └────────────┬───────────────────────────────────┘       │
-│               │                                            │
-│               ▼                                            │
-│  ┌─────────────────────────────────────────────┐          │
-│  │  Firestore Service                          │          │
-│  │                                             │          │
-│  │ • validateAuthToken()                       │          │
-│  │ • getContact()                              │          │
-│  │ • getTeamPublicProfile()                    │          │
-│  └────────────┬────────────────────────────────┘          │
-│               │                                            │
-│               ▼                                            │
-│  ┌─────────────────────────────────────────────┐          │
-│  │  Storage Service                            │          │
-│  │                                             │          │
-│  │ • saveAuthToken() / getAuthToken()          │          │
-│  │ • saveContactId() / getContactId()          │          │
-│  └────────────┬────────────────────────────────┘          │
-│               │                                            │
-└───────────────┼────────────────────────────────────────────┘
-                │
-                │ (Firebase SDK)
-                │
-         ┌──────▼──────────────────────────────────────────┐
-         │    FIREBASE FIRESTORE (Cloud Database)          │
-         ├───────────────────────────────────────────────┬─┤
-         │                                               │ │
-         │  ┌────────────────────────────────────────┐   │ │
-         │  │ student_auth_tokens Collection         │   │ │
-         │  │                                        │   │ │
-         │  │ token: string                          │   │ │
-         │  │ contactId: string                      │   │ │
-         │  │ expiresAt: number (timestamp)          │   │ │
-         │  │ createdAt: number (timestamp)          │   │ │
-         │  │ used: boolean                          │   │ │
-         │  └────────────────────────────────────────┘   │ │
-         │                                               │ │
-         │  ┌────────────────────────────────────────┐   │ │
-         │  │ contacts Collection                    │   │ │
-         │  │                                        │   │ │
-         │  │ id: string (doc ID)                    │   │ │
-         │  │ email: string                          │   │ │
-         │  │ firstName: string                      │   │ │
-         │  │ lastName: string                       │   │ │
-         │  │ phone: string                          │   │ │
-         │  │ teamId: string                         │   │ │
-         │  └────────────────────────────────────────┘   │ │
-         │                                               │ │
-         │  ┌────────────────────────────────────────┐   │ │
-         │  │ teams Collection                       │   │ │
-         │  │                                        │   │ │
-         │  │ id: string (doc ID)                    │   │ │
-         │  │ name: string                           │   │ │
-         │  │ public_profile: {                      │   │ │
-         │  │   description: string                  │   │ │
-         │  │   logo: string (URL)                   │   │ │
-         │  │   ...                                  │   │ │
-         │  │ }                                      │   │ │
-         │  └────────────────────────────────────────┘   │ │
-         │                                               │ │
-         └───────────────────────────────────────────────┴─┘
-```
+Two screens, gated on `AuthContext.isAuthenticated`:
 
-## Authentication Flow
+- **`LoginScreen`** — email → 6-digit code → (if the email matches more than
+  one contact) team/contact selection. Also renders the `appNotIncluded`
+  state when every matched contact's team plan lacks the `member_app`
+  feature (see Auth below).
+- **`ProfileScreen`** — the whole authenticated app: a tab bar (Dashboard /
+  Feed (placeholder) / Train / Team / Self) built from the `components/profile/*`
+  cards, all data loaded once in `loadData()` and refreshed by pull-to-refresh.
+
+`AppNavigator` swaps between two single-screen `Stack.Navigator`s
+(`unauthenticated` → Login, `authenticated` → Profile) rather than hiding one
+screen — this is what makes `navigation.reset()` on sign-in/sign-out safe
+(no back-stack into the other mode).
+
+## Auth flow
 
 ```
-                         EMAIL SYSTEM
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │  sendStudentAuth │
-                    │   Link Function  │
-                    │  (Cloud Func)    │
-                    └────────┬─────────┘
-                             │
-                 ┌───────────┼───────────┐
-                 │           │           │
-                 ▼           ▼           ▼
-         ┌─────────────┐ Generate  Store in
-         │ Send Email  │ Token     Firestore
-         │ with token  │
-         └──────┬──────┘
-                │
-                ▼
-        ┌──────────────────┐
-        │  Student opens   │
-        │  email link OR   │
-        │  copy/paste token│
-        └────────┬─────────┘
-                 │
-                 ▼
-        ┌──────────────────────────┐
-        │  Student App             │
-        │  LoginScreen             │
-        │  Enters token            │
-        └────────┬─────────────────┘
-                 │
-                 ▼
-        ┌──────────────────────────┐
-        │  Validate token in       │
-        │  Firestore               │
-        │  - Check exists          │
-        │  - Check not expired     │
-        │  - Get contactId         │
-        └────────┬─────────────────┘
-                 │
-         ┌───────┴───────┐
-         │               │
-      Valid           Invalid
-         │               │
-         ▼               ▼
-    Login Success    Show Error
-    Store token      Ask retry
-    Fetch contact    │
-         │           │
-         ▼           │
-    ProfileScreen    │
-         │           │
-         └───────┬───┘
-                 │
-         ┌───────▼─────────┐
-         │  User Logout OR │
-         │  Token Expires  │
-         └────────┬────────┘
-                  │
-                  ▼
-         ┌──────────────────┐
-         │ Clear token from  │
-         │ - LocalStorage    │
-         │ - Memory/State    │
-         └────────┬─────────┘
-                  │
-                  ▼
-           BackTo LoginScreen
+LoginScreen (email)
+  → FirestoreService.sendVerificationCode          [sendContactVerificationCode callable]
+  → user enters the 6-digit code
+  → FirestoreService.verifyCode({ client: 'mobile' }) [loginContactWithCode callable]
+       ├─ appNotIncluded: true         → LoginScreen shows the plan-gate screen (no session)
+       ├─ requiresContactSelection     → LoginScreen shows a contact picker
+       ├─ requiresSignup               → AuthContext returns a "no membership found" error
+       └─ customToken + contact        → signInWithCustomToken(auth, customToken)
+                                          AuthContext.setContact(contact)
 ```
 
-## Data Sync Flow
+`client: 'mobile'` is the one thing that distinguishes this login from the
+web Space's — it activates the `member_app` plan gate server-side
+(`packages/functions/src/auth/loginContactWithCode.ts`). The custom token's
+claims (`contactId`, `teamId`, `sessionExpires`, epoch ms) are what every
+Firestore rule and callable trusts; there is no `contacts/{id}` document a
+client could read/write to fake identity.
+
+`AuthContext` persists (via `StorageService`/AsyncStorage) the email, an
+in-flight code id, the selected contact id and `sessionExpires`, and
+refreshes the session (`switchActiveContact`) when `sessionExpires` is within
+24h — `sessionExpires` is a **custom claim**, and unlike a Firebase Auth ID
+token it does not auto-renew.
+
+## Data flow
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                   APP INITIALIZATION                       │
-└────────────────┬───────────────────────────────────────────┘
-                 │
-                 ▼
-         ┌───────────────┐
-         │ AuthContext   │
-         │ useEffect()   │
-         └───────┬───────┘
-                 │
-                 ▼
-         ┌───────────────────┐
-         │ Check for saved   │
-         │ token in Storage  │
-         └───────┬───────────┘
-                 │
-         ┌───────┴──────────┐
-         │                  │
-    Token Found         No Token
-         │                  │
-         ▼                  ▼
-    Validate Token    Show LoginScreen
-    in Firestore           │
-         │                 │
-    ┌────┴────┐            │
-    │          │            │
-Valid     Invalid          │
-    │          │            │
-    ▼          ▼            │
-Fetch Get            │
-Contact profile      │
-    │   × Remove token      │
-    ▼     from storage      │
-Set isAuth        │
-    =true         │
-    │             │
-    └─────┬───────┘
-          │
-          ▼
-    Show ProfileScreen
-
-
-┌────────────────────────────────────────────────────────────┐
-│                  PROFILE SCREEN LOAD                       │
-└────────────────┬───────────────────────────────────────────┘
-                 │
-                 ▼
-         ┌───────────────┐
-         │ Contact data  │
-         │ from context  │
-         └────────┬──────┘
-                  │
-                  ▼
-         ┌──────────────────────┐
-         │ Does contact have    │
-         │ teamId?              │
-         └──────┬────────┬──────┘
-                │        │
-              Yes       No
-                │        │
-                ▼        │
-    Fetch team public    │
-    profile from         │
-    Firestore            │
-                │        │
-                └────┬───┘
-                     │
-                     ▼
-         ┌──────────────────┐
-         │ Display on       │
-         │ ProfileScreen    │
-         └──────┬───────────┘
-                │
-                ▼
-        Pull-to-Refresh
-        available for
-        re-fetch
+Component
+  → FirestoreService (src/services/firestore.ts)     — the ONLY Firestore/callables gateway
+      ├─ teams/{id}/public_profile/{id}   (world-readable mirror; mapPublicProfileMirror)
+      ├─ contacts/{id}                    (self-read/self-update only; firestore.rules)
+      ├─ contacts/{id}/{goals,contact_alerts,performance_checkins,...} (self-scoped subcollections)
+      ├─ {teams|orgs}/*/sessions/{id}/public_profile/{id}  (collectionGroup, `type == 'session'`)
+      └─ Cloud Functions callables: getMyBookings, listAvailability, bookAppointment,
+         bookSession, cancelBooking, selfCheckIn, requestContactUpdate, getContactQR,
+         getMyReferralCode/Stats, requestContactDeletion/cancelContactDeletion, …
 ```
 
-## Component Hierarchy
+A contact session cannot read `teams/{id}`, `organizations/{id}` or
+`teams/{id}/subscription_types/*` — firestore.rules refuses it (no
+`team_members` row). Everything the member surfaces need from those
+collections (ranking systems, the org's affiliation-concept label,
+gamification settings, coaching axes, goal categories) is denormalised onto
+`public_profile` by `syncTeamPublicProfile` specifically so this app never
+has to try. The contact's own plan name is read off `Contact
+.active_subscriptions` / `.subscription_type_name` — never a
+`subscription_types` document.
 
-```
-┌─ App.tsx
-│  │
-│  ├─ AuthProvider (Context)
-│  │  │
-│  │  └─ AppNavigator
-│  │     │
-│  │     ├─ LoginScreen
-│  │     │  ├─ TextInput (token)
-│  │     │  ├─ TouchableOpacity (button)
-│  │     │  └─ Text (help text)
-│  │     │
-│  │     └─ ProfileScreen
-│  │        ├─ ScrollView
-│  │        ├─ View (header)
-│  │        │  ├─ Text (title)
-│  │        │  └─ TouchableOpacity (logout)
-│  │        ├─ View (section - personal)
-│  │        │  └─ InfoRow × 3
-│  │        │     ├─ Text (label)
-│  │        │     └─ Text (value)
-│  │        │
-│  │        └─ View (section - team)
-│  │           ├─ Text (title)
-│  │           └─ InfoRow × 2
-│  │              ├─ Text (label)
-│  │              └─ Text (value)
-│  │
-│  └─ Services
-│     ├─ FirestoreService
-│     │  ├─ validateAuthToken()
-│     │  ├─ getContact()
-│     │  └─ getTeamPublicProfile()
-│     │
-│     └─ StorageService
-│        ├─ saveAuthToken()
-│        ├─ getAuthToken()
-│        ├─ saveContactId()
-│        └─ getContactId()
-│
-└─ Contexts
-   └─ AuthContext
-      ├─ State: contact, isLoading, isAuthenticated
-      └─ Methods: login(), logout(), refreshContact()
-```
+"My bookings" (class **and** appointment, including ones the studio entered)
+comes from **one** `getMyBookings` call, never a per-session
+`bookings/{contactId}` read in a loop — see the module header of
+`packages/functions/src/booking/myBookings.ts` for the three ways that used
+to go wrong. Past attendance (`getContactAttendance`) is the one legitimate
+remaining per-session fan-out: it checks the contact's own
+`sessions/{id}/participants/{contactId}` doc, a fact `getMyBookings` (upcoming
+bookings only) cannot answer.
 
-## State Management
+## Types
 
-```
-AuthContext State:
-┌─────────────────────────────────────┐
-│ contact: Contact | null             │
-│ └─ id, email, firstName, lastName   │
-│ └─ phone, teamId                    │
-├─────────────────────────────────────┤
-│ isLoading: boolean                  │
-├─────────────────────────────────────┤
-│ isAuthenticated: boolean            │
-├─────────────────────────────────────┤
-│ Methods:                            │
-│ • login(token): Promise<boolean>    │
-│ • logout(): Promise<void>           │
-│ • refreshContact(): Promise<void>   │
-└─────────────────────────────────────┘
-         │
-         │ Provided via
-         │ useAuth() hook
-         │
-         ├─ LoginScreen
-         │  └─ Uses: login()
-         │
-         └─ ProfileScreen
-            └─ Uses: contact, logout(), refreshContact()
-```
+`src/types/index.ts` re-exports `@linyup/shared` for every shape the rest of
+the platform also uses (Contact, ranking systems, gamification settings,
+goals/evaluations/check-ins, contact alerts, the `listAvailability` and
+`getMyBookings` payloads). Local types are either a documented extension of a
+shared one (`TeamPublicProfile`, for two real fields `@linyup/shared` hasn't
+caught up to declaring) or genuinely mobile-only view/wire shapes with no
+platform-wide owner (the appointment carousel's row, the leaderboard/weekly
+report shapes, `SessionPublicProfile`).
 
-## Token Lifecycle
+## Update channel
 
-```
-CREATION (sendStudentAuthLink function)
-    │
-    ▼
-Generate random 64-char token
-    │
-    ▼
-Store in Firestore with:
-├─ token: random string
-├─ contactId: student's ID
-├─ expiresAt: now + 7 days
-├─ createdAt: now
-└─ used: false
-    │
-    ▼
-Send via email
+`AppNavigator` calls `Updates.checkForUpdateAsync()` on foreground/cold-start
+(`useAppUpdates`) and reports `mobile_app` telemetry (app version + OTA
+runtime version/channel/embedded flag/update id — `buildMobileAppTelemetry`)
+via `FirestoreService.updateLastSeen`, which writes exactly `last_seen_at` +
+`mobile_app` on the contact doc (the two keys the self-update rules arm
+admits). `app.config.js`'s `updates.url` is unset until `EAS_PROJECT_ID` is
+set (`eas init` — see the mobile roadmap's "What only the owner can do"), so
+OTA is currently inert everywhere.
 
+## What's deliberately not here
 
-USAGE (Student App)
-    │
-    ▼
-Student enters token
-    │
-    ▼
-Query Firestore for matching token
-    │
-    ├─ Not found → Error
-    │
-    ├─ Found but expired → Error + Delete
-    │
-    └─ Found and valid
-       │
-       ▼
-    Store token in AsyncStorage
-       │
-       ▼
-    Use for re-auth on app restart
-       │
-       ▼
-    Stay logged in until:
-    ├─ User clicks logout
-    ├─ Token expires (7 days)
-    └─ App cache cleared
-```
-
-## Error Handling Flow
-
-```
-User Action
-    │
-    ▼
-Try Operation
-    │
-    ├─ Success ──────────────────► Update UI
-    │
-    └─ Error
-       │
-       ├─ Network Error
-       │  └─► Show "Check connection"
-       │
-       ├─ Invalid Token
-       │  └─► Show "Invalid or expired"
-       │
-       ├─ Contact Not Found
-       │  └─► Show "Account error"
-       │
-       └─ Firestore Error
-          └─► Show "System error"
-             └─► Log to console
-```
-
----
-
-**Architecture Version**: 1.0
-**Last Updated**: January 26, 2026
+Push notifications, encrypted token storage (`expo-secure-store`), i18n,
+payment/checkout surfaces, a minimum-supported-version gate, and any EAS
+release lane or CI check for this app — see `README.md` → "What's not here
+yet" and `docs/mobile-roadmap-2026-09.md`'s sequence.

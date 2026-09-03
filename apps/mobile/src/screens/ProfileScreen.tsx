@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Linking,
   Platform,
@@ -14,26 +13,20 @@ import {
   View,
   StatusBar,
 } from 'react-native';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import {
-  Button,
   IconButton,
   Surface,
   Text,
   TouchableRipple,
   useTheme,
-  Avatar,
   Icon,
   Snackbar,
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { FirestoreService } from '../services/firestore';
-import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus, RankingSystem } from '../types';
+import { TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus, RankingSystem } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
-import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
+import { formatDateValue, formatAddress, formatGender, resolveAffiliationTerm, resolveSubscriptionTypeName } from '../utils/profileUtils';
 import { waiverRefusal } from '../utils/waiverRefusal';
 
 // Redesigned Components
@@ -55,6 +48,10 @@ import { TeamQrScannerModal } from '../components/profile/TeamQrScannerModal';
 import { SessionPickerModal } from '../components/profile/SessionPickerModal';
 import { GoalsSection } from '../components/profile/GoalsSection';
 import { PerformanceProfileSection } from '../components/profile/PerformanceProfileSection';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type TabType = 'DASH' | 'FEED' | 'TRAIN' | 'TEAM' | 'SELF';
 
@@ -157,7 +154,7 @@ export const ProfileScreen: React.FC = () => {
 
   // Self check-in state
   const [showScannerModal, setShowScannerModal] = useState(false);
-  const [scanSessions, setScanSessions] = useState<Array<{ id: string; activityName: string; start: any; end: any }>>([]);
+  const [scanSessions, setScanSessions] = useState<{ id: string; activityName: string; start: any; end: any }[]>([]);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [pendingTeamSlug, setPendingTeamSlug] = useState<string | null>(null);
@@ -178,17 +175,20 @@ export const ProfileScreen: React.FC = () => {
     try {
       let loadedProfile = null;
       if (contact.teamId) {
+        // ONE read of the public_profile mirror carries everything below —
+        // ranking systems and affiliation term are already the team's
+        // EFFECTIVE values (org-aware, resolved server-side by
+        // syncTeamPublicProfile), so no separate org lookup is needed or
+        // possible (a contact session cannot read organizations/{id}).
         loadedProfile = await FirestoreService.getTeamPublicProfile(contact.teamId);
         setTeamProfile(loadedProfile);
-        const term = await FirestoreService.getOrgAffiliationTerm(contact.teamId);
-        setAffiliationTerm(term);
-        // Org-aware: an org-managed tenant keeps its ranking systems on the ORG.
-        setRankingSystems(await FirestoreService.getRankingSystems(contact.teamId));
-        if (contact.subscription_type_id) {
-          const name = await FirestoreService.getSubscriptionTypeName(contact.teamId, contact.subscription_type_id);
-          setSubscriptionTypeName(name);
-        }
+        setAffiliationTerm(resolveAffiliationTerm(loadedProfile?.affiliation_term));
+        setRankingSystems(loadedProfile?.ranking_systems ?? []);
       }
+      // The plan name lives on the contact's own denormalised subscription
+      // snapshot — never `teams/{id}/subscription_types/*`, which a contact
+      // session cannot read.
+      setSubscriptionTypeName(resolveSubscriptionTypeName(contact));
       if (contact.teamId) {
         const lb = await FirestoreService.getTeamLeaderboard(contact.teamId);
         setLeaderboard(lb);
@@ -210,10 +210,7 @@ export const ProfileScreen: React.FC = () => {
       const contactAlerts = await FirestoreService.getContactAlerts(contact.id, contact.total_sessions);
       setAlerts(contactAlerts);
 
-      if (contact.teamId) {
-        const settings = await FirestoreService.getTeamGamificationSettings(contact.teamId);
-        setGamificationSettings(settings);
-      }
+      setGamificationSettings(loadedProfile?.gamification_settings ?? null);
 
       if (loadedProfile?.referralEnabled) {
         const stats = await FirestoreService.getMyReferralStats();
@@ -233,7 +230,7 @@ export const ProfileScreen: React.FC = () => {
         // FETCH on it meant a member with a confirmed booking could not even see
         // it, let alone cancel it. The query costs nothing where there is nothing
         // to find: a studio with no appointment sessions matches no documents.
-        const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
+        const slots = await FirestoreService.getUpcomingAppointments(contact.teamId);
         setAppointments(slots);
       } else {
         setAppointments([]);
@@ -289,7 +286,7 @@ export const ProfileScreen: React.FC = () => {
       await FirestoreService.updateContactWeight(contact.id, parsed);
       await refreshContact();
       setIsEditingWeight(false);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update weight');
     } finally {
       setIsSavingWeight(false);
@@ -389,7 +386,7 @@ export const ProfileScreen: React.FC = () => {
         Alert.alert('Error', 'Failed to generate QR code.');
         setShowQRModal(false);
       }
-    } catch (error) {
+    } catch {
       setShowQRModal(false);
     } finally {
       setIsLoadingQR(false);
@@ -666,15 +663,15 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {contact.residence && (
+          {contact.address && (
             <View style={styles.infoRow}>
               <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED' }]}>
                 <Icon source="map-marker-outline" size={20} color={theme.dark ? '#FB923C' : '#F97316'} />
               </View>
               <View style={styles.infoTextContainer}>
-                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>RESIDENCE</Text>
+                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>ADDRESS</Text>
                 <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>
-                  {formatResidence(contact.residence)}
+                  {formatAddress(contact.address)}
                 </Text>
               </View>
             </View>
@@ -712,30 +709,20 @@ export const ProfileScreen: React.FC = () => {
               <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{formatGender(contact.gender) || 'N/A'}</Text>
             </View>
           </View>
-
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(59, 130, 246, 0.15)' : '#DBEAFE' }]}>
-              <Icon source="card-account-details-outline" size={20} color={theme.dark ? '#60A5FA' : '#3B82F6'} />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>COD. FISC. • AHV/AVS • TAX ID</Text>
-              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.taxnumber || 'N/A'}</Text>
-            </View>
-          </View>
         </View>
 
         <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
 
         <View style={styles.infoSection}>
           <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant }]}>EMERGENCY CONTACT</Text>
-          {contact.emergencyContact ? (
+          {contact.emergency_contacts?.[0] ? (
             <View style={styles.infoRow}>
               <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}>
                 <Icon source="account-alert-outline" size={20} color={theme.dark ? '#F87171' : '#EF4444'} />
               </View>
               <View style={styles.infoTextContainer}>
-                <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.emergencyContact.name}</Text>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{contact.emergencyContact.phone}</Text>
+                <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.emergency_contacts[0].name}</Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{contact.emergency_contacts[0].phone}</Text>
               </View>
             </View>
           ) : (
@@ -893,8 +880,6 @@ export const ProfileScreen: React.FC = () => {
     // surfaces, surfaced by the app's own navigation rather than as plain links.
     const generalLinks = (teamProfile?.links || []).filter((l) => !l.target);
     const websiteLink = teamProfile?.socialLinks?.find((s) => s.platform === 'website');
-    const legalLinks = teamProfile?.legalLinks;
-    const hasLegal = !!(legalLinks?.gtcUrl || legalLinks?.privacyPolicyUrl || legalLinks?.regulationUrl);
     const coaches = teamProfile?.coaches || [];
 
     const toggleTeamCard = () => {
@@ -989,42 +974,6 @@ export const ProfileScreen: React.FC = () => {
                   </>
                 )}
 
-                {/* Legal links */}
-                {hasLegal && (
-                  <>
-                    <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
-                    <View style={[styles.infoSection, { gap: 0 }]}>
-                      <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant, marginBottom: 8 }]}>LEGAL</Text>
-                      {legalLinks?.gtcUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.gtcUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="file-document-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>General Terms & Conditions</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                      {legalLinks?.privacyPolicyUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.privacyPolicyUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="shield-lock-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>Privacy Policy</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                      {legalLinks?.regulationUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.regulationUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="clipboard-text-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>Regulation</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                    </View>
-                  </>
-                )}
               </>
             )}
 
@@ -1083,7 +1032,6 @@ export const ProfileScreen: React.FC = () => {
             {!appointmentsCollapsed && (
               <AppointmentsCarousel
                 slots={appointments}
-                contact={contact}
                 onRefresh={loadData}
                 onBookNew={() => setShowBookingModal(true)}
               />
@@ -1119,7 +1067,7 @@ export const ProfileScreen: React.FC = () => {
           contact={contact}
           initials={initials}
           onShowQR={handleShowQR}
-          onScanDojoQR={() => setShowScannerModal(true)}
+          onScanTeamQR={() => setShowScannerModal(true)}
           onEditProfile={() => setCurrentTab(currentTab === 'SELF' ? 'DASH' : 'SELF')}
         />
 
