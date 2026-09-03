@@ -68,7 +68,7 @@ describe('resolveTenantTheme — one studio look → the theme', () => {
     const light = resolveTenantTheme({ presetId: 'ocean' }, false)!;
     const dark = resolveTenantTheme({ presetId: 'ocean' }, true)!;
     expect(light.isDark).toBe(false);
-    expect(light.colors.background).toBe('#F2F7FB');
+    expect(light.colors.background).toBe('#EEF6FC');
     expect(dark.isDark).toBe(true);
     expect(dark.colors.background).toBe('#08131D');
     // The preset's default accent applies when the studio chose none.
