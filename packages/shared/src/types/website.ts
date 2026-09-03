@@ -61,8 +61,78 @@ export interface HeroSection extends SectionBase {
   bgImageUrl?: string
   /** Dark overlay strength over the background image, 0–100. */
   overlay?: number
+  /**
+   * A solid background colour used WHEN THERE IS NO IMAGE. Absent ⇒ the theme's
+   * page colour, today's behaviour. Ignored while `bgImageUrl` is set — an image
+   * is its own background.
+   */
+  bgColor?: string
+  /**
+   * How the hero content sits on the background:
+   *  - 'full' (default): text directly on the background, edge to edge.
+   *  - 'card': the text in a surface card floating on the background — the same
+   *    "comes out of the page" idea the theme applies to cards, for a hero over
+   *    a busy image or a strong colour.
+   *
+   * Absent ⇒ 'full', so existing heroes are unaffected.
+   */
+  layout?: 'full' | 'card'
   align: SectionAlign
   cta?: SiteCta
+}
+
+/** A row of highlight cards — icon, title, a short line, an optional link. For
+ *  "why us" / feature callouts. Deliberately simple: no rich text, no images. */
+export interface FeaturesSection extends SectionBase {
+  type: 'features'
+  heading?: string
+  subheading?: string
+  columns: 2 | 3 | 4
+  items: FeatureItem[]
+}
+
+export interface FeatureItem {
+  /** A lucide icon name (validated against a small allow-list at render). */
+  icon?: string
+  title: string
+  text?: string
+  linkLabel?: string
+  linkUrl?: string
+}
+
+/** One centred card, spaced above and below, with a heading, a line and a wide
+ *  button — an offer or a single call to action mid-page. */
+export interface CtaBannerSection extends SectionBase {
+  type: 'cta_banner'
+  heading: string
+  text?: string
+  cta?: SiteCta
+}
+
+/** A list of question/answer pairs, rendered as an accordion. */
+export interface FaqSection extends SectionBase {
+  type: 'faq'
+  heading?: string
+  items: FaqItem[]
+}
+
+export interface FaqItem {
+  question: string
+  answer: string
+}
+
+/** One testimonial at a time in a card, stepped through with chevrons. */
+export interface TestimonialsSection extends SectionBase {
+  type: 'testimonials'
+  heading?: string
+  items: Testimonial[]
+}
+
+export interface Testimonial {
+  name: string
+  /** What they do / their role — "Member since 2021", "Competitor". */
+  activity?: string
+  feedback: string
 }
 
 /** Generic free-form content block: a rich-text body (HTML, produced by the
@@ -207,6 +277,10 @@ export type WebsiteSection =
   | ScheduleSection
   | ContactSection
   | PlacesSection
+  | FeaturesSection
+  | CtaBannerSection
+  | FaqSection
+  | TestimonialsSection
 
 export type WebsiteSectionType = WebsiteSection['type']
 
