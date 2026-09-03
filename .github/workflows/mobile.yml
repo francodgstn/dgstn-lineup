@@ -1,0 +1,166 @@
+# Member app lanes — decoupled from the backend's v* release train.
+#
+#   PR touching the app or shared      → lint, jest, tsc, `expo config` per profile
+#   main merge touching the app/shared → the `staging` channel: an OTA update when a
+#                                        build with the current native fingerprint
+#                                        already exists, a `preview` BUILD otherwise
+#   mobile-v* tag                      → the `production` channel: same rule with the
+#                                        `store` profile, and builds are auto-submitted
+#
+# Why a separate tag: docs/mobile-roadmap-2026-09.md §3. Why fingerprint:
+# app.config.js sets runtimeVersion.policy = 'fingerprint', so an update can only
+# land on builds whose native project hashes the same — "does a build with this
+# fingerprint exist on this profile" IS the OTA-vs-build question, and Expo's
+# continuous-deploy-fingerprint action is the maintained implementation of it
+# (it computes both platforms' fingerprints, checks EAS for matching builds,
+# triggers builds that are missing, publishes updates otherwise, and comments
+# the result on the commit/PR).
+#
+# Secrets: EXPO_TOKEN (repository secret). FIREBASE_API_KEY per environment is
+# an EAS ENVIRONMENT VARIABLE (development/preview/production), never an
+# eas.json `env` literal — eas.json does not interpolate `${…}`.
+#
+# Verify on the FIRST run of each lane (nothing here can be exercised without
+# an EAS project and token): the action's `auto-submit-builds` input name, and
+# that the `production` EAS environment carries FIREBASE_API_KEY.
+name: Mobile
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - '.github/workflows/mobile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - '.github/workflows/mobile.yml'
+    tags: ['mobile-v*']
+  workflow_dispatch: {}
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: Lint · test · typecheck · config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @linyup/shared run build
+
+      - name: Lint
+        run: pnpm --filter @linyup/mobile run lint
+
+      - name: Unit tests
+        run: pnpm --filter @linyup/mobile run test -- --ci
+
+      - name: Typecheck
+        run: pnpm --filter @linyup/mobile run typecheck
+
+      # Every build profile must evaluate app.config.js without throwing — the
+      # class of failure that otherwise surfaces only on EAS's clock (the HMD-era
+      # eas.json pointed at project ids the config rejects, for weeks).
+      - name: Evaluate app config per profile
+        working-directory: apps/mobile
+        run: |
+          for id in linyup-staging linyup-prod; do
+            echo "== FIREBASE_PROJECT_ID=$id =="
+            FIREBASE_PROJECT_ID=$id FIREBASE_API_KEY=ci-placeholder npx expo config --type public --json > /dev/null
+          done
+
+  # ── main → staging channel ────────────────────────────────────────────────
+  staging:
+    name: Staging channel
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @linyup/shared run build
+
+      - name: OTA update, or preview build when the native fingerprint changed
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@v8
+        with:
+          working-directory: apps/mobile
+          profile: preview
+          branch: staging
+          platform: all
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── mobile-v* → production channel / store ────────────────────────────────
+  release:
+    name: Production channel / store
+    if: startsWith(github.ref, 'refs/tags/mobile-v')
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @linyup/shared run build
+
+      - name: OTA update, or store build + submit when the native fingerprint changed
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@v8
+        with:
+          working-directory: apps/mobile
+          profile: store
+          branch: production
+          platform: all
+          auto-submit-builds: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}

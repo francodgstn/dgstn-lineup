@@ -24,6 +24,14 @@ permissions:
   contents: read
   id-token: write
 
+
+# One staging deploy at a time, in order. Two merges minutes apart used to run
+# two concurrent `firebase deploy`s against the same project (2026-08-26/27);
+# the second now waits for the first. Never cancel a deploy in flight.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
 jobs:
   # Gate: the same checks a pull request gets. This workflow fires on every push
   # to main, including pushes that never went through a PR, so without this the

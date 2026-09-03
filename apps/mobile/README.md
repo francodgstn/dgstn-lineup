@@ -128,6 +128,16 @@ public-profile mapper, the appointment-benefit badge helper, the mobile
 telemetry payload shape, the affiliation-term locale pick, the session-mirror
 type constant. No emulator, no rendering.
 
+## Releases
+
+The app ships on its own **`mobile-v*` tag**, decoupled from the backend's `v*`
+releases. `.github/workflows/mobile.yml` runs three lanes — PR checks; `main` →
+the `staging` channel (OTA update, or a `preview` build when the native
+fingerprint changed); `mobile-v*` → the `production` channel (OTA, or a `store`
+build auto-submitted to TestFlight / Play internal). How to cut a release, what
+needs a native build, rollback, and the store checklist:
+`.claude/skills/mobile-release/SKILL.md`.
+
 ## What's not here yet
 
 - Push notifications (`expo-notifications`)

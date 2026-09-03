@@ -4,78 +4,61 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "22.22.3",
+      "android": {
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
+      "environment": "development",
       "android": {
         "buildType": "apk"
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "FIREBASE_PROJECT_ID": "linyup-staging"
       }
     },
     "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "channel": "staging",
       "environment": "preview",
-      "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
+        "buildType": "apk"
       },
       "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineupt",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
-      }
-    },
-    "production": {
-      "environment": "production",
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
-      },
-      "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineup",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+        "FIREBASE_PROJECT_ID": "linyup-staging"
       }
     },
     "store": {
-      "environment": "production",
+      "extends": "base",
       "distribution": "store",
+      "channel": "production",
+      "environment": "production",
       "autoIncrement": true,
       "android": {
-        "buildType": "app-bundle",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
+        "buildType": "app-bundle"
       },
       "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineup",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+        "FIREBASE_PROJECT_ID": "linyup-prod"
       }
     }
   },
   "submit": {
-    "production": {
-      "android": {
-        "track": "production"
-      },
-      "ios": {
-        "ascAppId": "6758545583"
-      }
-    },
     "store": {
       "android": {
-        "track": "alpha"
-      },
-      "ios": {
-        "ascAppId": "6758545583"
+        "track": "internal"
       }
     }
   }
