@@ -117,7 +117,9 @@ Apple/Google (see the roadmap §7), plus the prod key.
   back to the default (which is why the config uses `||`, not `??` — the
   `.env.*` templates ship `EAS_PROJECT_ID=`).
 - First Play submission is manual: Google requires the very first AAB to be
-  uploaded by hand before `eas submit` can target a track.
+  uploaded by hand before `eas submit` can target a track. The whole store
+  path — both consoles, the credentials, and the 14-day Play closed-testing
+  clock that gates going public — is `docs/mobile-store-setup.md`.
 - `FIREBASE_API_KEY` — **both** `eas.json`'s `env` block per profile **and**
   an EAS environment variable per environment. Not redundancy: the `env`
   block is the only thing in scope when `eas build` evaluates app.config.js

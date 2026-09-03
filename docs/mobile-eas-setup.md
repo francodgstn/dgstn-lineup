@@ -232,6 +232,10 @@ Add the project id and the account slug to `docs/mobile-roadmap-2026-09.md` §7
 
 ## Out of scope here, on purpose
 
+All of the below is now the subject of its own runbook —
+**`docs/mobile-store-setup.md`** — which sequences it around the 14-day
+Play closed-testing clock.
+
 Production key and `production` EAS environment; App Store Connect record,
 `ascAppId`, ASC API key; Play service account and the first manual AAB upload;
 store metadata (screenshots, privacy policy covering app users, support URL,
