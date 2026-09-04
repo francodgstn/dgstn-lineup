@@ -7890,5 +7890,12 @@
     "hoursAdapt": "Stunden an Daten anpassen",
     "nParticipants": "{n, plural, one {# Teilnehmer} other {# Teilnehmer}}",
     "nNewBookings": "{n, plural, one {# neue Buchung} other {# neue Buchungen}}"
+  },
+  "AppUsage": {
+    "title": "Aktive Mitglieder",
+    "today": "Heute",
+    "week": "7 Tage",
+    "month": "30 Tage",
+    "note": "Von {members} Mitgliedern. Zählt alle, die die App geöffnet oder sich auf deiner öffentlichen Seite angemeldet haben — nicht, was sie dort getan haben."
   }
 }

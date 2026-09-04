@@ -7890,5 +7890,12 @@
     "hoursAdapt": "Adapt hours to data",
     "nParticipants": "{n, plural, one {# participant} other {# participants}}",
     "nNewBookings": "{n, plural, one {# new booking} other {# new bookings}}"
+  },
+  "AppUsage": {
+    "title": "Active members",
+    "today": "Today",
+    "week": "7 days",
+    "month": "30 days",
+    "note": "Of {members} members. Counts anyone who opened the app or signed into your public page — not what they did there."
   }
 }
