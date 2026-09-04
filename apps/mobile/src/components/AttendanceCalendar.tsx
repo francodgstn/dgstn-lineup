@@ -4,6 +4,7 @@ import { Text, IconButton, useTheme, ActivityIndicator, Divider, Button } from '
 import { FirestoreService } from '../services/firestore';
 import { SessionPublicProfile, Contact } from '../types';
 import { waiverRefusal } from '../utils/waiverRefusal';
+import { useTranslations } from '../i18n';
 
 interface AttendanceCalendarProps {
   contactId: string;
@@ -14,6 +15,8 @@ interface AttendanceCalendarProps {
 
 export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactId, teamId, initialMonth, contact }) => {
   const theme = useTheme();
+  const t = useTranslations('Attendance');
+  const tWaiver = useTranslations('Waiver');
   const [currentDate, setCurrentDate] = useState(initialMonth || new Date());
 
   // Navigate to month when initialMonth changes (e.g. from chart tap)
@@ -68,11 +71,11 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
 
   const handleBook = async (session: SessionPublicProfile) => {
     if (!contact?.id) {
-      Alert.alert('Error', 'Please sign in again to book.');
+      Alert.alert(t('errorTitle'), t('signInAgain'));
       return;
     }
     if (!session.teamId) {
-      Alert.alert('Error', 'Session is missing team information.');
+      Alert.alert(t('errorTitle'), t('missingTeamInfo'));
       return;
     }
     setLoadingSessionId(session.id);
@@ -82,7 +85,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
         teamId: session.teamId,
         sessionId: session.id,
       });
-      Alert.alert('Success', 'Session booked successfully!');
+      Alert.alert(t('successTitle'), t('bookedSuccess'));
       loadMonthData();
     } catch (error) {
       console.error(error);
@@ -90,20 +93,20 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
       // call `bookSession`, both are gated server-side, so both have to name the
       // document rather than telling a member to retry something that cannot
       // succeed until somebody signs. See utils/waiverRefusal.ts.
-      const waiver = waiverRefusal(error, 'booking');
+      const waiver = waiverRefusal(tWaiver, error, 'booking');
       if (!waiver) {
-        Alert.alert('Error', 'Failed to book session. Please try again.');
+        Alert.alert(t('errorTitle'), t('bookFailed'));
         return;
       }
       if (waiver.signUrl) {
         const url = waiver.signUrl;
-        Alert.alert('Signature needed', waiver.message, [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+        Alert.alert(t('signatureNeeded'), waiver.message, [
+          { text: t('notNow'), style: 'cancel' },
+          { text: t('open'), onPress: () => { Linking.openURL(url).catch(() => undefined); } },
         ]);
         return;
       }
-      Alert.alert('Signature needed', waiver.message);
+      Alert.alert(t('signatureNeeded'), waiver.message);
     } finally {
       setLoadingSessionId(null);
     }
@@ -112,12 +115,12 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
   const handleCancel = async (session: SessionPublicProfile) => {
     if (!contact?.id) return;
     Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel your booking?',
+      t('cancelBookingTitle'),
+      t('cancelBookingConfirm'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('no'), style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: t('yesCancel'),
           style: 'destructive',
           onPress: async () => {
             setLoadingSessionId(session.id);
@@ -126,11 +129,11 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                 sessionId: session.id,
                 contactId: contact.id
               });
-              Alert.alert('Success', 'Booking cancelled.');
+              Alert.alert(t('successTitle'), t('cancelledSuccess'));
               loadMonthData();
             } catch (error: any) {
-              const message = error?.message || 'Failed to cancel booking.';
-              Alert.alert('Error', message);
+              const message = error?.message || t('cancelFailed');
+              Alert.alert(t('errorTitle'), message);
             } finally {
               setLoadingSessionId(null);
             }
@@ -221,13 +224,23 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
     });
   }, [selectedDay, availableSessions, currentDate]);
 
-  const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const weekDays = [
+    t('weekDayMon'),
+    t('weekDayTue'),
+    t('weekDayWed'),
+    t('weekDayThu'),
+    t('weekDayFri'),
+    t('weekDaySat'),
+    t('weekDaySun'),
+  ];
 
   return (
     <View>
       <View style={styles.header}>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          {attendedSessions.length} {attendedSessions.length === 1 ? 'session' : 'sessions'} in {currentDate.toLocaleDateString(undefined, { month: 'long' })}
+          {attendedSessions.length === 1
+            ? t('sessionsInMonthOne', { month: currentDate.toLocaleDateString(undefined, { month: 'long' }) })
+            : t('sessionsInMonthOther', { count: attendedSessions.length, month: currentDate.toLocaleDateString(undefined, { month: 'long' }) })}
         </Text>
         <View style={styles.monthSelector}>
           <IconButton icon="chevron-left" size={20} onPress={handlePrevMonth}  />
@@ -352,7 +365,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <View style={{ flex: 1 }}>
                                       <Text variant="bodyLarge" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>
-                                          {session.activityName || 'Session'}
+                                          {session.activityName || t('sessionFallback')}
                                       </Text>
                                       <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                                           {session.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -364,12 +377,12 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                                   ) : isAttended ? (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                           <IconButton icon="check-circle" size={18} iconColor={theme.dark ? '#4ADE80' : '#166534'} style={{ margin: 0 }} />
-                                          <Text variant="labelSmall" style={{ color: theme.dark ? '#4ADE80' : '#166534', fontWeight: 'bold' }}>ATTENDED</Text>
+                                          <Text variant="labelSmall" style={{ color: theme.dark ? '#4ADE80' : '#166534', fontWeight: 'bold' }}>{t('attendedTag').toUpperCase()}</Text>
                                       </View>
                                   ) : isBooked && isFuture ? (
                                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                           <View style={[styles.statusPill, { backgroundColor: theme.dark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE' }]}>
-                                              <Text variant="labelSmall" style={{ color: theme.dark ? '#60A5FA' : '#1E40AF', fontWeight: '800', fontSize: 9 }}>BOOKED</Text>
+                                              <Text variant="labelSmall" style={{ color: theme.dark ? '#60A5FA' : '#1E40AF', fontWeight: '800', fontSize: 9 }}>{t('bookedTag').toUpperCase()}</Text>
                                           </View>
                                           <IconButton
                                               icon="trash-can-outline"
@@ -382,7 +395,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                                   ) : isBooked ? (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                           <IconButton icon="calendar-check" size={18} iconColor={theme.dark ? '#60A5FA' : '#1E40AF'} style={{ margin: 0 }} />
-                                          <Text variant="labelSmall" style={{ color: theme.dark ? '#60A5FA' : '#1E40AF', fontWeight: 'bold' }}>BOOKED</Text>
+                                          <Text variant="labelSmall" style={{ color: theme.dark ? '#60A5FA' : '#1E40AF', fontWeight: 'bold' }}>{t('bookedTag').toUpperCase()}</Text>
                                       </View>
                                   ) : isAvailable && isFuture && session.allowBooking ? (
                                       <Button
@@ -392,7 +405,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                                           style={styles.bookBtn}
                                           labelStyle={styles.btnLabel}
                                       >
-                                          Book
+                                          {t('bookButton')}
                                       </Button>
                                   ) : null}
                               </View>
@@ -401,7 +414,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({ contactI
                   })
               ) : (
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontStyle: 'italic' }}>
-                      No classes scheduled for this day
+                      {t('noClassesScheduled')}
                   </Text>
               )}
           </View>

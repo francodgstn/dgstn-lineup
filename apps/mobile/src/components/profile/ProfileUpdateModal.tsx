@@ -4,6 +4,7 @@ import { Button, IconButton, Text, TextInput, useTheme, Surface, ActivityIndicat
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
+import { useTranslations } from '../../i18n';
 
 interface ProfileUpdateModalProps {
   visible: boolean;
@@ -35,6 +36,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
   onSuccess,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('ProfileUpdate');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBirthdatePicker, setShowBirthdatePicker] = useState(false);
@@ -64,7 +66,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
 
   const handleSubmit = async () => {
     if (!formData.firstname.trim() || !formData.lastname.trim()) {
-      setError('First and last name are required');
+      setError(t('firstLastNameRequired'));
       return;
     }
 
@@ -107,7 +109,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Submission error:', err);
-      setError(err.message || 'Failed to submit update request');
+      setError(err.message || t('submitFailed'));
     } finally {
       setLoading(false);
     }
@@ -121,14 +123,14 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
       >
         <Surface style={[styles.header, { backgroundColor: theme.colors.surface }]} elevation={1}>
           <View style={styles.headerContent}>
-            <Text variant="titleLarge">Update Profile</Text>
+            <Text variant="titleLarge">{t('updateProfileTitle')}</Text>
             <IconButton icon="close" onPress={onClose} disabled={loading} />
           </View>
         </Surface>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Text variant="bodyMedium" style={[styles.introText, { color: theme.colors.onSurfaceVariant }]}>
-            Submit your updated details. This request will be reviewed and approved by a team administrator.
+            {t('introText')}
           </Text>
 
           {error && (
@@ -137,16 +139,16 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             </Surface>
           )}
 
-          <Section title="Personal Information">
+          <Section title={t('sectionPersonalInfo')}>
             <TextInput
-              label="First Name *"
+              label={t('firstNameLabel')}
               value={formData.firstname}
               onChangeText={val => handleChange('firstname', val)}
               mode="outlined"
               style={styles.input}
             />
             <TextInput
-              label="Last Name *"
+              label={t('lastNameLabel')}
               value={formData.lastname}
               onChangeText={val => handleChange('lastname', val)}
               mode="outlined"
@@ -154,7 +156,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             />
             <View style={styles.input}>
               <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>
-                Birthdate
+                {t('birthdateLabel')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <TouchableRipple
@@ -171,7 +173,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
                   <Text variant="bodyMedium" style={{ color: birthdate ? theme.colors.onSurface : theme.colors.onSurfaceVariant }}>
                     {birthdate
                       ? birthdate.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })
-                      : 'Select date of birth…'}
+                      : t('selectDob')}
                   </Text>
                 </TouchableRipple>
                 {birthdate && (
@@ -194,12 +196,12 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
               )}
               {Platform.OS === 'ios' && showBirthdatePicker && (
                 <Button compact onPress={() => setShowBirthdatePicker(false)} style={{ alignSelf: 'flex-end' }}>
-                  Done
+                  {t('done')}
                 </Button>
               )}
             </View>
             <TextInput
-              label="Birthplace"
+              label={t('birthplaceLabel')}
               value={formData.birthplace}
               onChangeText={val => handleChange('birthplace', val)}
               mode="outlined"
@@ -208,7 +210,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             <View>
               <View style={styles.genderInputRow}>
                 <TextInput
-                  label="Gender (M/F)"
+                  label={t('genderMFLabel')}
                   value={formData.gender}
                   onChangeText={val => handleChange('gender', val)}
                   mode="outlined"
@@ -217,15 +219,15 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
                 <IconButton
                   icon="information-outline"
                   size={20}
-                  onPress={() => setError("This field may be required for event, competition or federation registration. It does not define or classify gender identity within our community.")}
+                  onPress={() => setError(t('genderInfoBody'))}
                 />
               </View>
               <Text variant="bodySmall" style={[styles.helperText, { color: theme.colors.onSurfaceVariant }]}>
-                May be required for event or federation registration.
+                {t('genderHelperText')}
               </Text>
             </View>
             <TextInput
-              label="Weight (kg)"
+              label={t('weightKgLabel')}
               value={formData.weight}
               onChangeText={val => handleChange('weight', val)}
               mode="outlined"
@@ -234,16 +236,16 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             />
           </Section>
 
-          <Section title="Contact Details">
+          <Section title={t('sectionContactDetails')}>
             <TextInput
-              label="Email"
+              label={t('emailLabel')}
               value={formData.email}
               disabled
               mode="outlined"
               style={styles.input}
             />
             <TextInput
-              label="Phone Number"
+              label={t('phoneNumberLabel')}
               value={formData.phone}
               onChangeText={val => handleChange('phone', val)}
               mode="outlined"
@@ -252,17 +254,17 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             />
           </Section>
 
-          <Section title="Address">
+          <Section title={t('sectionAddress')}>
             <View style={styles.row}>
               <TextInput
-                label="Street"
+                label={t('streetLabel')}
                 value={formData.route}
                 onChangeText={val => handleChange('route', val)}
                 mode="outlined"
                 style={[styles.input, { flex: 2, marginRight: 8 }]}
               />
               <TextInput
-                label="No."
+                label={t('noLabel')}
                 value={formData.street_number}
                 onChangeText={val => handleChange('street_number', val)}
                 mode="outlined"
@@ -271,7 +273,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             </View>
             <View style={styles.row}>
               <TextInput
-                label="ZIP"
+                label={t('zipLabel')}
                 value={formData.postal_code}
                 onChangeText={val => handleChange('postal_code', val)}
                 mode="outlined"
@@ -279,7 +281,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
                 keyboardType="numeric"
               />
               <TextInput
-                label="City"
+                label={t('cityLabel')}
                 value={formData.locality}
                 onChangeText={val => handleChange('locality', val)}
                 mode="outlined"
@@ -288,16 +290,16 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             </View>
           </Section>
 
-          <Section title="Emergency Contact">
+          <Section title={t('sectionEmergencyContact')}>
             <TextInput
-              label="Contact Name"
+              label={t('contactNameLabel')}
               value={formData.emergencyContactName}
               onChangeText={val => handleChange('emergencyContactName', val)}
               mode="outlined"
               style={styles.input}
             />
             <TextInput
-              label="Contact Phone"
+              label={t('contactPhoneLabel')}
               value={formData.emergencyContactPhone}
               onChangeText={val => handleChange('emergencyContactPhone', val)}
               mode="outlined"
@@ -306,9 +308,9 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
             />
           </Section>
 
-          <Section title="Additional Notes">
+          <Section title={t('sectionAdditionalNotes')}>
             <TextInput
-              label="Notes for Admin"
+              label={t('notesForAdminLabel')}
               value={formData.note}
               onChangeText={val => handleChange('note', val)}
               mode="outlined"
@@ -326,7 +328,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
               disabled={loading}
               style={styles.submitButton}
             >
-              Submit Update Request
+              {t('submitUpdateRequest')}
             </Button>
             <Button
               mode="text"
@@ -334,7 +336,7 @@ export const ProfileUpdateModal: React.FC<ProfileUpdateModalProps> = ({
               disabled={loading}
               style={styles.cancelButton}
             >
-              Cancel
+              {t('cancel')}
             </Button>
           </View>
         </ScrollView>

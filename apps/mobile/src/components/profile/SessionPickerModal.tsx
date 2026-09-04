@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, StyleSheet, View, ScrollView } from 'react-native';
 import { Button, IconButton, Text, useTheme, Surface, TouchableRipple } from 'react-native-paper';
+import { useTranslations } from '../../i18n';
 
 interface SessionOption {
   id: string;
@@ -34,6 +35,7 @@ export const SessionPickerModal: React.FC<SessionPickerModalProps> = ({
   onClose,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('SessionPicker');
 
   return (
     <Modal
@@ -46,7 +48,7 @@ export const SessionPickerModal: React.FC<SessionPickerModalProps> = ({
         <View style={[styles.sheet, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.header}>
             <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-              Select Session
+              {t('selectSessionTitle')}
             </Text>
             <IconButton icon="close" size={24} onPress={onClose} disabled={loading} />
           </View>
@@ -55,7 +57,7 @@ export const SessionPickerModal: React.FC<SessionPickerModalProps> = ({
             variant="bodyMedium"
             style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16 }}
           >
-            Multiple sessions are active right now. Which one are you attending?
+            {t('multipleSessionsBody')}
           </Text>
 
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -98,7 +100,7 @@ export const SessionPickerModal: React.FC<SessionPickerModalProps> = ({
             disabled={loading}
             style={{ marginTop: 12 }}
           >
-            Cancel
+            {t('cancel')}
           </Button>
         </View>
       </View>

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { Button, IconButton, Text, useTheme, ActivityIndicator } from 'react-native-paper';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useTranslations } from '../../i18n';
 
 interface TeamQrScannerModalProps {
   visible: boolean;
@@ -15,6 +16,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
   onScan,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('QrScanner');
   const [permission, requestPermission] = useCameraPermissions();
   const scannedRef = React.useRef(false);
 
@@ -48,7 +50,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.header}>
           <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-            Scan studio QR
+            {t('scanStudioQr')}
           </Text>
           <IconButton icon="close" size={24} onPress={onClose} />
         </View>
@@ -63,10 +65,10 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
               variant="bodyMedium"
               style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}
             >
-              Camera permission is required to scan your studio&apos;s check-in QR code.
+              {t('cameraPermissionBody')}
             </Text>
             <Button mode="contained" onPress={requestPermission}>
-              Grant Permission
+              {t('grantPermission')}
             </Button>
           </View>
         ) : (
@@ -84,7 +86,7 @@ export const TeamQrScannerModal: React.FC<TeamQrScannerModalProps> = ({
               variant="bodyMedium"
               style={[styles.hint, { color: '#ffffff' }]}
             >
-              Point the camera at your studio&apos;s QR code
+              {t('pointCamera')}
             </Text>
           </View>
         )}

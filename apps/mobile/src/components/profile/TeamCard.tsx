@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Avatar, Icon, Surface, Text } from 'react-native-paper';
 import { useAppTheme } from '../../theme';
 import { withAlpha } from '../../utils/color';
+import { useTranslations } from '../../i18n';
 
 interface TeamCardProps {
   teamName: string;
@@ -13,8 +14,8 @@ interface TeamCardProps {
   lastSeenAt?: any;
 }
 
-function formatLastSeen(value: unknown): string {
-  if (!value) return '—';
+function formatLastSeen(value: unknown, dash: string): string {
+  if (!value) return dash;
   let date: Date | null = null;
   if (value instanceof Date) {
     date = value;
@@ -27,12 +28,13 @@ function formatLastSeen(value: unknown): string {
     if (typeof ref.toDate === 'function') date = ref.toDate();
     else if (typeof ref.seconds === 'number') date = new Date(ref.seconds * 1000);
   }
-  if (!date || isNaN(date.getTime())) return '—';
+  if (!date || isNaN(date.getTime())) return dash;
   return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export const TeamCard: React.FC<TeamCardProps> = ({ teamName, logoUrl, subscriptionName, subscriptionRecurrence, lastSeenAt }) => {
   const theme = useAppTheme();
+  const t = useTranslations('TeamCard');
   // The studio row carries the STUDIO's colour (the tenant accent); the other
   // rows keep their semantic tints so they never collide with it.
   const badge = (color: string) => ({ backgroundColor: withAlpha(color, theme.dark ? 0.16 : 0.09) });
@@ -50,7 +52,7 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, logoUrl, subscript
             <Icon source="shield-outline" size={16} color={theme.colors.primary} />
           </View>
         )}
-        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>TEAM</Text>
+        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{t('teamLabel').toUpperCase()}</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
           {teamName}
         </Text>
@@ -62,13 +64,13 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, logoUrl, subscript
         <View style={[styles.iconBadge, badge(theme.semantic.info)]}>
           <Icon source="tag-outline" size={16} color={theme.semantic.info} />
         </View>
-        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>SUBSCRIPTION</Text>
+        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{t('subscriptionLabel').toUpperCase()}</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
           {subscriptionName
             ? subscriptionRecurrence
               ? `${subscriptionName} · ${subscriptionRecurrence}`
               : subscriptionName
-            : '—'}
+            : t('dash')}
         </Text>
       </View>
 
@@ -78,9 +80,9 @@ export const TeamCard: React.FC<TeamCardProps> = ({ teamName, logoUrl, subscript
         <View style={[styles.iconBadge, badge(theme.semantic.teal)]}>
           <Icon source="calendar-check-outline" size={16} color={theme.semantic.teal} />
         </View>
-        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>LAST SESSION</Text>
+        <Text variant="labelSmall" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{t('lastSessionLabel').toUpperCase()}</Text>
         <Text variant="labelMedium" style={[styles.value, { color: theme.colors.onSurface }]} numberOfLines={1}>
-          {formatLastSeen(lastSeenAt)}
+          {formatLastSeen(lastSeenAt, t('dash'))}
         </Text>
       </View>
     </Surface>

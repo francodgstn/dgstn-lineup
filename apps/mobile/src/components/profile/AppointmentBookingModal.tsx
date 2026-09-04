@@ -4,6 +4,7 @@ import { ActivityIndicator, Button, Icon, IconButton, Text, TouchableRipple, use
 import { ListAvailabilityActivity, ListAvailabilityCoach, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 import { activityHasMemberBenefit, durationIsBenefitOnly } from '../../utils/appointmentAccess';
+import { useTranslations } from '../../i18n';
 
 interface Props {
   visible: boolean;
@@ -22,11 +23,13 @@ interface PendingSlot {
   durationMinutes: number;
 }
 
-function fmtDuration(mins: number): string {
-  if (mins < 60) return `${mins} min`;
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function fmtDuration(t: Translate, mins: number): string {
+  if (mins < 60) return t('durationMinutes', { mins });
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
+  return m ? t('durationHoursMinutes', { h, m }) : t('durationHoursOnly', { h });
 }
 
 const fmtDayShort = (ms: number) =>
@@ -49,6 +52,7 @@ const fmtTime = (ms: number) =>
  */
 export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, contact, onClose, onBooked }) => {
   const theme = useTheme();
+  const t = useTranslations('Appointments');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +80,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
     setBookError(null);
 
     if (!teamId) {
-      setError('Missing team.');
+      setError(t('missingTeam'));
       setCoaches([]);
       return;
     }
@@ -91,7 +95,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
       })
       .catch(() => {
         if (!alive) return;
-        setError('Could not load availability. Please try again.');
+        setError(t('loadAvailabilityFailed'));
         setCoaches([]);
       })
       .finally(() => {
@@ -100,7 +104,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
     return () => {
       alive = false;
     };
-  }, [visible, teamId]);
+  }, [visible, teamId, t]);
 
   const selectCoach = (coach: ListAvailabilityCoach) => {
     setSelectedCoach(coach);
@@ -145,12 +149,12 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
         durationMinutes: pendingSlot.durationMinutes,
       });
       setPendingSlot(null);
-      Alert.alert('Confirmed', 'Your appointment has been booked!');
+      Alert.alert(t('confirmedTitle'), t('confirmedBody'));
       onBooked();
     } catch (e: any) {
       // Surface the server's message (e.g. a members/subscription access-rule
       // refusal, or "this time was just taken") rather than crashing.
-      setBookError(e?.message || 'Failed to book. Please try again.');
+      setBookError(e?.message || t('bookFailed'));
     } finally {
       setBooking(false);
     }
@@ -164,10 +168,10 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
   const title =
     step === 'coach'
-      ? 'Book an appointment'
+      ? t('bookTitle')
       : step === 'activity'
-        ? selectedCoach?.providerName || 'Choose an activity'
-        : selectedActivity?.activityName || 'Choose a time';
+        ? selectedCoach?.providerName || t('chooseActivityTitle')
+        : selectedActivity?.activityName || t('chooseTimeTitle');
 
   return (
     <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
@@ -182,7 +186,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
               >
                 <View style={styles.backBtnInner}>
                   <Icon source="chevron-left" size={20} color={theme.colors.primary} />
-                  <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Back</Text>
+                  <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>{t('back')}</Text>
                 </View>
               </TouchableRipple>
             )}
@@ -223,7 +227,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                 variant="bodyMedium"
                 style={{ color: theme.colors.onSurfaceVariant, marginTop: 10, textAlign: 'center' }}
               >
-                No availability published yet. Check back soon!
+                {t('noAvailability')}
               </Text>
             </View>
           )}
@@ -239,7 +243,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
-                      {coach.providerName || 'Coach'}
+                      {coach.providerName || t('coachFallback')}
                     </Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
                       {coach.activities.map((a) => a.activityName).join(' · ')}
@@ -254,7 +258,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
             selectedCoach.activities.length === 0 ? (
               <View style={styles.centerBox}>
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  No activities available with this coach.
+                  {t('noActivitiesForCoach')}
                 </Text>
               </View>
             ) : (
@@ -267,8 +271,8 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                 const durations = activity.durations.map((d) => d.minutes);
                 const durationLabel =
                   durations.length > 1
-                    ? `${fmtDuration(Math.min(...durations))} – ${fmtDuration(Math.max(...durations))}`
-                    : fmtDuration(durations[0] ?? 60);
+                    ? `${fmtDuration(t, Math.min(...durations))} – ${fmtDuration(t, Math.max(...durations))}`
+                    : fmtDuration(t, durations[0] ?? 60);
                 return (
                   <TouchableRipple
                     key={activity.activityId}
@@ -291,7 +295,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                             >
                               <Icon source="star-outline" size={10} color={theme.dark ? '#FBBF24' : '#B45309'} />
                               <Text style={{ color: theme.dark ? '#FBBF24' : '#B45309', fontSize: 10, fontWeight: '700' }}>
-                                Members benefit
+                                {t('membersBenefitBadge')}
                               </Text>
                             </View>
                           )}
@@ -319,7 +323,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                             <View style={styles.metaItem}>
                               <Icon source="video-outline" size={12} color={theme.colors.onSurfaceVariant} />
                               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                Online
+                                {t('onlineLabel')}
                               </Text>
                             </View>
                           ) : null}
@@ -338,7 +342,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
               {selectedActivity.durations.length > 1 && (
                 <View style={{ gap: 8 }}>
                   <Text variant="labelMedium" style={[styles.groupLabel, { color: theme.colors.onSurfaceVariant }]}>
-                    DURATION
+                    {t('groupDuration').toUpperCase()}
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {selectedActivity.durations.map((duration) => {
@@ -365,7 +369,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                                 fontSize: 12,
                               }}
                             >
-                              {fmtDuration(d)}{benefitOnly ? ' · members' : ''}
+                              {fmtDuration(t, d)}{benefitOnly ? t('memberOnlySuffix') : ''}
                             </Text>
                           </View>
                         </TouchableRipple>
@@ -377,7 +381,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
               <View style={{ gap: 8 }}>
                 <Text variant="labelMedium" style={[styles.groupLabel, { color: theme.colors.onSurfaceVariant }]}>
-                  DAY
+                  {t('groupDay').toUpperCase()}
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -412,11 +416,11 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
               <View style={{ gap: 8 }}>
                 <Text variant="labelMedium" style={[styles.groupLabel, { color: theme.colors.onSurfaceVariant }]}>
-                  TIME
+                  {t('groupTime').toUpperCase()}
                 </Text>
                 {times.length === 0 ? (
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    No times available this day.
+                    {t('noTimesThisDay')}
                   </Text>
                 ) : (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -462,7 +466,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                   <View style={styles.coachRow}>
                     <Icon source="account-circle" size={16} color={theme.colors.onSurfaceVariant} />
                     <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                      with{' '}
+                      {t('withLabel')}{' '}
                       <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>
                         {selectedCoach.providerName}
                       </Text>
@@ -487,7 +491,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                   >
                     <Icon source="clock-outline" size={16} color={theme.colors.primary} />
                     <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurface }]}>
-                      {`${fmtTime(pendingSlot.startMs)} – ${fmtTime(pendingSlot.startMs + pendingSlot.durationMinutes * 60_000)} · ${fmtDuration(pendingSlot.durationMinutes)}`}
+                      {`${fmtTime(pendingSlot.startMs)} – ${fmtTime(pendingSlot.startMs + pendingSlot.durationMinutes * 60_000)} · ${fmtDuration(t, pendingSlot.durationMinutes)}`}
                     </Text>
                   </View>
                   {selectedActivity?.location ? (
@@ -506,7 +510,7 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
                     >
                       <Icon source="video-outline" size={16} color={theme.colors.primary} />
                       <Text variant="bodySmall" style={[styles.detailText, { color: theme.colors.onSurface }]}>
-                        Online session
+                        {t('onlineSession')}
                       </Text>
                     </View>
                   ) : null}
@@ -520,10 +524,10 @@ export const AppointmentBookingModal: React.FC<Props> = ({ visible, teamId, cont
 
                 <View style={styles.actions}>
                   <Button mode="text" onPress={closeConfirm} style={{ flex: 1 }} disabled={booking}>
-                    Not now
+                    {t('notNow')}
                   </Button>
                   <Button mode="contained" style={{ flex: 1 }} onPress={confirmBook} loading={booking} disabled={booking}>
-                    Book it
+                    {t('bookIt')}
                   </Button>
                 </View>
               </Pressable>

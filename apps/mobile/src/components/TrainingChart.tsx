@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import { Text, Chip, useTheme, ActivityIndicator } from 'react-native-paper';
 import { LineChart } from 'react-native-gifted-charts';
 import { FirestoreService } from '../services/firestore';
+import { useTranslations } from '../i18n';
 
 interface TrainingChartProps {
   contactId: string;
@@ -12,6 +13,7 @@ interface TrainingChartProps {
 
 export const TrainingChart: React.FC<TrainingChartProps> = ({ contactId, teamId, onMonthPress }) => {
   const theme = useTheme();
+  const t = useTranslations('Training');
   const [chartWeeks, setChartWeeks] = useState(26);
   const [attendedSessions, setAttendedSessions] = useState<{ start: Date }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,7 +109,11 @@ export const TrainingChart: React.FC<TrainingChartProps> = ({ contactId, teamId,
         monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + 1);
       }
     });
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNames = [
+      t('monthJan'), t('monthFeb'), t('monthMar'), t('monthApr'),
+      t('monthMay'), t('monthJun'), t('monthJul'), t('monthAug'),
+      t('monthSep'), t('monthOct'), t('monthNov'), t('monthDec'),
+    ];
     chartEntries = Array.from(monthMap.entries()).map(([key, count]) => {
       const [y, m] = key.split('-').map(Number);
       return {
@@ -118,7 +124,7 @@ export const TrainingChart: React.FC<TrainingChartProps> = ({ contactId, teamId,
     });
   } else {
     chartEntries = weeklyData.map(w => ({
-      label: w.iso_week.replace(/^\d{4}-W/, 'W'),
+      label: w.iso_week.replace(/^\d{4}-W/, t('weekPrefix')),
       sessions_count: w.sessions_count,
       date: new Date(),
     }));
@@ -137,15 +143,19 @@ export const TrainingChart: React.FC<TrainingChartProps> = ({ contactId, teamId,
   }));
 
   const rangeOptions = [
-    { label: '6m', value: 26, summary: '6 months' },
-    { label: '1y', value: 52, summary: '1 year' },
+    { label: t('range6mLabel'), value: 26, summary: t('range6mSummary') },
+    { label: t('range1yLabel'), value: 52, summary: t('range1ySummary') },
   ];
+
+  const rangeSummary = rangeOptions.find(o => o.value === chartWeeks)?.summary ?? t('weeksFallback', { count: chartWeeks });
 
   return (
     <View>
       <View style={styles.header}>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          {totalSessions} {totalSessions === 1 ? 'session' : 'sessions'} (last {rangeOptions.find(o => o.value === chartWeeks)?.summary ?? `${chartWeeks} weeks`})
+          {totalSessions === 1
+            ? t('sessionsCountOneWithRange', { range: rangeSummary })
+            : t('sessionsCountOtherWithRange', { count: totalSessions, range: rangeSummary })}
         </Text>
         <View style={styles.filters}>
           {rangeOptions.map((option) => (
