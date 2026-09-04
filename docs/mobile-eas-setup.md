@@ -195,11 +195,19 @@ npx eas-cli build --profile preview --platform android    # accept "generate a n
 ```
 
 Install the resulting APK (the build page shows a QR code / link) and sign in
-with the review login. What to check on the device: the sign-in lands on the
-profile; the studio look applies (the review studio has no preset, so it stays
-Linyup purple — a studio with `ink` + a warm accent is the visual test);
-`Settings → Member app` in the operator console with a minimum version above
-`1.0.0` shows the update-required screen on the next foreground.
+with the review login. What to check on the device:
+
+- ~~sign-in lands on the profile~~ — **VERIFIED 2026-09-03** on build
+  `0e3f3ee6` (preview, v1.0.0/versionCode 2, channel `staging`). The backend
+  half was verified separately by calling `sendContactVerificationCode` and
+  `loginContactWithCode` against staging with `client: 'mobile'`, which is the
+  flag that trips the member-app access gate — so a failure after this point is
+  the app, not staging or the review account.
+- **still open:** the studio look applies. The review studio has no preset, so
+  Linyup purple proves nothing — sign into a seeded tier studio (`ink` + a warm
+  accent) to see the app re-theme.
+- **still open:** `Settings → Member app` in the operator console with a minimum
+  version above `1.0.0` shows the update-required screen on the next foreground.
 
 ### 8. Prove the lane
 
