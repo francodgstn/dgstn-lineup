@@ -225,21 +225,29 @@ export interface LeadGridSlot {
  *
  *  Appointments have NO access gate — THE PRICE IS THE GATE. `priceAmount` is
  *  the base price anyone (guests included) pays through Stripe checkout; omit
- *  it (or null) for an unpriced duration, which anyone books free. The member
- *  benefit is never per duration: it is ONE rule for the whole offering
- *  (`LeadAppointmentDef.memberBenefit`). */
+ *  it (or null) for an unpriced duration, which anyone books free. The stored
+ *  member rule IS per duration (`Activity.durationBenefits`) — a profile still
+ *  states ONE rule (`LeadAppointmentDef.memberBenefit`) and the seeder applies
+ *  it to every length; see there for why the profile shape did not change. */
 export interface LeadAppointmentDurationDef {
   minutes: number
   priceAmount?: number | null
 }
 
-/** The ONE member-benefit rule of an appointment offering
- *  (`Activity.memberBenefit`), referencing subscriptions by
+/** The member rule of an appointment offering, referencing subscriptions by
  *  `LeadSubscriptionDef.key` (resolved to subscription-type ids at seed time).
  *  Holders of any listed type: `kind: 'included'` book every priced duration
  *  free (a credit-pack type spends a credit); `kind: 'discount'` pay
  *  `discountPercent` off every priced duration. Absent = no benefit — everyone
- *  pays base. The benefit is data, never implied. */
+ *  pays base. The benefit is data, never implied.
+ *
+ *  ONE RULE HERE, PER-LENGTH RULES IN THE DOCUMENT. The product stores one rule
+ *  per session length; the seeder writes this one onto every length. The
+ *  profile shape stayed as it was on purpose — lead profiles are gitignored, so
+ *  a required edit there is one this repo can neither make nor review, and
+ *  every existing profile would break on a field nobody could find. A profile
+ *  that wants different rules per length can be given a per-length key when one
+ *  actually does. */
 export interface LeadAppointmentMemberBenefitDef {
   subKeys: string[]
   kind: 'included' | 'discount'
@@ -269,7 +277,7 @@ export interface LeadAppointmentDef {
    *  price (Activity.durations). Duration belongs to the offering, never to the
    *  availability schedule. */
   durations: LeadAppointmentDurationDef[]
-  /** The ONE member-benefit rule (Activity.memberBenefit). Absent = no benefit
+  /** The member rule, applied to EVERY length at seed time. Absent = no benefit
    *  — everyone pays the base price (or books free when unpriced). */
   memberBenefit?: LeadAppointmentMemberBenefitDef
 }
@@ -654,6 +662,15 @@ export interface LeadProfile {
   events: LeadEventDef[]
 
   siteSections: LeadSiteSection[]
+  /**
+   * Optional stored header MENU (a `SiteMenuItem[]` tree). Absent ⇒ the header
+   * is DERIVED from the sections — every nav-visible section becomes a top-level
+   * item, which grows long once a site has many sections. A profile provides
+   * this to demo a realistic GROUPED menu: a few top items, some with children,
+   * and secondary sections folded away (set their `showInNav: false`).
+   * Authored by hand as `{ id, label?, target, children? }`; see SiteMenuItem.
+   */
+  siteMenu?: Record<string, unknown>[]
   courses: LeadCourseDef[]
   products: LeadProductDef[]
   /** Gift cards (settings.giftCards + the team public_profile mirror): lets the

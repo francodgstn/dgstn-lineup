@@ -17,9 +17,13 @@
 # triggers builds that are missing, publishes updates otherwise, and comments
 # the result on the commit/PR).
 #
-# Secrets: EXPO_TOKEN (repository secret). FIREBASE_API_KEY per environment is
-# an EAS ENVIRONMENT VARIABLE (development/preview/production), never an
-# eas.json `env` literal — eas.json does not interpolate `${…}`.
+# Secrets: EXPO_TOKEN (repository secret). FIREBASE_API_KEY lives in TWO
+# places, which are different channels and not redundant: eas.json's `env`
+# block per profile (what `eas build` uses to evaluate app.config.js LOCALLY,
+# before upload) and an EAS environment variable per environment (what the
+# BUILDER gets, and what `eas update --environment` resolves). The trap is
+# writing `"${FIREBASE_API_KEY}"` in eas.json — it does not interpolate and
+# bakes in that literal string. Write the value.
 #
 # Action version: the `continuous-deploy-fingerprint` sub-action exists on
 # expo-github-action v9 (and main) — NOT on the v8 tag, where the first run on
@@ -31,9 +35,11 @@
 #
 # Settled 2026-09-03, when docs/mobile-eas-setup.md was executed for staging:
 # `auto-submit-builds` IS the input's real name (checked against v9's
-# action.yml), and the `preview` environment carries FIREBASE_API_KEY. The
-# `production` environment does NOT — that is the prod key, deliberately still
-# absent, so the release lane cannot build until it is added.
+# action.yml). The first run on main then failed with nothing but an exit
+# code, because `eas build` evaluates app.config.js locally with ONLY
+# eas.json's `env` in scope and our config refuses a real project without a
+# key — see the runbook's step 5. The `store` profile still has no prod key
+# in either channel, so the release lane cannot build until it is added.
 name: Mobile
 
 on:
@@ -95,13 +101,30 @@ jobs:
       # Every build profile must evaluate app.config.js without throwing — the
       # class of failure that otherwise surfaces only on EAS's clock (the HMD-era
       # eas.json pointed at project ids the config rejects, for weeks).
-      - name: Evaluate app config per profile
+      #
+      # This step used to inject FIREBASE_API_KEY=ci-placeholder, which made it
+      # PASS while `eas build` failed — the first run on main, 2026-09-03. So it
+      # now reproduces what EAS actually does: only the profile's own `env`, plus
+      # EXPO_NO_DOTENV=1, and no key handed in from the side. `--type public`
+      # rather than `--json` because JSON mode exits 1 with EMPTY stderr, which
+      # is what made the original failure unreadable.
+      - name: Evaluate app config per build profile, as `eas build` does
         working-directory: apps/mobile
         run: |
-          for id in linyup-staging linyup-prod; do
-            echo "== FIREBASE_PROJECT_ID=$id =="
-            FIREBASE_PROJECT_ID=$id FIREBASE_API_KEY=ci-placeholder npx expo config --type public --json > /dev/null
+          for profile in development preview store; do
+            echo "== profile: $profile =="
+            env EXPO_NO_DOTENV=1 \
+              $(node -p "Object.entries(require('./eas.json').build['$profile'].env||{}).map(([k,v])=>k+'='+v).join(' ')") \
+              npx expo config --type public > /dev/null
           done
+
+      # `store` is in the loop above now that it carries a key. It points at
+      # linyup-STAGING for the moment (see the release job below), so nothing in
+      # that loop exercises linyup-prod any more — this step is what keeps the
+      # prod project id honest. A placeholder key is fine for that one question.
+      - name: Prod project id is known to the config
+        working-directory: apps/mobile
+        run: FIREBASE_PROJECT_ID=linyup-prod FIREBASE_API_KEY=ci-placeholder npx expo config --type public > /dev/null
 
   # ── main → staging channel ────────────────────────────────────────────────
   staging:
@@ -157,6 +180,21 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v7
+
+      # The `store` profile is TEMPORARILY pointed at linyup-staging so the Play
+      # closed test can start without the prod key being decided
+      # (docs/mobile-store-setup.md). A `mobile-v*` tag means a REAL release, and
+      # a store build that talks to staging would put real members on seeded demo
+      # data that gets wiped and reseeded. eas.json cannot hold a comment saying
+      # so, and a note in a doc is not a guard — this is.
+      - name: The store profile must target production
+        run: |
+          id=$(node -p "require('./apps/mobile/eas.json').build.store.env.FIREBASE_PROJECT_ID")
+          if [ "$id" != "linyup-prod" ]; then
+            echo "::error::eas.json store profile targets $id, not linyup-prod — switch it back, with the prod key, before tagging a release. See docs/mobile-store-setup.md."
+            exit 1
+          fi
+          echo "store profile targets $id"
 
       - uses: pnpm/action-setup@v6
 

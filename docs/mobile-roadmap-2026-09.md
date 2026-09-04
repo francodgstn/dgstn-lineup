@@ -285,26 +285,40 @@ Collected during autonomous execution; none blocks the current steps.
 
 ## 7. What only the owner can do (needed for step 2 to run end to end)
 
-The staging half — EAS project, staging key into EAS environment variables,
-`EXPO_TOKEN`, the first `preview` build — is written as a runbook a local
-agent can execute: `docs/mobile-eas-setup.md`. It was run on 2026-09-03; the
+The staging half — EAS project, the staging key, `EXPO_TOKEN`, the first
+`preview` build — is written as a runbook a local agent can execute:
+`docs/mobile-eas-setup.md`. It was run on 2026-09-03 and is **DONE**. The
 EAS project is **`@francodagostino/linyup`**,
-`f941b285-002a-4bdb-8c42-8c3e5edfab66` (the default in `app.config.js`).
+`f941b285-002a-4bdb-8c42-8c3e5edfab66` (the default in `app.config.js`); CI
+authenticates as the robot user `linyup-eas-robot`.
+
+Both halves of the lane are proven on `main`: a finished `preview` APK, and
+EAS updates published to the `staging` branch at a runtime version that APK
+matches — so the next push that changes only JS publishes an OTA instead of
+building. Everything still listed below is Apple, Google, or the prod key.
 
 - ~~`eas init` in `apps/mobile` (writes `extra.eas.projectId`)~~ — done; the
-  id is a literal in `app.config.js` because the config is dynamic. An
-  `EXPO_TOKEN` repository secret for CI.
-- EAS environment variables `FIREBASE_API_KEY`: ~~`development` + `preview` →
-  staging~~ done; `production`/`store` → prod still owed.
+  id is a literal in `app.config.js` because the config is dynamic.
+  ~~An `EXPO_TOKEN` repository secret for CI~~ — done, a robot token.
+- `FIREBASE_API_KEY` in BOTH eas.json `env` and the EAS environment:
+  ~~`development` + `preview` → staging~~ done. The `store` profile TEMPORARILY
+  targets staging too (2026-09-03) so the Play closed test could start; the prod
+  key is still owed in both channels, and the release lane refuses a `mobile-v*`
+  tag until `store` points at `linyup-prod` again.
   ~~`messagingSenderId` for staging~~ done (`157648925506`); prod + sandbox
   still carry the TODO, and `appId` is read by nothing yet (Terraform outputs).
 - App Store Connect record for `com.dgstn.linyup` → `ascAppId`; ASC API key
-  for `eas submit`; Play service-account JSON in EAS. Until the Apple side
+  for `eas submit`; Play service-account JSON in EAS. **Runbook:**
+  `docs/mobile-store-setup.md`. The long pole is not the setup but Play's
+  12-testers-for-14-days closed test (personal account, post-2023-11-13,
+  per app), which gates production only — internal testing is unaffected. Until the Apple side
   exists the **staging lane is `platform: android`** — an iOS internal build
   needs an ad hoc profile listing device UDIDs (`eas device:create`), so `all`
   would make every run on main red on its iOS half. Widening that one input
   back to `all` is the last step of setting up the Apple account.
-- Store metadata: screenshots (iPhone + iPad while `supportsTablet` is true),
-  a privacy policy that covers the app's users (today's covers website
-  visitors and Customers only), Terms/DPA without the DRAFT banner, a support
-  URL, and the fixed review-access code entered in ASC/Play.
+- Store metadata: screenshots (~~iPhone + iPad~~ **iPhone only** —
+  `supportsTablet` is now `false`), ~~a privacy policy that
+  covers the app's users~~ done (`/privacy` §2.10, plus the
+  `/delete-account` page Play requires alongside the in-app route),
+  Terms/DPA without the DRAFT banner, a support URL, and the fixed
+  review-access code entered in ASC/Play.

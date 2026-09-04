@@ -15,6 +15,9 @@ import {
   type SiteMeta,
   type EmbedWidget,
   type ClubsSection,
+  type FeaturesSection,
+  type FaqSection,
+  type TestimonialsSection,
   type SiteTranslationUnits,
 } from '@linyup/shared'
 
@@ -139,5 +142,45 @@ describe('translate/siteTranslation (extractor/resolver contract)', () => {
     }
     const translated = applySiteTranslations({ sections }, units)
     assert.equal((translated.sections[0] as HeroSection).headline, '   ')
+  })
+
+  it('features / faq / testimonials extract their item text, and a testimonial NAME does not', () => {
+    const features: FeaturesSection = {
+      id: 'f1', type: 'features', columns: 3,
+      items: [{ icon: 'Star', title: 'Coached', text: 'By pros', linkLabel: 'More', linkUrl: 'https://x' }],
+    }
+    const faq: FaqSection = {
+      id: 'q1', type: 'faq',
+      items: [{ question: 'When?', answer: 'Anytime.' }],
+    }
+    const testis: TestimonialsSection = {
+      id: 't1', type: 'testimonials',
+      items: [{ name: 'Alex', activity: 'Member', feedback: 'Loved it' }],
+    }
+    const units = extractSiteUnits({ sections: [features, faq, testis] })
+    const byKey = new Map(units.map((u) => [u.key, u.text]))
+    assert.equal(byKey.get('s.f1.item.0.title'), 'Coached')
+    assert.equal(byKey.get('s.f1.item.0.text'), 'By pros')
+    assert.equal(byKey.get('s.f1.item.0.linkLabel'), 'More')
+    assert.equal(byKey.get('s.q1.item.0.question'), 'When?')
+    assert.equal(byKey.get('s.q1.item.0.answer'), 'Anytime.')
+    assert.equal(byKey.get('s.t1.item.0.activity'), 'Member')
+    assert.equal(byKey.get('s.t1.item.0.feedback'), 'Loved it')
+    // The person's name is never extracted, so it is never machine-translated.
+    assert.equal([...byKey.keys()].some((k) => k.startsWith('s.t1.item.0.name')), false)
+    // Nor is a link URL.
+    assert.equal([...byKey.keys()].some((k) => k.includes('linkUrl')), false)
+  })
+
+  it('a translated feature item is substituted back at its key', () => {
+    const features: FeaturesSection = {
+      id: 'f2', type: 'features', columns: 2,
+      items: [{ title: 'Fast' }],
+    }
+    const units: SiteTranslationUnits = {
+      's.f2.item.0.title': { text: 'Schnell', srcHash: translationSourceHash('Fast') },
+    }
+    const out = applySiteTranslations({ sections: [features] }, units)
+    assert.equal((out.sections[0] as FeaturesSection).items[0].title, 'Schnell')
   })
 })

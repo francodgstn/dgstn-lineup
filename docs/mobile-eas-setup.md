@@ -8,6 +8,17 @@ browser are at hand — none of that exists in a cloud session. Scope is
 **staging only**: nothing here touches `linyup-prod`, the stores, or
 `eas submit`.
 
+> **EXECUTED 2026-09-03 — do not run steps 2 and 5 again.** The EAS project
+> `@francodagostino/linyup` (`f941b285-002a-4bdb-8c42-8c3e5edfab66`) exists and
+> is the default in `app.config.js`; `eas init` here would create a SECOND
+> project, and the account owns exactly one. `EXPO_TOKEN` is set (robot user
+> `linyup-eas-robot`), the key is in both channels for `development` and
+> `preview`, and both halves of the lane are proven on `main` — a finished
+> `preview` APK plus EAS updates on the `staging` branch at a matching runtime
+> version. What is left is the Apple/Google work in "Out of scope" below, plus
+> the prod key. Read on for HOW it was done and the corrections it earned; run
+> it again only against a different Expo account.
+
 Paste this into a local session to run it:
 
 > Read `docs/mobile-eas-setup.md` and execute it for staging, step by step.
@@ -23,9 +34,12 @@ Paste this into a local session to run it:
   APK / iOS internal, channel `staging`, EAS environment `preview`) and `store`
   (channel `production`, EAS environment `production`). Both non-prod profiles
   pin `FIREBASE_PROJECT_ID=linyup-staging` in `env` — that value is a plain
-  literal, which is fine for a project id and is exactly why the **API key must
-  NOT go there** (`eas.json` does not interpolate `${…}`; a `"${FIREBASE_API_KEY}"`
-  string would be baked into the app as-is).
+  literal. **CORRECTED 2026-09-03:** this file used to say the API key must NOT
+  go there. That was wrong and it cost the first run on `main`. The real rule is
+  narrower — never write `"${FIREBASE_API_KEY}"`, because `eas.json` does not
+  interpolate `${…}` and bakes in that literal string. The VALUE belongs there,
+  because it is the only thing in scope when `eas build` evaluates
+  `app.config.js` locally. See step 5.
 - `apps/mobile/app.config.js` reads `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`
   and `EAS_PROJECT_ID` from the environment and **refuses a real project
   without a key** at config time (a clear error, not a runtime
@@ -121,10 +135,25 @@ pnpm dev:mobile            # Metro; open in Expo Go or a dev client, sign in wit
 
 ### 5. EAS environment variables — the API key for builds
 
-The key must reach EAS builds through **EAS environment variables**, one per
-environment the profiles name. It is public config, so `plaintext` visibility
-is correct (a `secret` would hide it from `expo config` on the builder, which
-needs to read it):
+The key must reach **two** places. They look redundant and are not — they serve
+different commands, and the setup is broken if either is missing.
+
+**a. `eas.json`'s `env` block**, per non-prod profile, as a literal value.
+This is the only thing in scope when `eas build` evaluates `app.config.js`
+**on your machine**, before it uploads anything: eas-cli sets
+`EXPO_NO_DOTENV=1` there, so no `.env` applies, and server-side variables are
+not resolved yet. Since `app.config.js` refuses a real project without a key,
+omitting this makes every `eas build` die in about a second — and die
+*silently*: `expo config --json` exits 1 with empty stderr, and
+`expo-github-action` surfaces only "failed with exit code 1". Nothing names
+the cause. (Verified by probe: the config sees exactly `EXPO_NO_DOTENV` and
+`FIREBASE_PROJECT_ID` during that read.)
+
+**b. EAS environment variables**, one per environment the profiles name.
+These reach the BUILDER, and they are what `eas update --environment`
+resolves — so the OTA half of the lane needs them even though the build half
+does not. Public config, so `plaintext` visibility is correct (a `secret`
+would hide it from `expo config` on the builder, which needs to read it):
 
 ```bash
 cd apps/mobile
@@ -135,8 +164,9 @@ done
 npx eas-cli env:list --environment preview       # FIREBASE_API_KEY present
 ```
 
-Do **not** create the `production` one here — that is the prod key and a
-separate, deliberate step.
+Do **not** create the `production` one here, and do not add a key to the
+`store` profile's `env` — that is the prod key and a separate, deliberate
+step. Both halves are owed before the release lane can build.
 
 ### 6. The CI token — `EXPO_TOKEN`
 
@@ -165,11 +195,19 @@ npx eas-cli build --profile preview --platform android    # accept "generate a n
 ```
 
 Install the resulting APK (the build page shows a QR code / link) and sign in
-with the review login. What to check on the device: the sign-in lands on the
-profile; the studio look applies (the review studio has no preset, so it stays
-Linyup purple — a studio with `ink` + a warm accent is the visual test);
-`Settings → Member app` in the operator console with a minimum version above
-`1.0.0` shows the update-required screen on the next foreground.
+with the review login. What to check on the device:
+
+- ~~sign-in lands on the profile~~ — **VERIFIED 2026-09-03** on build
+  `0e3f3ee6` (preview, v1.0.0/versionCode 2, channel `staging`). The backend
+  half was verified separately by calling `sendContactVerificationCode` and
+  `loginContactWithCode` against staging with `client: 'mobile'`, which is the
+  flag that trips the member-app access gate — so a failure after this point is
+  the app, not staging or the review account.
+- **still open:** the studio look applies. The review studio has no preset, so
+  Linyup purple proves nothing — sign into a seeded tier studio (`ink` + a warm
+  accent) to see the app re-theme.
+- **still open:** `Settings → Member app` in the operator console with a minimum
+  version above `1.0.0` shows the update-required screen on the next foreground.
 
 ### 8. Prove the lane
 
@@ -201,6 +239,10 @@ Add the project id and the account slug to `docs/mobile-roadmap-2026-09.md` §7
 `.claude/skills/mobile-release/SKILL.md` → "Secrets and where they live".
 
 ## Out of scope here, on purpose
+
+All of the below is now the subject of its own runbook —
+**`docs/mobile-store-setup.md`** — which sequences it around the 14-day
+Play closed-testing clock.
 
 Production key and `production` EAS environment; App Store Connect record,
 `ascAppId`, ASC API key; Play service account and the first manual AAB upload;

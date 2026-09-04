@@ -20,6 +20,12 @@ export function ReviewAccessCard({ status }: { status: ReviewAccessStatus }) {
   const [code, setCode] = useState('')
   const [days, setDays] = useState(30)
   const [note, setNote] = useState(status.note ?? '')
+  // The addresses this code opens. Seeded from what is stored, so opening the
+  // page and pressing Enable re-saves what was already true rather than
+  // silently narrowing the list to the reviewer.
+  const [selected, setSelected] = useState<string[]>(
+    status.addresses.length > 0 ? status.addresses : status.email ? [status.email] : []
+  )
   const [busy, setBusy] = useState<'enable' | 'disable' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -30,7 +36,11 @@ export function ReviewAccessCard({ status }: { status: ReviewAccessStatus }) {
     setBusy('enable')
     try {
       const fn = httpsCallable(functions, 'setReviewAccess')
-      await fn({ enabled: true, email, code, days, note })
+      // The reviewer's own address is always included: it is the one the store
+      // actually needs, and an operator narrowing the tester list should not be
+      // able to lock out a review by accident.
+      const emails = [...new Set([email.toLowerCase().trim(), ...selected])].filter(Boolean)
+      await fn({ enabled: true, email, emails, code, days, note })
       setCode('')
       setDone('Review login enabled.')
       router.refresh()
@@ -66,8 +76,19 @@ export function ReviewAccessCard({ status }: { status: ReviewAccessStatus }) {
           <span className="text-muted-foreground">Never configured.</span>
         ) : live ? (
           <span className="text-amber-700">
-            <strong>Active</strong> for {status.email} until{' '}
-            {status.expiresMs ? new Date(status.expiresMs).toLocaleString() : 'unknown'}
+            <strong>Active</strong> for{' '}
+            {status.addresses.length > 1 ? (
+              // The count IS the blast radius. One code opens every address on
+              // the document, so showing only the reviewer's would understate
+              // what disabling this actually revokes.
+              <>
+                {status.addresses.length} addresses ({status.email} + {status.addresses.length - 1}{' '}
+                tester logins)
+              </>
+            ) : (
+              status.email
+            )}{' '}
+            until {status.expiresMs ? new Date(status.expiresMs).toLocaleString() : 'unknown'}
             {status.updatedBy ? ` · set by ${status.updatedBy}` : ''}
           </span>
         ) : (
@@ -76,6 +97,72 @@ export function ReviewAccessCard({ status }: { status: ReviewAccessStatus }) {
           </span>
         )}
       </div>
+
+      {status.candidates.length > 1 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Addresses this code opens ({selected.length})
+            </span>
+            <div className="flex gap-3 text-xs">
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => setSelected(status.candidates.map((c) => c.email))}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => setSelected(status.email ? [status.email] : [])}
+              >
+                Reviewer only
+              </button>
+            </div>
+          </div>
+          {/* Only contacts of the demo tenant appear here, and the callable
+              refuses anything else — so a fixed code can never be opened on an
+              address that has no contact behind it, or on a real mailbox. */}
+          <div className="max-h-56 overflow-y-auto rounded-md border">
+            {status.candidates.map((c) => {
+              const isReviewer = c.email === status.email
+              const checked = isReviewer || selected.includes(c.email)
+              return (
+                <label
+                  key={c.email}
+                  className="flex items-center gap-2.5 border-b px-3 py-1.5 text-sm last:border-b-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={isReviewer}
+                    onChange={(e) =>
+                      setSelected((prev) =>
+                        e.target.checked
+                          ? [...new Set([...prev, c.email])]
+                          : prev.filter((x) => x !== c.email)
+                      )
+                    }
+                  />
+                  <span className="font-mono text-xs">{c.email}</span>
+                  <span className="truncate text-muted-foreground">{c.name}</span>
+                  {isReviewer && (
+                    <span className="ml-auto shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      reviewer
+                    </span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            One code opens every ticked address. Disabling revokes all of them at once.
+            Addresses come from the demo tenant&rsquo;s contacts &mdash; run
+            <code className="mx-1">pnpm provision:demo</code> to add more.
+          </p>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       {done && <p className="text-sm text-green-700">{done}</p>}

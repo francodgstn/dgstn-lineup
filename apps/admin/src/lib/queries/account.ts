@@ -125,6 +125,9 @@ export interface AccountDetail {
   orgId: string | null
   subscription: SubscriptionView | null
   contactUsage: ContactUsage | null
+  /** How many of this tenant's members actually opened something. Null for orgs,
+   *  which hold no contacts of their own. */
+  appUsage: AppUsage | null
   members: MemberRow[]
   activity: ActivityRow[]
   payments: PaymentsView | null
@@ -140,6 +143,27 @@ export interface AccountDetail {
   internal: boolean
   compedReason: string | null
   compedSinceMs: number | null
+}
+
+/**
+ * ACTIVE MEMBERS — the only engagement figure the platform can answer honestly.
+ *
+ * `Contact.last_seen_at` is stamped when the member app comes to the foreground
+ * (apps/mobile) and when a public contact session is established on the web
+ * (PublicContactAuthProvider). So this counts members who OPENED something, not
+ * members who did anything — which is the question a studio owner actually asks
+ * first, and the only one this field can support without inventing a metric.
+ *
+ * Three windows rather than a series: a trend line wants a rollup, and three
+ * `count()` aggregations answer "is anyone using this" for the price of three
+ * cheap reads on an index that already exists (contacts: teamId + last_seen_at).
+ */
+export interface AppUsage {
+  activeToday: number
+  activeWeek: number
+  activeMonth: number
+  /** Non-provisional contacts — the population the three counts sit against. */
+  members: number
 }
 
 /** Connect account state + aggregated member→studio payment totals for a team. */
@@ -245,9 +269,37 @@ function toSubscriptionView(sub: SaasSubscription): SubscriptionView {
   }
 }
 
+/** Active-since counts for the three windows, in the order AppUsage reads them.
+ *  Today starts at local midnight rather than 24h back: an operator comparing
+ *  this with a studio's own day means the calendar day, not a rolling window. */
+function activeSinceQueries(teamId: string) {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const DAY = 24 * 60 * 60 * 1000
+  return [startOfToday, new Date(Date.now() - 7 * DAY), new Date(Date.now() - 30 * DAY)].map(
+    (since) =>
+      adminDb
+        .collection(CONTACTS_COLLECTION)
+        .where('teamId', '==', teamId)
+        .where('last_seen_at', '>=', since)
+        .count()
+        .get()
+  )
+}
+
 async function getTeamDetail(id: string): Promise<AccountDetail | null> {
   const teamRef = adminDb.collection(TEAMS_COLLECTION).doc(id)
-  const [teamDoc, subDoc, membersSnap, activitySnap, contactAgg, provisionalAgg] = await Promise.all([
+  const [
+    teamDoc,
+    subDoc,
+    membersSnap,
+    activitySnap,
+    contactAgg,
+    provisionalAgg,
+    activeTodayAgg,
+    activeWeekAgg,
+    activeMonthAgg,
+  ] = await Promise.all([
     teamRef.get(),
     adminDb.collection(SAAS_SUBSCRIPTIONS_COLLECTION).doc(id).get(),
     teamRef.collection(TEAM_MEMBERS_SUBCOLLECTION).get(),
@@ -265,6 +317,7 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
       .where('provisional', '==', true)
       .count()
       .get(),
+    ...activeSinceQueries(id),
   ])
 
   if (!teamDoc.exists) return null
@@ -307,6 +360,12 @@ async function getTeamDetail(id: string): Promise<AccountDetail | null> {
       plan,
       Math.max(0, contactAgg.data().count - provisionalAgg.data().count)
     ),
+    appUsage: {
+      activeToday: activeTodayAgg.data().count,
+      activeWeek: activeWeekAgg.data().count,
+      activeMonth: activeMonthAgg.data().count,
+      members: Math.max(0, contactAgg.data().count - provisionalAgg.data().count),
+    },
     members,
     activity,
     payments,
@@ -350,6 +409,8 @@ async function getOrgDetail(id: string): Promise<AccountDetail | null> {
     orgId: null,
     subscription: sub ? toSubscriptionView(sub) : null,
     contactUsage: null,
+    // Orgs hold no contacts of their own — the members are on the studios below.
+    appUsage: null,
     members,
     activity: [],
     payments: null,

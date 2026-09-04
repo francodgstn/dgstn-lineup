@@ -113,6 +113,12 @@ The one-time staging setup (project, key, token, first build) is a runbook
 for a local session: `docs/mobile-eas-setup.md`. Run 2026-09-03 — the EAS
 project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
 
+**The staging half is COMPLETE and both halves of the lane are proven on
+`main`**: the project, the `EXPO_TOKEN` robot (`linyup-eas-robot`), the key
+in both channels, a finished `preview` APK, and EAS updates landing on the
+`staging` branch at a runtime version that APK matches. What remains is all
+Apple/Google (see the roadmap §7), plus the prod key.
+
 - `EXPO_TOKEN` — GitHub repository secret (the CI's EAS identity).
 - `EAS_PROJECT_ID` — the project id is now the DEFAULT in `app.config.js`
   (`extra.eas.projectId` + `updates.url` are live, so OTA is armed). The env
@@ -120,12 +126,21 @@ project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
   back to the default (which is why the config uses `||`, not `??` — the
   `.env.*` templates ship `EAS_PROJECT_ID=`).
 - First Play submission is manual: Google requires the very first AAB to be
-  uploaded by hand before `eas submit` can target a track.
-- `FIREBASE_API_KEY` per environment — **EAS environment variables**, never
-  `eas.json` `env` (which is a literal string, not interpolated). `development`
-  and `preview` carry the staging key (`plaintext`, so the builder's
-  `expo config` can read it); `production` is still EMPTY, so the release lane
-  cannot build until the prod key is added.
+  uploaded by hand before `eas submit` can target a track. The whole store
+  path — both consoles, the credentials, and the 14-day Play closed-testing
+  clock that gates going public — is `docs/mobile-store-setup.md`.
+- `FIREBASE_API_KEY` — **both** `eas.json`'s `env` block per profile **and**
+  an EAS environment variable per environment. Not redundancy: the `env`
+  block is the only thing in scope when `eas build` evaluates app.config.js
+  LOCALLY (eas-cli sets `EXPO_NO_DOTENV=1` there), while the EAS environment
+  variable is what the builder gets and what `eas update --environment`
+  resolves for the OTA path. `development` and `preview` carry the staging key
+  in both. The `store` profile TEMPORARILY carries the STAGING key too, so the
+  Play closed test could start before the prod key was decided — the release
+  lane refuses a `mobile-v*` tag while its `FIREBASE_PROJECT_ID` is anything but
+  `linyup-prod`, so this cannot ship by accident. The `production` EAS
+  environment still carries nothing. Write the literal value —
+  `"${FIREBASE_API_KEY}"` is not interpolated and gets baked in as that string.
 - Apple ASC API key, Play service-account JSON — stored on EAS
   (`credentialsSource: remote`).
 
@@ -133,8 +148,50 @@ project is `@francodagostino/linyup`, `f941b285-002a-4bdb-8c42-8c3e5edfab66`.
 
 - `"${FIREBASE_API_KEY}"` in `eas.json` bakes the literal into the app: auth
   fails at runtime, build succeeds.
+- The opposite trap, which cost the first green run on main: NO key in
+  `eas.json` `env` at all. `eas build` evaluates app.config.js locally before
+  upload, the config's own guard throws, `expo config --json` exits 1 with
+  EMPTY stderr, and expo-github-action reports only "failed with exit code
+  1". Nothing anywhere names the cause. An EAS environment variable does not
+  cover this — it is not in scope for that local read.
+- **A green lane does not mean a green build.** The action starts builds with
+  `--no-wait`, so the job goes green the moment the build is QUEUED. The first
+  run after the key fix reported success while its build failed four minutes
+  later, and nothing in GitHub ever says so — the commit comment carries a
+  link, not an outcome. After any lane run that STARTS a build (rather than
+  publishing an update), check EAS: `eas build:list --platform android
+  --limit 3`, or `--json` for the `error` field, which is the only place the
+  reason appears.
+- Gradle failures on EAS can be transient. Two builds of the SAME fingerprint
+  errored with `EAS_BUILD_UNKNOWN_GRADLE_ERROR` and a third finished, same
+  native inputs. Identical fingerprint + different outcome = infrastructure,
+  not code; re-run before investigating.
 - A stale `packages/shared/dist` on the EAS builder: `eas-build-post-install`
   builds shared; if that script is removed, Metro fails to resolve
   `@linyup/shared`.
 - `expo config` throws on an unknown `FIREBASE_PROJECT_ID` — every profile's
   env must name a project the `environments` map in `app.config.js` knows.
+- **A CONFIG EDIT COSTS A REBUILD, and the scoping you wrote it with does not
+  survive.** Both config files are hashed WHOLE, so a change aimed at one
+  platform or one profile invalidates every fingerprint. Two mechanisms, both
+  measured on 2026-09-03, both of which look like bugs until you know:
+
+  | Edit | Hashed as | What actually happens |
+  |---|---|---|
+  | `app.config.js` | one `expoConfig` source, no platform filter | an `ios.*` field rebuilds ANDROID — the Android fingerprint's config blob contains `ios.supportsTablet` |
+  | `eas.json` | one `easBuild` file source, no profile filter | a `store`-only `env` change rebuilds `preview` |
+
+  The lane then finds no build matching the new fingerprint and BUILDS instead
+  of publishing an update. Expected, not a fault.
+
+  **So batch config changes.** Three separate config commits on 2026-09-03
+  produced three Android builds back to back, and because EAS runs them on a
+  queue they serialised — the third (the one actually wanted) started last. Each
+  merge also strands the previously installed APK: OTA updates only reach a
+  build whose fingerprint matches, so a tester on the older APK silently stops
+  receiving them. One commit, one rebuild, one reinstall.
+
+  `fingerprint.config.js` already skips the two parts that would otherwise churn
+  on EVERY push (`extra` and the version fields). What is left genuinely
+  describes the native project, so there is nothing further to skip — the answer
+  is fewer config commits, not more `sourceSkips`.

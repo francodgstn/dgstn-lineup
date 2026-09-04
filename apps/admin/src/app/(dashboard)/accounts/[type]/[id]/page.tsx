@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { getAccount } from '@/lib/queries/account'
 import type { AccountType } from '@/lib/queries/accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 import { getMessagingInfo, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
+import { describeFirebaseTarget } from '@/lib/firebase-admin'
 import { CompCard } from './comp-card'
 import { InternalCard } from './internal-card'
 import { ConnectToggle } from './connect-toggle'
@@ -23,6 +24,18 @@ import { DisconnectConnect } from './disconnect-connect'
 import { MessagingPolicyCard } from './messaging-policy-card'
 
 export const dynamic = 'force-dynamic'
+
+/** A count with its share of the member base. The share is what makes the count
+ *  mean anything: 12 active is a triumph at 20 members and a problem at 400. */
+function UsageFigure({ n, of }: { n: number; of: number }) {
+  const pct = of > 0 ? Math.round((n / of) * 100) : null
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-lg font-semibold tabular-nums">{n}</span>
+      {pct !== null && <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>}
+    </span>
+  )
+}
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -59,7 +72,20 @@ export default async function AccountDetailPage({
 
   const sub = account.subscription
   const usage = account.contactUsage
+  const appUsage = account.appUsage
   const messaging = await getMessagingInfo(account.id)
+
+  // The tenant's own front door. `/public/{slug}` is the team root and renders
+  // whatever surface the studio chose as its default, so this is the page a
+  // member or prospect actually lands on — the fastest way for an operator to
+  // see a tenant as the world sees it. Teams only: org slugs do not resolve
+  // there (the public route matches `type == 'team'`), and a link that 404s is
+  // worse than no link.
+  const target = describeFirebaseTarget()
+  const publicUrl =
+    account.type === 'team' && account.slug && target.publicBaseUrl
+      ? `${target.publicBaseUrl}/public/${account.slug}`
+      : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -75,7 +101,44 @@ export default async function AccountDetailPage({
         <PlanBadge plan={account.plan} />
         <StatusBadge status={account.status} />
         <span className="text-sm text-muted-foreground capitalize">· {account.type}</span>
+        {publicUrl && (
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={publicUrl}
+          >
+            <ExternalLink className="size-3.5" />
+            <span className="font-mono text-xs">/{account.slug}</span>
+          </a>
+        )}
       </div>
+
+      {/* ACTIVE MEMBERS. `last_seen_at` is stamped when the member app comes to
+          the foreground and when a contact session is established on the web, so
+          this counts members who OPENED something — not members who did
+          anything. Said plainly under the figures, because an engagement number
+          whose definition is a guess is worse than no engagement number. */}
+      {appUsage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Member app &amp; Space usage</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Field label="Active today" value={<UsageFigure n={appUsage.activeToday} of={appUsage.members} />} />
+              <Field label="Active 7 days" value={<UsageFigure n={appUsage.activeWeek} of={appUsage.members} />} />
+              <Field label="Active 30 days" value={<UsageFigure n={appUsage.activeMonth} of={appUsage.members} />} />
+              <Field label="Members" value={<span className="tabular-nums">{appUsage.members}</span>} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Counts contacts who opened the member app or signed into the public Space.
+              Not a measure of what they did there.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Studio → Linyup: the platform subscription the studio pays Linyup. */}
