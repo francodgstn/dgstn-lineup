@@ -49,9 +49,12 @@
  */
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
+import { format } from 'date-fns'
+import { updateTeamLeaderboard } from '../utils/leaderboard'
 import {
   TEAMS_COLLECTION,
   CONTACTS_COLLECTION,
+  PARTICIPANTS_SUBCOLLECTION,
   ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -127,7 +130,13 @@ export interface ProvisionResult {
   slug: string
   reviewContactId: string
   reviewEmail: string
-  counts: { activities: number; sessions: number; contacts: number; bookings: number }
+  counts: {
+    activities: number
+    sessions: number
+    contacts: number
+    bookings: number
+    attended: number
+  }
 }
 
 /**
@@ -278,6 +287,7 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
 
   let sessionCount = 0
   let bookingCount = 0
+  let attendedCount = 0
   const start = new Date(nowMs)
   start.setHours(0, 0, 0, 0)
 
@@ -304,8 +314,47 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
         location: 'Main studio',
         archived_at: null,
         created_at: FieldValue.serverTimestamp(),
+        // REQUIRED, and the reason this tenant used to open on an empty app:
+        // `syncSessionPublicProfile` publishes a class session ONLY when
+        // `allowBooking === true`, and the member app reads upcoming sessions
+        // from those public_profile mirrors and nowhere else. Without this the
+        // sessions exist, the bookings exist, and the app shows "No upcoming
+        // sessions scheduled" — which is what a store reviewer would have seen.
+        allowBooking: true,
       })
       sessionCount++
+
+      // PAST sessions get attendance, so the app opens on a history rather than
+      // on empty states: the training calendar counts sessions, the streak and
+      // month score have something to compute from, and the team leaderboard has
+      // rows. Scoring reads the `participants` subcollection — `bookings` alone
+      // leaves all of it at zero.
+      if (offset < 0) {
+        const attendees = CONTACTS.slice(0, 4)
+        for (const c of attendees) {
+          await db
+            .collection(SESSIONS_COLLECTION)
+            .doc(sessionId)
+            .collection(PARTICIPANTS_SUBCOLLECTION)
+            .doc(c.id)
+            .set({
+              contactId: c.id,
+              session: sessionId,
+              firstname: c.firstname,
+              lastname: c.lastname,
+              fullname: `${c.lastname} ${c.firstname}`,
+              joinedAt: Timestamp.fromDate(startsAt),
+              checkedInAt: Timestamp.fromDate(startsAt),
+              checkedInBy: 'demo-tenant',
+            })
+        }
+        attendedCount += attendees.length
+        // ABSOLUTE, like bookings_count below — written once, known not accumulated.
+        await db
+          .collection(SESSIONS_COLLECTION)
+          .doc(sessionId)
+          .set({ participants_count: attendees.length }, { merge: true })
+      }
 
       // Give the reviewer a booking on the next few upcoming sessions, so their
       // own screens are not empty the moment they sign in.
@@ -331,6 +380,33 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
     }
   }
 
+  // ── 6. Gamification state ─────────────────────────────────────────────────
+  // Derived fields written directly, the way the environment seeders already do
+  // (scripts/seed-staging.ts). The scoring triggers fire on session edits and on
+  // the recalculateScores callable, neither of which runs during provisioning —
+  // so without this the app shows NO RANK and an empty leaderboard even though
+  // the attendance above is real. The numbers are shaped so the reviewer sits
+  // mid-table rather than first: a leaderboard with one name is not a leaderboard.
+  const SCORES: Record<string, { score: number; streak: number }> = {
+    [DEMO_REVIEW_CONTACT_ID]: { score: 48, streak: 3 },
+    [`${DEMO_TEAM_ID}-c2`]: { score: 72, streak: 6 },
+    [`${DEMO_TEAM_ID}-c3`]: { score: 55, streak: 4 },
+    [`${DEMO_TEAM_ID}-c4`]: { score: 31, streak: 2 },
+  }
+  for (const [contactId, v] of Object.entries(SCORES)) {
+    await db.collection(CONTACTS_COLLECTION).doc(contactId).set(
+      { current_month_score: v.score, current_streak: v.streak, max_streak: v.streak },
+      { merge: true }
+    )
+  }
+
+  // The team leaderboard is a DENORMALISED doc (teams/{id}/leaderboard/current)
+  // and the app reads only that — writing per-contact scores fills the member's
+  // own cards but leaves the leaderboard empty. Rebuild it through its existing
+  // writer rather than hand-assembling the document here: it reads exactly the
+  // `current_month_score > 0` contacts just written.
+  await updateTeamLeaderboard(DEMO_TEAM_ID, format(new Date(nowMs), 'yyyy-MM'))
+
   return {
     teamId: DEMO_TEAM_ID,
     slug: DEMO_SLUG,
@@ -341,6 +417,7 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
       sessions: sessionCount,
       contacts: CONTACTS.length,
       bookings: bookingCount,
+      attended: attendedCount,
     },
   }
 }
