@@ -51,10 +51,12 @@ import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
 import { format } from 'date-fns'
 import { updateTeamLeaderboard } from '../utils/leaderboard'
+import { detectPerformanceProfile } from '@linyup/shared'
 import {
   TEAMS_COLLECTION,
   CONTACTS_COLLECTION,
   PARTICIPANTS_SUBCOLLECTION,
+  CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
   ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -406,6 +408,39 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
   // writer rather than hand-assembling the document here: it reads exactly the
   // `current_month_score > 0` contacts just written.
   await updateTeamLeaderboard(DEMO_TEAM_ID, format(new Date(nowMs), 'yyyy-MM'))
+
+  // ── 7. Performance check-ins ──────────────────────────────────────────────
+  // The radar on the TRAIN tab plots the latest check-in and the history chart
+  // needs more than one, so the reviewer gets three a fortnight apart. Scores
+  // improve over time and are deliberately UNEVEN — five equal axes draw a
+  // regular pentagon, which looks like a placeholder rather than a person.
+  // `detectPerformanceProfile` derives profile_key/primary_lever/anchor exactly
+  // as the app would; hardcoding them here would let this drift from the real
+  // heuristic silently.
+  const CHECKINS: Array<{ daysAgo: number; scores: Record<string, number> }> = [
+    { daysAgo: 28, scores: { consistency: 2, effort: 4, focus: 2, recharge: 3, sense_of_progress: 2 } },
+    { daysAgo: 14, scores: { consistency: 3, effort: 4, focus: 3, recharge: 3, sense_of_progress: 3 } },
+    { daysAgo: 2, scores: { consistency: 4, effort: 5, focus: 3, recharge: 4, sense_of_progress: 4 } },
+  ]
+  for (const ci of CHECKINS) {
+    const takenAt = new Date(nowMs - ci.daysAgo * DAY_MS)
+    const { profile_key, primary_lever, anchor } = detectPerformanceProfile(ci.scores)
+    await db
+      .collection(CONTACTS_COLLECTION)
+      .doc(DEMO_REVIEW_CONTACT_ID)
+      .collection(CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION)
+      .doc(`demo-checkin-${ci.daysAgo}`)
+      .set({
+        taken_at: Timestamp.fromDate(takenAt),
+        filled_by: 'student',
+        scores: ci.scores,
+        notes: null,
+        context: 'self',
+        profile_key,
+        primary_lever,
+        anchor,
+      })
+  }
 
   return {
     teamId: DEMO_TEAM_ID,
