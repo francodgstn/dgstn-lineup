@@ -4,10 +4,15 @@ import { Icon, Surface, Text, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Contact, GamificationBadgeThresholds, GamificationCoachBadge, RankingSystem } from '../../types';
 import { resolvePrimaryRank } from '../../utils/profileUtils';
+import { useTranslations } from '../../i18n';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+/** What `getBadgeGroups` needs from `useTranslations('Badges')` — a plain
+ *  function param since it is built outside the component. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 interface Badge {
   id: string;
@@ -20,6 +25,9 @@ interface Badge {
 }
 
 interface BadgeGroup {
+  /** Stable, locale-independent — used for collapse state and list keys so a
+   *  language switch never loses a group's expanded/collapsed state. */
+  id: string;
   title: string;
   icon: string;
   badges: Badge[];
@@ -54,12 +62,11 @@ const COACH_BADGE_GRADIENTS: Record<string, [string, string]> = {
 const DEFAULT_COACH_GRADIENT: [string, string] = ['#6366F1', '#4338CA'];
 const DEFAULT_COACH_ICON = 'star-circle';
 
-const DEFAULT_COACH_BADGES: GamificationCoachBadge[] = [
-  { key: 'tournament_ready', label: 'Tournament', icon: 'sword-cross', description: 'Ready for competition' },
-  { key: 'forms_expert', label: 'Forms Expert', icon: 'yin-yang', description: 'Excellence in traditional forms' },
-  { key: 'kick_pro', label: 'Kick Pro', icon: 'karate', description: 'Strong kicking technique' },
-  { key: 'flying_kick', label: 'Flying Kick', icon: 'rocket-launch', description: 'Achieved flying kicks' },
-];
+// No built-in coach badges: a tenant's ranks/badges are a configured feature,
+// never a hardcoded sport-specific set (CLAUDE.md — never a default badge set
+// or belt/kickboxing/dojo copy). Absent `coachBadges` just means this studio
+// hasn't configured any yet — the "Special" group falls back to `Explorer` /
+// `Iron Will` alone rather than inventing combat-sport badges for it.
 
 /**
  * Rank badges as PROPORTIONS of whatever scale the tenant configured.
@@ -77,6 +84,7 @@ const DEFAULT_COACH_BADGES: GamificationCoachBadge[] = [
 const RANK_BADGE_FRACTIONS = { intermediate: 0.2, advanced: 0.5, blackBelt: 0.75 } as const;
 
 const getBadgeGroups = (
+  t: Translate,
   contact: Contact,
   thresholds: GamificationBadgeThresholds,
   coachBadgeList: GamificationCoachBadge[],
@@ -112,14 +120,15 @@ const getBadgeGroups = (
   // shown five permanently-locked belt badges that meant nothing to it.
   if (resolved && levels.length > 1) {
     groups.push({
-      title: 'Rank',
+      id: 'rank',
+      title: t('groupRank'),
       icon: 'shield-outline',
       badges: [
-        { id: 'beginner', label: 'Beginner', description: 'Start your journey', icon: 'white-balance-sunny', gradient: ['#E0E0E0', '#BDBDBD'], earned: true },
-        { id: 'intermediate', label: 'Intermediate', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.intermediate)}`, icon: 'shield-half-full', gradient: ['#FF9A3C', '#FF6B1B'], earned: fraction >= RANK_BADGE_FRACTIONS.intermediate },
-        { id: 'advanced', label: 'Advanced', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.advanced)}`, icon: 'shield-star', gradient: ['#42A5F5', '#1565C0'], earned: fraction >= RANK_BADGE_FRACTIONS.advanced },
-        { id: 'expert', label: 'Expert', description: `Reach ${labelAt(RANK_BADGE_FRACTIONS.blackBelt)}`, icon: 'shield-star', gradient: ['#555555', '#1A1A1A'], earned: fraction >= RANK_BADGE_FRACTIONS.blackBelt },
-        { id: 'master', label: 'Master', description: `Reach ${levels[top]?.label ?? 'the highest grade'}`, icon: 'crown', gradient: ['#FFD700', '#F59E0B'], earned: position === top },
+        { id: 'beginner', label: t('beginner'), description: t('startJourney'), icon: 'white-balance-sunny', gradient: ['#E0E0E0', '#BDBDBD'], earned: true },
+        { id: 'intermediate', label: t('intermediate'), description: t('reachLevel', { level: labelAt(RANK_BADGE_FRACTIONS.intermediate) }), icon: 'shield-half-full', gradient: ['#FF9A3C', '#FF6B1B'], earned: fraction >= RANK_BADGE_FRACTIONS.intermediate },
+        { id: 'advanced', label: t('advanced'), description: t('reachLevel', { level: labelAt(RANK_BADGE_FRACTIONS.advanced) }), icon: 'shield-star', gradient: ['#42A5F5', '#1565C0'], earned: fraction >= RANK_BADGE_FRACTIONS.advanced },
+        { id: 'expert', label: t('expert'), description: t('reachLevel', { level: labelAt(RANK_BADGE_FRACTIONS.blackBelt) }), icon: 'shield-star', gradient: ['#555555', '#1A1A1A'], earned: fraction >= RANK_BADGE_FRACTIONS.blackBelt },
+        { id: 'master', label: t('master'), description: t('reachLevel', { level: levels[top]?.label ?? t('highestGrade') }), icon: 'crown', gradient: ['#FFD700', '#F59E0B'], earned: position === top },
       ],
     })
   }
@@ -127,23 +136,24 @@ const getBadgeGroups = (
   const attendanceBadges: Badge[] = [];
   if (a.enabled !== false) {
     attendanceBadges.push(
-      { id: 'first-class', label: 'First Class', description: `Attend ${a.first_class === 1 ? 'your first session' : `${a.first_class} sessions`}`, icon: 'shoe-sneaker', gradient: ['#34D399', '#059669'], earned: sessions >= a.first_class },
-      { id: 'dedicated', label: 'Dedicated', description: `Attend ${a.dedicated} sessions`, icon: 'dumbbell', gradient: ['#60A5FA', '#2563EB'], earned: sessions >= a.dedicated },
-      { id: 'committed', label: 'Committed', description: `Attend ${a.committed} sessions`, icon: 'arm-flex', gradient: ['#A78BFA', '#7C3AED'], earned: sessions >= a.committed },
-      { id: 'centurion', label: 'Centurion', description: `Attend ${a.centurion} sessions`, icon: 'medal', gradient: ['#FBBF24', '#D97706'], earned: sessions >= a.centurion },
-      { id: 'veteran', label: 'Veteran', description: `Attend ${a.veteran} sessions`, icon: 'trophy-award', gradient: ['#F97316', '#C2410C'], earned: sessions >= a.veteran },
+      { id: 'first-class', label: t('firstClass'), description: a.first_class === 1 ? t('attendFirstSession') : t('attendSessions', { count: a.first_class }), icon: 'shoe-sneaker', gradient: ['#34D399', '#059669'], earned: sessions >= a.first_class },
+      { id: 'dedicated', label: t('dedicated'), description: t('attendSessions', { count: a.dedicated }), icon: 'dumbbell', gradient: ['#60A5FA', '#2563EB'], earned: sessions >= a.dedicated },
+      { id: 'committed', label: t('committed'), description: t('attendSessions', { count: a.committed }), icon: 'arm-flex', gradient: ['#A78BFA', '#7C3AED'], earned: sessions >= a.committed },
+      { id: 'centurion', label: t('centurion'), description: t('attendSessions', { count: a.centurion }), icon: 'medal', gradient: ['#FBBF24', '#D97706'], earned: sessions >= a.centurion },
+      { id: 'veteran', label: t('veteran'), description: t('attendSessions', { count: a.veteran }), icon: 'trophy-award', gradient: ['#F97316', '#C2410C'], earned: sessions >= a.veteran },
     );
   }
   if (s.enabled !== false) {
     attendanceBadges.push(
-      { id: 'on-fire', label: 'On Fire', description: `Reach a ${s.on_fire}-week streak`, icon: 'fire', gradient: ['#F87171', '#DC2626'], earned: maxStreak >= s.on_fire },
-      { id: 'unstoppable', label: 'Unstoppable', description: `Reach a ${s.unstoppable}-week streak`, icon: 'lightning-bolt', gradient: ['#818CF8', '#4F46E5'], earned: maxStreak >= s.unstoppable },
-      { id: 'legendary', label: 'Legendary', description: `Reach a ${s.legendary}-week streak`, icon: 'star-shooting', gradient: ['#F472B6', '#BE185D'], earned: maxStreak >= s.legendary },
+      { id: 'on-fire', label: t('onFire'), description: t('reachStreak', { weeks: s.on_fire }), icon: 'fire', gradient: ['#F87171', '#DC2626'], earned: maxStreak >= s.on_fire },
+      { id: 'unstoppable', label: t('unstoppable'), description: t('reachStreak', { weeks: s.unstoppable }), icon: 'lightning-bolt', gradient: ['#818CF8', '#4F46E5'], earned: maxStreak >= s.unstoppable },
+      { id: 'legendary', label: t('legendary'), description: t('reachStreak', { weeks: s.legendary }), icon: 'star-shooting', gradient: ['#F472B6', '#BE185D'], earned: maxStreak >= s.legendary },
     );
   }
   if (attendanceBadges.length > 0) {
     groups.push({
-      title: 'Attendance & Streak',
+      id: 'attendance',
+      title: t('groupAttendanceStreak'),
       icon: 'calendar-check-outline',
       badges: attendanceBadges,
     });
@@ -152,21 +162,22 @@ const getBadgeGroups = (
   const scoreBadges: Badge[] = [];
   if (sc.enabled !== false) {
     scoreBadges.push(
-      { id: 'rising-star', label: 'Rising Star', description: `Score ${sc.rising_star}+ points in a month`, icon: 'star-outline', gradient: ['#60A5FA', '#2563EB'], earned: monthScore >= sc.rising_star },
-      { id: 'monthly-star', label: 'Monthly Star', description: `Score ${sc.monthly_star}+ points in a month`, icon: 'star-circle', gradient: ['#FBBF24', '#EA580C'], earned: monthScore >= sc.monthly_star },
-      { id: 'superstar', label: 'Superstar', description: `Score ${sc.superstar}+ points in a month`, icon: 'star-shooting', gradient: ['#F472B6', '#9333EA'], earned: monthScore >= sc.superstar },
+      { id: 'rising-star', label: t('risingStar'), description: t('scorePoints', { points: sc.rising_star }), icon: 'star-outline', gradient: ['#60A5FA', '#2563EB'], earned: monthScore >= sc.rising_star },
+      { id: 'monthly-star', label: t('monthlyStar'), description: t('scorePoints', { points: sc.monthly_star }), icon: 'star-circle', gradient: ['#FBBF24', '#EA580C'], earned: monthScore >= sc.monthly_star },
+      { id: 'superstar', label: t('superstar'), description: t('scorePoints', { points: sc.superstar }), icon: 'star-shooting', gradient: ['#F472B6', '#9333EA'], earned: monthScore >= sc.superstar },
     );
   }
   if (lb.enabled !== false) {
     scoreBadges.push(
-      { id: 'top-5', label: 'Top 5', description: `Finish in the top 5 ${lb.top5 === 1 ? 'once' : `${lb.top5} times`}`, icon: 'numeric-5-circle-outline', gradient: ['#60A5FA', '#2563EB'], earned: timesTop5 >= lb.top5 },
-      { id: 'leader', label: 'Leader', description: `Finish #1 ${lb.leader === 1 ? 'once' : `${lb.leader} times`}`, icon: 'trophy', gradient: ['#FBBF24', '#D97706'], earned: timesLeader >= lb.leader },
-      { id: 'hall-of-fame', label: 'Hall of Fame', description: `Finish in the top 5 ${lb.hall_of_fame}+ times`, icon: 'star-face', gradient: ['#F472B6', '#9333EA'], earned: timesTop5 >= lb.hall_of_fame },
+      { id: 'top-5', label: t('top5'), description: lb.top5 === 1 ? t('finishTop5Once') : t('finishTop5Times', { count: lb.top5 }), icon: 'numeric-5-circle-outline', gradient: ['#60A5FA', '#2563EB'], earned: timesTop5 >= lb.top5 },
+      { id: 'leader', label: t('leader'), description: lb.leader === 1 ? t('finishFirstOnce') : t('finishFirstTimes', { count: lb.leader }), icon: 'trophy', gradient: ['#FBBF24', '#D97706'], earned: timesLeader >= lb.leader },
+      { id: 'hall-of-fame', label: t('hallOfFame'), description: t('finishTop5PlusTimes', { count: lb.hall_of_fame }), icon: 'star-face', gradient: ['#F472B6', '#9333EA'], earned: timesTop5 >= lb.hall_of_fame },
     );
   }
   if (scoreBadges.length > 0) {
     groups.push({
-      title: 'Score & Leaderboard',
+      id: 'score',
+      title: t('groupScoreLeaderboard'),
       icon: 'podium',
       badges: scoreBadges,
     });
@@ -177,18 +188,19 @@ const getBadgeGroups = (
   const specialBadges: Badge[] = [];
   if (ex.enabled !== false) {
     specialBadges.push(
-      { id: 'explorer', label: 'Explorer', description: `Train in ${ex.explorer}+ different activities`, icon: 'compass-outline', gradient: ['#2DD4BF', '#0D9488'], earned: distinctActivities >= ex.explorer },
+      { id: 'explorer', label: t('explorer'), description: t('trainActivities', { count: ex.explorer }), icon: 'compass-outline', gradient: ['#2DD4BF', '#0D9488'], earned: distinctActivities >= ex.explorer },
     );
   }
   specialBadges.push(
-    { id: 'iron-will', label: 'Iron Will', description: 'Update your weight', icon: 'kettlebell', gradient: ['#78716C', '#44403C'], earned: weight > 10 },
+    { id: 'iron-will', label: t('ironWill'), description: t('updateWeight'), icon: 'kettlebell', gradient: ['#78716C', '#44403C'], earned: weight > 10 },
+    // cb.label / cb.description are the studio's own copy (Firestore), never translated here.
     ...coachBadgeList.map((cb) => {
       const rnIcon = cb.icon || DEFAULT_COACH_ICON;
       const gradient = COACH_BADGE_GRADIENTS[cb.key] || DEFAULT_COACH_GRADIENT;
       return {
         id: `coach-${cb.key}`,
         label: cb.label,
-        description: cb.description || 'Assigned by your coach',
+        description: cb.description || t('coachAssignedDefault'),
         icon: rnIcon,
         gradient,
         earned: customBadges.includes(cb.key),
@@ -198,7 +210,8 @@ const getBadgeGroups = (
   );
   if (specialBadges.length > 0) {
     groups.push({
-      title: 'Special',
+      id: 'special',
+      title: t('groupSpecial'),
       icon: 'creation',
       badges: specialBadges,
     });
@@ -209,6 +222,7 @@ const getBadgeGroups = (
 
 export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds, coachBadges, rankingSystems }) => {
   const theme = useTheme();
+  const t = useTranslations('Badges');
   const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
   const mergedThresholds = useMemo<GamificationBadgeThresholds>(() => ({
     attendance: { ...DEFAULT_THRESHOLDS.attendance, ...badgeThresholds?.attendance },
@@ -218,30 +232,30 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
     explorer: { ...DEFAULT_THRESHOLDS.explorer, ...badgeThresholds?.explorer },
   }), [badgeThresholds]);
 
-  const resolvedCoachBadges = coachBadges || DEFAULT_COACH_BADGES;
-  const groups = useMemo(() => getBadgeGroups(contact, mergedThresholds, resolvedCoachBadges, rankingSystems ?? []), [contact, mergedThresholds, resolvedCoachBadges, rankingSystems]);
+  const resolvedCoachBadges = coachBadges || [];
+  const groups = useMemo(() => getBadgeGroups(t, contact, mergedThresholds, resolvedCoachBadges, rankingSystems ?? []), [t, contact, mergedThresholds, resolvedCoachBadges, rankingSystems]);
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
-    new Set(getBadgeGroups(contact, {
+    new Set(getBadgeGroups(t, contact, {
       attendance: { ...DEFAULT_THRESHOLDS.attendance, ...badgeThresholds?.attendance },
       streak: { ...DEFAULT_THRESHOLDS.streak, ...badgeThresholds?.streak },
       score: { ...DEFAULT_THRESHOLDS.score, ...badgeThresholds?.score },
       leaderboard: { ...DEFAULT_THRESHOLDS.leaderboard, ...badgeThresholds?.leaderboard },
       explorer: { ...DEFAULT_THRESHOLDS.explorer, ...badgeThresholds?.explorer },
-    }, coachBadges || DEFAULT_COACH_BADGES, rankingSystems ?? []).map(g => g.title))
+    }, coachBadges || [], rankingSystems ?? []).map(g => g.id))
   );
   const allBadges = groups.flatMap(g => g.badges);
   const earnedCount = allBadges.filter(b => b.earned).length;
 
-  const toggleGroup = (title: string) => {
+  const toggleGroup = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCollapsedGroups(prev => {
       const next = new Set(prev);
-      if (next.has(title)) {
-        next.delete(title);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(title);
-        if (selectedBadge && groups.find(g => g.title === title)?.badges.some(b => b.id === selectedBadge.id)) {
+        next.add(id);
+        if (selectedBadge && groups.find(g => g.id === id)?.badges.some(b => b.id === selectedBadge.id)) {
           setSelectedBadge(null);
         }
       }
@@ -333,8 +347,8 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
     );
   };
 
-  const selectedGroupTitle = selectedBadge
-    ? groups.find(g => g.badges.some(b => b.id === selectedBadge.id))?.title ?? null
+  const selectedGroupId = selectedBadge
+    ? groups.find(g => g.badges.some(b => b.id === selectedBadge.id))?.id ?? null
     : null;
 
   return (
@@ -342,7 +356,7 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
       {/* Section heading — outside card */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 }}>
         <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
-          Achievements
+          {t('achievements')}
         </Text>
         <Surface style={[styles.countBadge, { backgroundColor: theme.colors.secondaryContainer }]} elevation={0}>
           <Text style={{ color: theme.colors.onSecondaryContainer, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
@@ -355,12 +369,12 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
       <View style={styles.content}>
 
         {groups.map((group, index) => {
-          const isCollapsed = collapsedGroups.has(group.title);
+          const isCollapsed = collapsedGroups.has(group.id);
           const groupEarned = group.badges.filter(b => b.earned).length;
 
           return (
-            <View key={group.title} style={index > 0 ? { marginTop: 14 } : undefined}>
-              <Pressable onPress={() => toggleGroup(group.title)} style={styles.groupHeader}>
+            <View key={group.id} style={index > 0 ? { marginTop: 14 } : undefined}>
+              <Pressable onPress={() => toggleGroup(group.id)} style={styles.groupHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                   <Icon source={group.icon} size={14} color={theme.colors.onSurfaceVariant} />
                   <Text style={[styles.groupTitle, { color: theme.colors.onSurfaceVariant }]}>
@@ -381,7 +395,7 @@ export const BadgesCard: React.FC<BadgesCardProps> = ({ contact, badgeThresholds
                   <View style={styles.grid}>
                     {group.badges.map(renderBadge)}
                   </View>
-                  {selectedGroupTitle === group.title && renderTooltip()}
+                  {selectedGroupId === group.id && renderTooltip()}
                 </>
               )}
             </View>

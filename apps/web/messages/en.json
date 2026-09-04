@@ -7809,7 +7809,11 @@
     "createStepDefaultTitle": "Work on {dimension}",
     "createStepSubmit": "Create task",
     "parentGoalNone": "General",
-    "goalFromDimension": "From {dimension}"
+    "goalFromDimension": "From {dimension}",
+    "collapseGoal": "Collapse goal",
+    "expandGoal": "Expand goal",
+    "startDateLabel": "Start: {date}",
+    "tasksCompletedLabel": "{done}/{total} tasks done"
   },
   "OrgUpsell": {
     "title": "Running more than one studio?",

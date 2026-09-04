@@ -21,6 +21,14 @@
  *      an agent that filled three locales by copy-paste. Reported, NOT failed:
  *      short strings ("OK", "Stripe", "E-Mail") legitimately match, so this one
  *      is advice, and pretending otherwise would make the whole check ignorable.
+ *
+ * TWO CATALOGUES, ONE SET OF RULES. `apps/mobile` keeps its own messages rather
+ * than sharing the web files: almost none of its copy is shared, and a phone
+ * has no reason to carry the structure of several thousand admin keys. What it
+ * DOES share is this checker — the member app shipped English-only for months
+ * precisely because nothing was watching it, and a second catalogue guarded by
+ * discipline alone would repeat that. A catalogue with no messages directory is
+ * skipped, so this stays correct if one is ever removed.
  */
 
 import { readFileSync, readdirSync, existsSync } from 'fs'
@@ -30,59 +38,77 @@ import { LOCALES, flatten, placeholderProblems } from './lib/icuMessages.mjs'
 import { checkUsedKeys } from './lib/usedKeys.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const MESSAGES = join(ROOT, 'apps/web/messages')
 
-// An UNMERGED fragment is the failure mode this whole scheme introduces: the
-// lane's components ship referencing keys that were never applied, so every
-// visitor sees the raw key id. Typecheck cannot catch it — there is no
-// IntlMessages augmentation, so message keys are untyped strings.
-const PENDING = join(MESSAGES, '_pending')
-const stranded = existsSync(PENDING) ? readdirSync(PENDING).filter((f) => f.endsWith('.json')) : []
-if (stranded.length) {
-  console.error(
-    `\n✗ ${stranded.length} unmerged message fragment(s): ${stranded.join(', ')}` +
-      `\n  Run: pnpm i18n:merge\n`
-  )
-  process.exit(1)
-}
+const CATALOGUES = [
+  { name: 'web', messages: join(ROOT, 'apps/web/messages'), src: join(ROOT, 'apps/web/src') },
+  { name: 'mobile', messages: join(ROOT, 'apps/mobile/messages'), src: join(ROOT, 'apps/mobile/src') },
+].filter((c) => existsSync(c.messages))
 
-// The NESTED tree, for check 3 — a dotted key has to be walked, not looked up
-// in the flattened map (a namespace can hold an object).
-const enMessages = JSON.parse(readFileSync(join(MESSAGES, 'en.json'), 'utf8'))
-
-const flat = Object.fromEntries(
-  LOCALES.map((l) => [l, flatten(JSON.parse(readFileSync(join(MESSAGES, `${l}.json`), 'utf8')))])
-)
-
+// One catalogue at a time, so a problem names the app it belongs to.
 const errors = []
-const enKeys = Object.keys(flat.en)
-
-for (const locale of LOCALES.slice(1)) {
-  for (const key of enKeys) {
-    if (!(key in flat[locale])) errors.push(`${key} — missing in ${locale}`)
-  }
-  for (const key of Object.keys(flat[locale])) {
-    if (!(key in flat.en)) errors.push(`${key} — present in ${locale} but not in en`)
-  }
-}
-
-for (const key of enKeys) {
-  for (const locale of LOCALES.slice(1)) {
-    if (!(key in flat[locale])) continue
-    const problem = placeholderProblems(key, flat.en[key], flat[locale][key], locale)
-    if (problem) errors.push(problem)
-  }
-}
-
-// ── 3. USED KEYS ────────────────────────────────────────────────────────────
-const used = checkUsedKeys(join(ROOT, 'apps/web/src'), enMessages, ROOT)
-for (const p of used.problems) errors.push(p)
-
-// Advisory only — see the header.
 const suspect = []
-for (const key of enKeys) {
-  const copies = LOCALES.slice(1).filter((l) => flat[l][key] === flat.en[key])
-  if (copies.length === 3 && flat.en[key].length > 30) suspect.push(`${key} — identical in all four`)
+const summary = []
+
+for (const cat of CATALOGUES) {
+  // An UNMERGED fragment is the failure mode the parallel-lane scheme
+  // introduces: the lane's components ship referencing keys that were never
+  // applied, so every visitor sees the raw key id. Typecheck cannot catch it —
+  // there is no IntlMessages augmentation, so message keys are untyped strings.
+  const pending = join(cat.messages, '_pending')
+  const stranded = existsSync(pending)
+    ? readdirSync(pending).filter((f) => f.endsWith('.json'))
+    : []
+  if (stranded.length) {
+    console.error(
+      `\n✗ ${cat.name}: ${stranded.length} unmerged message fragment(s): ${stranded.join(', ')}` +
+        `\n  Run: pnpm i18n:merge\n`
+    )
+    process.exit(1)
+  }
+
+  // The NESTED tree, for check 3 — a dotted key has to be walked, not looked up
+  // in the flattened map (a namespace can hold an object).
+  const enMessages = JSON.parse(readFileSync(join(cat.messages, 'en.json'), 'utf8'))
+  const flat = Object.fromEntries(
+    LOCALES.map((l) => [
+      l,
+      flatten(JSON.parse(readFileSync(join(cat.messages, `${l}.json`), 'utf8'))),
+    ])
+  )
+  const enKeys = Object.keys(flat.en)
+
+  // ── 1. PARITY ─────────────────────────────────────────────────────────────
+  for (const locale of LOCALES.slice(1)) {
+    for (const key of enKeys) {
+      if (!(key in flat[locale])) errors.push(`${cat.name}: ${key} — missing in ${locale}`)
+    }
+    for (const key of Object.keys(flat[locale])) {
+      if (!(key in flat.en)) errors.push(`${cat.name}: ${key} — present in ${locale} but not in en`)
+    }
+  }
+
+  // ── 2. PLACEHOLDERS ───────────────────────────────────────────────────────
+  for (const key of enKeys) {
+    for (const locale of LOCALES.slice(1)) {
+      if (!(key in flat[locale])) continue
+      const problem = placeholderProblems(key, flat.en[key], flat[locale][key], locale)
+      if (problem) errors.push(`${cat.name}: ${problem}`)
+    }
+  }
+
+  // ── 3. USED KEYS ──────────────────────────────────────────────────────────
+  const used = checkUsedKeys(cat.src, enMessages, ROOT)
+  for (const p of used.problems) errors.push(`${cat.name}: ${p}`)
+
+  // Advisory only — see the header.
+  for (const key of enKeys) {
+    const copies = LOCALES.slice(1).filter((l) => flat[l][key] === flat.en[key])
+    if (copies.length === 3 && flat.en[key].length > 30) {
+      suspect.push(`${cat.name}: ${key} — identical in all four`)
+    }
+  }
+
+  summary.push(`${cat.name}: ${enKeys.length} keys, ${used.checked} key use(s) resolve`)
 }
 
 if (errors.length) {
@@ -93,12 +119,9 @@ if (errors.length) {
   process.exit(1)
 }
 
-console.log(
-  `✓ ${enKeys.length} keys, four locales in parity, placeholders consistent; ` +
-    `${used.checked} key use(s) resolve`
-)
+console.log(`✓ four locales in parity, placeholders consistent — ${summary.join('; ')}`)
 if (suspect.length) {
   console.log(`\n  ${suspect.length} key(s) identical across all four locales — check if untranslated:`)
-  for (const s of suspect.slice(0, 15)) console.log(`    ? ${s}`)
+  for (const s2 of suspect.slice(0, 15)) console.log(`    ? ${s2}`)
   if (suspect.length > 15) console.log(`    … and ${suspect.length - 15} more`)
 }

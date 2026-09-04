@@ -11,6 +11,7 @@ import {
   resolvePrimaryRank,
 } from '../../utils/profileUtils';
 import { BeltBadge } from './BeltBadge';
+import { useTranslations } from '../../i18n';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -61,10 +62,12 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   onEditWeight,
   onSaveWeight,
   onCancelWeightEdit,
-  affiliationTerm = 'Affiliation',
+  affiliationTerm,
   rankingSystems,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Affiliation');
+  const resolvedAffiliationTerm = affiliationTerm ?? t('affiliationFallback');
   const chevronAnim = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
 
   useEffect(() => {
@@ -86,14 +89,14 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
   const rankInfo = resolvePrimaryRank(contact, rankingSystems);
 
   const age = calculateAge(contact.birthdate);
-  const genderLabel = formatGender(contact.gender);
+  const genderLabel = formatGender(t, contact.gender);
 
-  const rankTitle = rankInfo?.label ?? 'NO RANK';
+  const rankTitle = rankInfo?.label ?? t('noRank');
   const studentName = [contact.firstname, contact.lastname].filter(Boolean).join(' ').toUpperCase();
-  const rankSub = `MEMBER: ${studentName}`;
+  const rankSub = t('memberPrefix', { name: studentName });
   const affiliationSummary = contact.affiliation_summary;
   const statusColors = getAffiliationColors(affiliationSummary, theme.colors);
-  const affiliationLabel = getAffiliationLabel(affiliationSummary);
+  const affiliationLabel = getAffiliationLabel(t, affiliationSummary);
 
   const handleToggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -150,7 +153,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
                 {(teamProfile?.name ?? 'LINYUP').toUpperCase()}
               </Text>
               <Text variant="labelSmall" style={styles.orgSubLabel}>
-                {affiliationTerm.toUpperCase()} CARD
+                {t('cardLabel', { term: resolvedAffiliationTerm }).toUpperCase()}
               </Text>
             </View>
             <TouchableRipple onPress={onShowStatusModal} style={styles.statusBadgeContainer}>
@@ -193,13 +196,13 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
               <View style={styles.statValueRow}>
                 <TouchableRipple onPress={onShowGenderInfo} style={styles.statChip}>
                   <View style={styles.inlineStats}>
-                    <Text variant="titleSmall" style={styles.footerValue}>{genderLabel || 'F'}</Text>
+                    <Text variant="titleSmall" style={styles.footerValue}>{genderLabel || t('genderFallback')}</Text>
                     <Icon source="information-outline" size={14} color="#94A3B8" />
                   </View>
                 </TouchableRipple>
 
                 <Text variant="titleSmall" style={styles.statSeparator}>•</Text>
-                <Text variant="titleSmall" style={styles.footerValue}>{age || '??'} yrs</Text>
+                <Text variant="titleSmall" style={styles.footerValue}>{t('ageYears', { age: age || t('ageFallback') })}</Text>
                 <Text variant="titleSmall" style={styles.statSeparator}>•</Text>
 
                 {isEditingWeight ? (
@@ -219,7 +222,7 @@ export const AffiliationCard: React.FC<AffiliationCardProps> = ({
                   <TouchableRipple onPress={onEditWeight}>
                     <View style={styles.weightValueRow}>
                       <Text variant="titleSmall" style={styles.footerValue}>
-                        {contact.weight ? `${contact.weight} kg` : '?? kg'}
+                        {t('weightKg', { weight: contact.weight || t('weightFallback') })}
                       </Text>
                       <Icon source="pencil-outline" size={12} color="#94A3B8" />
                     </View>

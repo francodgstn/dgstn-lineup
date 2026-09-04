@@ -225,7 +225,14 @@ export default function PublicSite({ slug }: { slug: string }) {
       translatedSite?.meta.header.showSignIn === false
         ? undefined
         : isAuthenticated && contact
-          ? { label: tSpace('openSpace'), onClick: () => router.push(publicHref(slug, 'space')) }
+          ? {
+              label: tSpace('openSpace'),
+              // `from: 'site'` — the same stamp every other cross-surface link
+              // from this page carries. Without it PublicReturnBar falls back to
+              // the team's DEFAULT surface, so a member who opened her portal
+              // from the website was returned to the bio-link instead.
+              onClick: () => router.push(publicHref(slug, 'space', { from: 'site' })),
+            }
           : { label: tSpace('signIn'), onClick: () => openSignIn() },
     [translatedSite?.meta.header.showSignIn, isAuthenticated, contact, tSpace, router, slug, openSignIn]
   )

@@ -3,6 +3,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { Button, Text, useTheme } from 'react-native-paper';
 import { GradientBackground } from '../components/GradientBackground';
 import type { UpdateGate } from '../utils/minVersion';
+import { useTranslations } from '../i18n';
 
 /**
  * Shown INSTEAD of the app when the build is older than the platform's
@@ -12,18 +13,21 @@ import type { UpdateGate } from '../utils/minVersion';
  */
 export const UpdateRequiredScreen: React.FC<{ gate: UpdateGate }> = ({ gate }) => {
   const theme = useTheme();
+  const t = useTranslations('UpdateRequired');
   return (
     <GradientBackground>
       <View style={styles.container} testID="update-required">
         <Text variant="headlineMedium" style={styles.title}>
-          Update required
+          {t('title')}
         </Text>
         <Text variant="bodyMedium" style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>
-          {gate.message ?? 'This version of Linyup is no longer supported. Please update to keep using the app.'}
+          {/* gate.message, when present, is the operator's own copy
+              (app_settings/mobile.update_message) — never translated here. */}
+          {gate.message ?? t('fallbackMessage')}
         </Text>
         <Text variant="bodySmall" style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>
-          {gate.current ? `You have ${gate.current}; ` : ''}
-          {`version ${gate.minimum} or newer is required.`}
+          {gate.current ? t('youHavePrefix', { version: gate.current }) : ''}
+          {t('versionRequired', { minimum: gate.minimum })}
         </Text>
         {gate.storeUrl ? (
           <Button
@@ -31,7 +35,7 @@ export const UpdateRequiredScreen: React.FC<{ gate: UpdateGate }> = ({ gate }) =
             onPress={() => Linking.openURL(gate.storeUrl as string).catch(() => undefined)}
             style={styles.button}
           >
-            Open the store
+            {t('openStore')}
           </Button>
         ) : null}
       </View>

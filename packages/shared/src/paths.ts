@@ -158,6 +158,13 @@ export const CONTACT_PLAN_PURCHASES_SUBCOLLECTION = 'plan_purchases'
 export const SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION = 'subscription_transitions'
 // Affiliation set — a contact may hold several (club + federation licence + grading).
 export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'
+// Push-notification device registrations, doc id = the token itself. See
+// `PushToken` (types/push.ts) for why. Client writes are self-only
+// (contacts/{id}/push_tokens/{token}, isSelfContact — no staff/admin arm at
+// all); sendPush (packages/functions/src/push/) is the only Admin-SDK writer,
+// and it only ever DELETES a token the vendor reports dead. See the
+// firestore.rules match for the full reasoning.
+export const CONTACT_PUSH_TOKENS_SUBCOLLECTION = 'push_tokens'
 
 export const EVENTS_COLLECTION = 'events'
 export const EVENT_TYPES_SUBCOLLECTION = 'event_types'

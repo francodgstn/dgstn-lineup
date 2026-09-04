@@ -2,6 +2,8 @@
 
 import { useCallback } from 'react'
 import { useTranslations } from 'next-intl'
+import { parsePublicFrom } from '@linyup/shared'
+import { publicHref } from '@/lib/publicRoutes'
 import { Link, usePathname } from '@/i18n/navigation'
 import type { Route } from 'next'
 import { CircleUser, LogIn, LogOut } from 'lucide-react'
@@ -40,6 +42,18 @@ export function PublicContactSignIn() {
   return <SignInDialog open={signInOpen} onOpenChange={onSignInOpenChange} slug={slug} />
 }
 
+/** Surfaces this bar can sit on, longest-first so `appointments/cancel` is not
+ *  matched as `appointments`. Only surfaces a visitor can meaningfully return
+ *  to — the bar does not render on the others. */
+const PUBLIC_FROM_CANDIDATES = [
+  'appointments',
+  'documents',
+  'events',
+  'booking',
+  'signup',
+  'shop',
+]
+
 export function PublicContactBar() {
   const t = useTranslations('Space')
   const pathname = usePathname()
@@ -49,6 +63,15 @@ export function PublicContactBar() {
   // Precise segment match (so a slug like "spacegym" isn't mistaken for /space).
   const onSurface = (s: string) => pathname.endsWith(`/${s}`) || pathname.includes(`/${s}/`)
   if (onSurface('space') || onSurface('site') || onSurface('kiosk')) return null
+
+  // Stamp the surface the visitor is standing on, so the portal's return bar
+  // sends them BACK here rather than to the team's default surface. The bar
+  // never renders on /site (the website draws its own control, which stamps
+  // `from: 'site'` itself), so the tenant root resolves to the bio-link.
+  const currentSurface = parsePublicFrom(
+    PUBLIC_FROM_CANDIDATES.find((s) => onSurface(s))
+  ) ?? 'bio-link'
+  const spaceHref = publicHref(slug, 'space', { from: currentSurface })
   // A returning member's session is still being checked — show nothing rather
   // than a "Sign in" pill she is about to be told she does not need (UX-37).
   // Nothing, not a skeleton: this control floats over the page, and a pulsing
@@ -65,7 +88,7 @@ export function PublicContactBar() {
           >
             {/* Name links to the contact's personal Space (their portal home) */}
             <Link
-              href={`/public/${slug}/space` as Route}
+              href={spaceHref}
               title={t('openSpace')}
               className="flex min-w-0 items-center gap-1 transition-opacity hover:opacity-70"
             >

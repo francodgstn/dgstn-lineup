@@ -18,19 +18,25 @@ import { FirestoreService } from '../../services/firestore';
 import { Goal, GoalEvaluation, GoalStatus, PerformanceIndicator } from '../../types';
 import { dimensionLabel, goalCategoryLabel, groupGoalsWithSteps } from '../../utils/goalContract';
 import { Timestamp } from 'firebase/firestore';
+import { useTranslations } from '../../i18n';
 
 interface Props {
   contactId: string;
   teamId: string;
 }
 
+/** What the module-level helpers need from `useTranslations('Goals')`. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<GoalStatus, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  achieved: 'Achieved',
-  abandoned: 'Abandoned',
+const statusLabel = (t: Translate, status: GoalStatus): string => {
+  switch (status) {
+    case 'open': return t('statusOpen');
+    case 'in_progress': return t('statusInProgress');
+    case 'achieved': return t('statusAchieved');
+    case 'abandoned': return t('statusAbandoned');
+  }
 };
 
 const STATUS_COLORS: Record<GoalStatus, string> = {
@@ -94,6 +100,7 @@ interface EvaluationItemProps {
 
 const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   const date = eval_.evaluated_at.toDate();
   const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -114,7 +121,7 @@ const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {eval_.edited && (
             <Chip compact style={{ backgroundColor: theme.colors.surfaceVariant }} textStyle={{ fontSize: 9, color: theme.colors.onSurfaceVariant }}>
-              edited
+              {t('editedTag')}
             </Chip>
           )}
           <Chip
@@ -122,7 +129,7 @@ const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
             style={{ backgroundColor: eval_.evaluated_by === 'coach' ? '#7C3AED20' : '#3B82F620' }}
             textStyle={{ fontSize: 10 }}
           >
-            {eval_.evaluated_by === 'coach' ? 'Coach' : 'Self'}
+            {eval_.evaluated_by === 'coach' ? t('filledByCoach') : t('filledBySelf')}
           </Chip>
           {onEdit && (
             <TouchableRipple onPress={onEdit} borderless style={{ borderRadius: 12 }}>
@@ -132,7 +139,7 @@ const EvaluationItem: React.FC<EvaluationItemProps> = ({ eval_, onEdit }) => {
         </View>
       </View>
       <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-        {dateStr} · Status: {STATUS_LABELS[eval_.status_after]}
+        {t('dateStatusLine', { date: dateStr, status: statusLabel(t, eval_.status_after) })}
       </Text>
       {eval_.notes ? (
         <Text variant="bodySmall" style={{ color: theme.colors.onSurface, marginTop: 4 }}>
@@ -171,6 +178,7 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
   onSubmit,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   // Unset until the member actually taps a star — a default of 3 let a save
   // happen with zero interaction.
   const [score, setScore] = useState<number | null>(initialScore ?? null);
@@ -210,18 +218,18 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
         }}
       >
         <Text variant="titleMedium" style={{ fontWeight: '700' }}>
-          {initialScore !== undefined ? 'Edit Evaluation' : 'Add Evaluation'}
+          {initialScore !== undefined ? t('editEvaluationTitle') : t('addEvaluationTitle')}
         </Text>
 
         <View>
           <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-            Score
+            {t('scoreLabel')}
           </Text>
           <StarInput value={score ?? 0} onChange={setScore} />
         </View>
 
         <TextInput
-          label="Notes (optional)"
+          label={t('notesOptional')}
           value={notes}
           onChangeText={setNotes}
           multiline
@@ -233,7 +241,7 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
         {allowStatusChange ? (
           <View>
             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-              Status after
+              {t('statusAfterLabel')}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {ALL_STATUSES.map(s => (
@@ -244,21 +252,21 @@ const AddEvalModal: React.FC<EvalModalProps> = ({
                   style={statusAfter === s ? { backgroundColor: STATUS_COLORS[s] + '30' } : undefined}
                   textStyle={statusAfter === s ? { color: STATUS_COLORS[s], fontWeight: '700' } : undefined}
                 >
-                  {STATUS_LABELS[s]}
+                  {statusLabel(t, s)}
                 </Chip>
               ))}
             </View>
           </View>
         ) : (
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            Recorded against the goal&apos;s current status ({STATUS_LABELS[currentStatus]}) — your coach set this goal, so only they can move its status.
+            {t('recordedAgainstStatus', { status: statusLabel(t, currentStatus) })}
           </Text>
         )}
 
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-          <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
+          <Button onPress={onDismiss} disabled={submitting}>{t('cancel')}</Button>
           <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting || score === null}>
-            Save
+            {t('save')}
           </Button>
         </View>
       </Modal>
@@ -290,6 +298,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
   onSubmit,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   const isEditing = initialTitle !== undefined;
   const [title, setTitle] = useState(initialTitle ?? '');
   const [description, setDescription] = useState(initialDescription ?? '');
@@ -341,10 +350,10 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
           gap: 16,
         }}
       >
-        <Text variant="titleMedium" style={{ fontWeight: '700' }}>{isEditing ? 'Edit Goal' : 'Add Goal'}</Text>
+        <Text variant="titleMedium" style={{ fontWeight: '700' }}>{isEditing ? t('editGoalTitle') : t('addGoalTitle')}</Text>
 
         <TextInput
-          label="Title"
+          label={t('titleLabel')}
           value={title}
           onChangeText={setTitle}
           mode="outlined"
@@ -352,7 +361,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
         />
 
         <TextInput
-          label="Description (optional)"
+          label={t('descriptionOptional')}
           value={description}
           onChangeText={setDescription}
           multiline
@@ -363,7 +372,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
         <View>
           <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-            Categories
+            {t('categoriesLabel')}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {categoryOptions.map(cat => (
@@ -380,7 +389,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
 
         <View>
           <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-            Target date (optional)
+            {t('targetDateOptional')}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableRipple
@@ -395,7 +404,7 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
               }}
             >
               <Text variant="bodyMedium" style={{ color: formattedDate ? theme.colors.onSurface : theme.colors.onSurfaceVariant }}>
-                {formattedDate ?? 'Select a date…'}
+                {formattedDate ?? t('selectDate')}
               </Text>
             </TouchableRipple>
             {targetDate && (
@@ -418,20 +427,20 @@ const AddGoalModal: React.FC<AddGoalModalProps> = ({
           )}
           {Platform.OS === 'ios' && showDatePicker && (
             <Button compact onPress={() => setShowDatePicker(false)} style={{ alignSelf: 'flex-end' }}>
-              Done
+              {t('done')}
             </Button>
           )}
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-          <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
+          <Button onPress={onDismiss} disabled={submitting}>{t('cancel')}</Button>
           <Button
             mode="contained"
             onPress={handleSubmit}
             loading={submitting}
             disabled={submitting || !title.trim()}
           >
-            {isEditing ? 'Save' : 'Add Goal'}
+            {isEditing ? t('save') : t('addGoalTitle')}
           </Button>
         </View>
       </Modal>
@@ -452,6 +461,7 @@ interface TaskRowProps {
 
 const TaskRow: React.FC<TaskRowProps> = ({ task, contactId, onChanged, nested }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   const [toggling, setToggling] = useState(false);
   const isDone = task.status === 'achieved';
 
@@ -468,7 +478,7 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, contactId, onChanged, nested })
       onChanged();
     } catch (error) {
       console.error('Error toggling task:', error);
-      Alert.alert('Could not update task', 'Please try again in a moment.');
+      Alert.alert(t('taskUpdateFailedTitle'), t('taskUpdateFailedBody'));
     } finally {
       setToggling(false);
     }
@@ -516,7 +526,7 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, contactId, onChanged, nested })
         ) : null}
         {targetDateStr ? (
           <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-            Target: {targetDateStr}
+            {t('targetPrefix', { date: targetDateStr })}
           </Text>
         ) : null}
       </View>
@@ -540,6 +550,7 @@ interface GoalCardProps {
 
 const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOptions, dimensionOptions, onEvaluationAdded, onEditGoal, onDeleteGoal }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   const [expanded, setExpanded] = useState(false);
   const [evaluations, setEvaluations] = useState<GoalEvaluation[]>([]);
   const [loadingEvals, setLoadingEvals] = useState(false);
@@ -631,7 +642,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
             </View>
             {goal.created_by === 'coach' ? (
               <TouchableRipple
-                onPress={() => Alert.alert('Coach Goal', 'This goal was set by your coach and cannot be edited or deleted.')}
+                onPress={() => Alert.alert(t('coachGoalTitle'), t('coachGoalBody'))}
                 borderless
                 style={{ borderRadius: 16, padding: 4 }}
               >
@@ -668,7 +679,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
               style={{ backgroundColor: statusColor + '20', height: 24 }}
               textStyle={{ color: statusColor, fontSize: 11, fontWeight: '700', marginVertical: 0 }}
             >
-              {STATUS_LABELS[goal.status]}
+              {statusLabel(t, goal.status)}
             </Chip>
             {(goal.categories ?? []).map(cat => (
               <Chip
@@ -689,7 +700,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
                 style={{ backgroundColor: 'transparent', height: 24 }}
                 textStyle={{ fontSize: 11, marginVertical: 0, color: theme.colors.onSurfaceVariant }}
               >
-                {`From: ${dimensionLabel(goal.from_dimension, dimensionOptions)}`}
+                {t('fromPrefix', { dimension: dimensionLabel(goal.from_dimension, dimensionOptions) })}
               </Chip>
             ) : null}
             {goal.target_date ? (
@@ -698,7 +709,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
                 style={{ backgroundColor: theme.colors.surfaceVariant, height: 24 }}
                 textStyle={{ fontSize: 11, marginVertical: 0 }}
               >
-                {`Target: ${formatGoalDate(goal.target_date)}`}
+                {t('targetPrefix', { date: formatGoalDate(goal.target_date) })}
               </Chip>
             ) : null}
           </View>
@@ -716,7 +727,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
           <TouchableRipple onPress={handleExpand} borderless style={{ borderRadius: 8, marginTop: 8, alignSelf: 'flex-end' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2, paddingHorizontal: 4 }}>
               <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {expanded ? 'Hide' : 'Evaluations'}
+                {expanded ? t('hide') : t('evaluationsLabel')}
               </Text>
               <Icon
                 source={expanded ? 'chevron-up' : 'chevron-down'}
@@ -742,7 +753,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
               <ActivityIndicator size="small" style={{ marginVertical: 8 }} />
             ) : evaluations.length === 0 ? (
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-                No evaluations yet.
+                {t('noEvaluationsYet')}
               </Text>
             ) : (
               evaluations.map(ev => (
@@ -762,7 +773,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
                 style={{ alignSelf: 'flex-start', marginTop: 4 }}
                 compact
               >
-                Add Evaluation
+                {t('addEvaluationTitle')}
               </Button>
             )}
           </View>
@@ -795,6 +806,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, steps, contactId, categoryOpt
 
 export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
+  const t = useTranslations('Goals');
   const [goals, setGoals] = useState<Goal[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<PerformanceIndicator[]>([]);
   const [dimensionOptions, setDimensionOptions] = useState<PerformanceIndicator[]>([]);
@@ -862,12 +874,12 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
 
   const handleDeleteGoal = (goal: Goal) => {
     Alert.alert(
-      'Delete Goal',
-      `Are you sure you want to delete "${goal.title}"?`,
+      t('deleteGoalTitle'),
+      t('deleteGoalConfirm', { title: goal.title }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             await FirestoreService.deleteGoal(contactId, goal.id);
@@ -886,10 +898,10 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
       {/* Section heading — outside cards */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 }}>
         <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
-          Goals
+          {t('goalsHeading')}
         </Text>
         <Button mode="contained-tonal" icon="plus" compact onPress={() => setShowAddModal(true)}>
-          Add Goal
+          {t('addGoalTitle')}
         </Button>
       </View>
 
@@ -899,7 +911,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
         <View style={{ alignItems: 'center', paddingVertical: 24, gap: 8 }}>
           <Icon source="flag-outline" size={40} color={theme.colors.onSurfaceVariant} />
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-            No goals or tasks yet — your coach will add them here
+            {t('emptyStateNoGoals')}
           </Text>
         </View>
       ) : (
@@ -924,7 +936,7 @@ export const GoalsSection: React.FC<Props> = ({ contactId, teamId }) => {
                 variant="titleSmall"
                 style={{ fontWeight: '700', color: theme.colors.onSurfaceVariant, marginBottom: 8, paddingHorizontal: 4 }}
               >
-                General
+                {t('generalLabel')}
               </Text>
               {generalSteps.map(step => (
                 <TaskRow key={step.id} task={step} contactId={contactId} onChanged={loadGoals} />

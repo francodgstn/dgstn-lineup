@@ -94,6 +94,15 @@ A phone can be several store versions behind. Before merging a backend change:
 - Account deletion is in-app (Profile → Delete my account) — Apple 5.1.1(v).
 - Camera purpose string is explicit and the microphone permission is off
   (`expo-camera` plugin config in `app.config.js`).
+- **Push credentials must be uploaded BEFORE the first build carrying
+  `expo-notifications`.** The plugin is in `app.config.js` and the app registers
+  a token when permission is already granted (`src/push/registerPushToken.ts`) —
+  but delivery needs an FCM V1 service account (Android) and an APNs key (iOS)
+  in EAS (`eas credentials`), and neither lives in this repo. Ship without them
+  and the app happily stores tokens that can never be delivered to; you find out
+  the day someone wires the first send, not at build time. Nothing prompts and
+  nothing sends yet, so a build that goes out ahead of the credentials is not
+  broken — it is just not yet useful.
 - iPad screenshots are required while `ios.supportsTablet` is true.
 - Privacy policy must cover the app's users (studio contacts); Terms/DPA must
   not carry the DRAFT banner.

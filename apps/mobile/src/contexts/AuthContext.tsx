@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { registerPushTokenIfAllowed } from '../push/registerPushToken';
 import { onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { StorageService } from '../services/storage';
 import { FirestoreService } from '../services/firestore';
 import { Contact } from '../types';
+import { useTranslations } from '../i18n';
 
 /** A studio a matched contact belongs to, whose plan does not include the
  *  member app (loginContactWithCode's `appNotIncluded` result). */
@@ -55,10 +57,22 @@ function userMessage(error: unknown, fallback: string): string {
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const t = useTranslations('Auth');
   const [email, setEmail] = useState<string | null>(null);
   const [codeId, setCodeId] = useState<string | null>(null);
   const [verifiedCode, setVerifiedCode] = useState<string | null>(null);
   const [contact, setContact] = useState<Contact | null>(null);
+
+  // Push registration rides the session, not a screen: whichever way a member
+  // arrives — fresh sign-in or a restored session — this is the moment their
+  // contact and team are both known. It NEVER PROMPTS (see
+  // push/registerPushToken.ts) and never throws, so on a fresh install it is a
+  // no-op; it exists so the wiring ships in the same store build as the native
+  // module and the day we start asking is a JS change.
+  useEffect(() => {
+    if (!contact?.id || !contact.teamId) return;
+    void registerPushTokenIfAllowed(contact.id, contact.teamId);
+  }, [contact?.id, contact?.teamId]);
   const [matchedContacts, setMatchedContacts] = useState<Contact[] | null>(null);
   const [teamSummaries, setTeamSummaries] = useState<{ id: string; name: string }[] | null>(null);
   const [appNotIncludedTeams, setAppNotIncludedTeams] = useState<AppNotIncludedTeam[] | null>(null);
@@ -182,7 +196,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Error sending code:', error);
       return {
         success: false,
-        error: userMessage(error, 'Failed to send verification code'),
+        error: userMessage(error, t('sendCodeFailed')),
       };
     } finally {
       setIsLoading(false);
@@ -194,7 +208,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true);
 
       if (!codeId) {
-        return { success: false, error: 'No verification code ID found' };
+        return { success: false, error: t('noVerificationCodeId') };
       }
 
       const normalizedCode = code.trim();
@@ -205,7 +219,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (!result.verified) {
-        return { success: false, error: 'Invalid code' };
+        return { success: false, error: t('invalidCode') };
       }
 
       // Save stayLoggedIn preference
@@ -229,7 +243,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (result.requiresSignup) {
         return {
           success: false,
-          error: 'No membership found for this email. Ask your studio to add you as a contact.',
+          error: t('noMembershipFound'),
         };
       }
 
@@ -250,12 +264,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true };
       }
 
-      return { success: false, error: 'Could not sign in. Please try again.' };
+      return { success: false, error: t('couldNotSignIn') };
     } catch (error) {
       console.error('Error verifying code:', error);
       return {
         success: false,
-        error: userMessage(error, 'Failed to verify code'),
+        error: userMessage(error, t('verifyCodeFailed')),
       };
     } finally {
       setIsLoading(false);
@@ -290,7 +304,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { success: true };
         } else {
           console.error('[AuthContext] Failed to switch contact via existing session');
-          return { success: false, error: 'Failed to switch contact. Please try logging in again.' };
+          return { success: false, error: t('switchContactFailed') };
         }
       }
 
@@ -316,13 +330,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: true };
       } else {
         console.error('[AuthContext] Failed to finalize contact selection');
-        return { success: false, error: 'Failed to authenticate. Please try again.' };
+        return { success: false, error: t('authenticateFailed') };
       }
     } catch (error) {
       console.error('[AuthContext] Error selecting contact:', error);
       return {
         success: false,
-        error: userMessage(error, 'An unexpected error occurred. Please try again.'),
+        error: userMessage(error, t('unexpectedError')),
       };
     } finally {
       setIsLoading(false);

@@ -13,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslations } from '../i18n';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { GradientBackground } from '../components/GradientBackground';
@@ -23,6 +24,7 @@ type LoginStep = 'email' | 'code' | 'team-selection' | 'contact-selection';
 
 export const LoginScreen: React.FC = () => {
   const theme = useTheme();
+  const t = useTranslations('Login');
   const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -109,9 +111,9 @@ export const LoginScreen: React.FC = () => {
 
   const resolveTeamName = (teamId?: string | null) => {
     if (!teamId) {
-      return 'Team';
+      return t('defaultTeamName');
     }
-    return teamNameMap.get(teamId) || 'Team';
+    return teamNameMap.get(teamId) || t('defaultTeamName');
   };
 
   const teamOptions = useMemo(() => {
@@ -133,10 +135,10 @@ export const LoginScreen: React.FC = () => {
 
     return Array.from(counts.entries()).map(([id, count]) => ({
       id,
-      name: teamNameMap.get(id) || 'Team',
+      name: teamNameMap.get(id) || t('defaultTeamName'),
       contactCount: count
     }));
-  }, [matchedContacts, teamSummaries, teamNameMap]);
+  }, [matchedContacts, teamSummaries, teamNameMap, t]);
 
   const filteredContacts = useMemo(() => {
     if (!matchedContacts) {
@@ -167,7 +169,7 @@ export const LoginScreen: React.FC = () => {
 
   const handleVerifyCode = useCallback(async () => {
     if (!code.trim() || code.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit code');
+      Alert.alert(t('errorTitle'), t('invalidCodeMessage'));
       return;
     }
 
@@ -175,11 +177,11 @@ export const LoginScreen: React.FC = () => {
     if (result.success) {
       // AuthContext will automatically set contact and isAuthenticated
     } else {
-      Alert.alert('Error', result.error || 'Invalid code');
+      Alert.alert(t('errorTitle'), result.error || t('invalidCode'));
       setCode('');
       codeInputRef.current?.focus();
     }
-  }, [code, verifyCode, stayLoggedIn]);
+  }, [code, verifyCode, stayLoggedIn, t]);
 
   // Auto-submit when all 6 digits are entered
   useEffect(() => {
@@ -197,7 +199,7 @@ export const LoginScreen: React.FC = () => {
   // to it, instead of the cross-team lookup the first request has to make.
   const handleSendCode = async (teamId?: string) => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert(t('errorTitle'), t('enterEmail'));
       return;
     }
 
@@ -207,14 +209,14 @@ export const LoginScreen: React.FC = () => {
       setCode('');
       setSelectedTeamId(teamId ?? '');
     } else {
-      Alert.alert('Error', result.error || 'Failed to send verification code');
+      Alert.alert(t('errorTitle'), result.error || t('sendCodeFailed'));
     }
   };
 
   const handleSelectContact = async (contactId: string) => {
     const result = await selectContact(contactId, stayLoggedIn);
     if (!result.success) {
-      Alert.alert('Error', result.error || 'Failed to select contact');
+      Alert.alert(t('errorTitle'), result.error || t('selectContactFailed'));
     }
   };
 
@@ -249,7 +251,7 @@ export const LoginScreen: React.FC = () => {
           color={theme.colors.primary}
         />
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
-          Stay logged in
+          {t('stayLoggedIn')}
         </Text>
       </View>
     </TouchableRipple>
@@ -281,21 +283,21 @@ export const LoginScreen: React.FC = () => {
         >
           <ScrollView contentContainerStyle={styles.centeredContent}>
             {renderHeader(
-              'Not included in your plan',
+              t('notIncludedTitle'),
               appNotIncludedTeams.length === 1
-                ? `${appNotIncludedTeams[0].teamName ?? 'Your studio'} hasn't added the mobile app to their plan yet.`
-                : "These studios haven't added the mobile app to their plan yet."
+                ? t('notIncludedSingle', { team: appNotIncludedTeams[0].teamName ?? t('yourStudioFallback') })
+                : t('notIncludedMultiple')
             )}
 
             {appNotIncludedTeams.map((team) => (
               <Card key={team.teamId} style={styles.contactCard} mode="contained">
                 <Card.Content>
-                  <Text variant="titleMedium">{team.teamName ?? 'Studio'}</Text>
+                  <Text variant="titleMedium">{team.teamName ?? t('studioFallback')}</Text>
                   <Text
                     variant="bodySmall"
                     style={[styles.teamMeta, { color: theme.colors.onSurfaceVariant }]}
                   >
-                    Ask your studio about upgrading, or use their web member area instead.
+                    {t('askUpgrade')}
                   </Text>
                   {team.slug ? (
                     <Button
@@ -304,7 +306,7 @@ export const LoginScreen: React.FC = () => {
                       onPress={() => handleOpenSpace(team.slug)}
                       style={styles.inlineButton}
                     >
-                      Open web member area
+                      {t('openWebSpace')}
                     </Button>
                   ) : null}
                 </Card.Content>
@@ -312,7 +314,7 @@ export const LoginScreen: React.FC = () => {
             ))}
 
             <Button mode="text" onPress={handleBackFromAppNotIncluded}>
-              Back to sign in
+              {t('backToSignIn')}
             </Button>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -330,13 +332,14 @@ export const LoginScreen: React.FC = () => {
         <ScrollView contentContainerStyle={styles.centeredContent} keyboardShouldPersistTaps="handled">
           {/* No studio is known yet at this step (email entry precedes any
               team lookup), so this always reads "Linyup" — never HMD's old
-              hardcoded "Linyup Member". */}
-          {renderHeader('Linyup', 'Sign in with the email registered by your studio')}
+              hardcoded "Linyup Member". "Linyup" is the brand name, never
+              translated. */}
+          {renderHeader('Linyup', t('emailSubtitle'))}
 
           <TextInput
             mode="outlined"
-            label="Email Address"
-            placeholder="you@example.com"
+            label={t('emailLabel')}
+            placeholder={t('emailPlaceholder')}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -355,11 +358,11 @@ export const LoginScreen: React.FC = () => {
             loading={isLoading}
             testID="login-send"
           >
-            Send Code
+            {t('sendCode')}
           </Button>
 
           <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
-            Your email must be registered by your studio before you can sign in. If you don&apos;t have access, please contact your studio.
+            {t('emailHelp')}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -376,7 +379,7 @@ export const LoginScreen: React.FC = () => {
         style={styles.container}
       >
         <ScrollView contentContainerStyle={styles.centeredContent} keyboardShouldPersistTaps="handled">
-          {renderHeader('Verify Code', `Enter the 6-digit code sent to ${email}`)}
+          {renderHeader(t('verifyCodeTitle'), t('verifyCodeSubtitle', { email }))}
 
           <View
             style={styles.pinContainer}
@@ -425,7 +428,7 @@ export const LoginScreen: React.FC = () => {
               style={styles.primaryButton}
               loading
             >
-              Verifying
+              {t('verifying')}
             </Button>
           ) : (
             <Button
@@ -434,7 +437,7 @@ export const LoginScreen: React.FC = () => {
               disabled={code.length !== 6}
               style={styles.primaryButton}
             >
-              Verify Code
+              {t('verifyCodeButton')}
             </Button>
           )}
 
@@ -444,7 +447,7 @@ export const LoginScreen: React.FC = () => {
             disabled={isLoading}
             testID="login-resend"
           >
-            Send a new code
+            {t('sendNewCode')}
           </Button>
 
           <Button
@@ -452,11 +455,11 @@ export const LoginScreen: React.FC = () => {
             onPress={() => { setStep('email'); setCode(''); }}
             disabled={isLoading}
           >
-            Back to email
+            {t('backToEmail')}
           </Button>
 
           <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
-            Code expires in 15 minutes
+            {t('codeExpires')}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -473,8 +476,8 @@ export const LoginScreen: React.FC = () => {
       >
         <ScrollView contentContainerStyle={styles.content}>
           {renderHeader(
-            'Choose Team',
-            'Select the team associated with your email address.'
+            t('chooseTeamTitle'),
+            t('chooseTeamSubtitle')
           )}
 
           {teamOptions.length > 0 ? (
@@ -490,17 +493,16 @@ export const LoginScreen: React.FC = () => {
                   <Text variant="bodyMedium" style={[styles.teamMeta, { color: theme.colors.onSurfaceVariant }]}>
                     {team.contactCount > 0
                       ? team.contactCount === 1
-                        ? '1 contact available'
-                        : `${team.contactCount} contacts available`
-                      : 'No saved contacts yet'}
+                        ? t('contactAvailableOne')
+                        : t('contactsAvailable', { count: team.contactCount })
+                      : t('noSavedContacts')}
                   </Text>
                 </Card.Content>
               </Card>
             ))
           ) : (
             <HelperText type="info" visible>
-              No linked teams found for this email. Please contact support if you
-              believe this is an error.
+              {t('noLinkedTeams')}
             </HelperText>
           )}
 
@@ -509,7 +511,7 @@ export const LoginScreen: React.FC = () => {
             onPress={() => setStep('code')}
             disabled={isLoading}
           >
-            Back to code
+            {t('backToCode')}
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -526,10 +528,10 @@ export const LoginScreen: React.FC = () => {
         >
           <ScrollView contentContainerStyle={styles.content}>
             {renderHeader(
-              'Select Contact',
+              t('selectContactTitle'),
               multipleTeamsAvailable && selectedTeamId
-                ? `Contacts for ${resolveTeamName(selectedTeamId)}`
-                : 'Multiple contacts found with this email. Please select yours:'
+                ? t('contactsForTeam', { team: resolveTeamName(selectedTeamId) })
+                : t('multipleContactsFound')
             )}
 
             {multipleTeamsAvailable && (
@@ -539,7 +541,7 @@ export const LoginScreen: React.FC = () => {
                 style={styles.inlineButton}
                 disabled={isLoading}
               >
-                Change team
+                {t('changeTeam')}
               </Button>
             )}
 
@@ -571,13 +573,12 @@ export const LoginScreen: React.FC = () => {
               })
             ) : (
               <HelperText type="info" visible>
-                No contacts available for this team. Go back and choose a different team or
-                try another email.
+                {t('noContactsForTeam')}
               </HelperText>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
-        <LoadingOverlay visible={isLoading} message="Signing in..." />
+        <LoadingOverlay visible={isLoading} message={t('signingIn')} />
       </GradientBackground>
     );
   }

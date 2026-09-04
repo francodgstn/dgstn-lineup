@@ -1,5 +1,9 @@
 import { AffiliationSummary, ContactAddress, Contact, RankingSystem } from '../types';
 
+/** What a few helpers below need from `useTranslations(...)` — the caller's
+ *  own namespace (these are plain utilities with no namespace of their own). */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 /** What the badge needs to draw a level, whatever scale it came from. */
 export interface ResolvedRank {
   system: RankingSystem | null;
@@ -112,10 +116,10 @@ export const calculateAge = (birthdate: unknown): number | null => {
   return age >= 0 ? age : null;
 };
 
-export const formatGender = (gender?: string): string | null => {
+export const formatGender = (t: Translate, gender?: string): string | null => {
   if (!gender) return null;
-  if (gender === 'M') return 'M';
-  if (gender === 'F') return 'F';
+  if (gender === 'M') return t('genderM');
+  if (gender === 'F') return t('genderF');
   return gender;
 };
 
@@ -136,11 +140,14 @@ export const formatAddress = (address?: ContactAddress | null) => {
 
 // ── Affiliation helpers ──────────────────────────────────────────────────────
 
-/** Returns a short display label for the affiliation badge on the card. */
-export const getAffiliationLabel = (summary?: AffiliationSummary): string => {
-  if (!summary || !summary.has_active) return 'NOT AFFILIATED';
+/** Returns a short display label for the affiliation badge on the card. When
+ *  there is exactly one active type, its name is the studio's own affiliation
+ *  type identifier (Firestore-authored) and is never translated — only the
+ *  "not affiliated" / "affiliated (N)" states are app copy. */
+export const getAffiliationLabel = (t: Translate, summary?: AffiliationSummary): string => {
+  if (!summary || !summary.has_active) return t('notAffiliated').toUpperCase();
   if (summary.types.length === 1) return summary.types[0].replace(/_/g, ' ').toUpperCase();
-  return `AFFILIATED (${summary.types.length})`;
+  return t('affiliatedCount', { count: summary.types.length }).toUpperCase();
 };
 
 /** Returns badge background/text colors for the affiliation badge. */

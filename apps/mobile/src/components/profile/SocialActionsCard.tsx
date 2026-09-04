@@ -5,6 +5,7 @@ import { useAppTheme } from '../../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FirestoreService } from '../../services/firestore';
 import { ReferralInfo, TeamPublicProfile } from '../../types';
+import { useTranslations } from '../../i18n';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ export const SocialActionsCard: React.FC<SocialActionsCardProps> = ({
   rewardedCount,
 }) => {
   const theme = useAppTheme();
+  const t = useTranslations('Social');
   // Accent colours (small touches only — the card stays neutral): the referral
   // action in the studio's own colour, the third-party marks in theirs.
   const REFERRAL_COLOR = theme.colors.primary;
@@ -117,19 +119,19 @@ export const SocialActionsCard: React.FC<SocialActionsCardProps> = ({
             </View>
             <View style={styles.textBlock}>
               <Text variant="titleSmall" style={[styles.title, { color: theme.colors.onSurface }]}>
-                Invite a Friend
+                {t('inviteFriend')}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 {rewardedCount > 0
-                  ? `${rewardedCount} reward${rewardedCount > 1 ? 's' : ''} earned · Share again`
-                  : 'Share your link · Earn a reward'}
+                  ? (rewardedCount === 1 ? t('rewardsEarnedOne') : t('rewardsEarnedOther', { count: rewardedCount }))
+                  : t('shareToEarn')}
               </Text>
             </View>
             {shareLoading ? (
               <ActivityIndicator size={16} color={REFERRAL_COLOR} />
             ) : (
               <View style={[styles.chip, { borderColor: REFERRAL_COLOR }]}>
-                <Text variant="labelSmall" style={[styles.chipLabel, { color: REFERRAL_COLOR }]}>Share</Text>
+                <Text variant="labelSmall" style={[styles.chipLabel, { color: REFERRAL_COLOR }]}>{t('share')}</Text>
               </View>
             )}
           </View>
@@ -148,14 +150,14 @@ export const SocialActionsCard: React.FC<SocialActionsCardProps> = ({
             </View>
             <View style={styles.textBlock}>
               <Text variant="titleSmall" style={[styles.title, { color: theme.colors.onSurface }]}>
-                Follow Us on Instagram
+                {t('followInstagram')}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 {handle}
               </Text>
             </View>
             <View style={[styles.chip, { borderColor: IG_COLOR }]}>
-              <Text variant="labelSmall" style={[styles.chipLabel, { color: IG_COLOR }]}>Follow</Text>
+              <Text variant="labelSmall" style={[styles.chipLabel, { color: IG_COLOR }]}>{t('follow')}</Text>
             </View>
           </View>
         </TouchableRipple>
@@ -173,14 +175,14 @@ export const SocialActionsCard: React.FC<SocialActionsCardProps> = ({
             </View>
             <View style={styles.textBlock}>
               <Text variant="titleSmall" style={[styles.title, { color: theme.colors.onSurface }]}>
-                Leave Us a Review
+                {t('leaveReview')}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                Share your experience
+                {t('shareExperience')}
               </Text>
             </View>
             <View style={[styles.chip, { borderColor: REVIEW_COLOR }]}>
-              <Text variant="labelSmall" style={[styles.chipLabel, { color: REVIEW_COLOR }]}>Review</Text>
+              <Text variant="labelSmall" style={[styles.chipLabel, { color: REVIEW_COLOR }]}>{t('review')}</Text>
             </View>
           </View>
         </TouchableRipple>

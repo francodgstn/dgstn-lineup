@@ -47,9 +47,40 @@ describe('sortSteps', () => {
     assert.equal(ids(sortSteps(list, 'manual')), 'first,second,unplaced1,unplaced2')
   })
 
-  it('manual is a NO-OP until something is dragged — nothing carries an order', () => {
+  it('with nothing dragged AND identical timestamps, incoming order survives', () => {
     const list = [task('c'), task('a'), task('b')]
     assert.equal(ids(sortSteps(list, 'manual')), 'c,a,b')
+  })
+
+  // THE CASE THAT WAS WRONG IN PRODUCTION. `order` is written only by a drag,
+  // never on create, so every step of an untouched goal ties — and the surfaces
+  // all query `created_at desc`, so leaning on the stable sort rendered a
+  // sequence backwards for the overwhelmingly common case.
+  it('unplaced tasks read OLDEST-FIRST, not in the query order they arrived in', () => {
+    const list = [
+      task('register', { created_at: ts('2026-01-04T00:00:00Z') }),
+      task('cut', { created_at: ts('2026-01-03T00:00:00Z') }),
+      task('spar', { created_at: ts('2026-01-02T00:00:00Z') }),
+      task('drill', { created_at: ts('2026-01-01T00:00:00Z') }),
+    ]
+    assert.equal(ids(sortSteps(list, 'manual')), 'drill,spar,cut,register')
+  })
+
+  it('a drag still wins over the timestamp tie-break', () => {
+    const list = [
+      task('old-but-last', { order: 1, created_at: ts('2026-01-01T00:00:00Z') }),
+      task('new-but-first', { order: 0, created_at: ts('2026-01-09T00:00:00Z') }),
+    ]
+    assert.equal(ids(sortSteps(list, 'manual')), 'new-but-first,old-but-last')
+  })
+
+  it('date modes break their own ties by age too', () => {
+    const same = '2026-05-01T00:00:00Z'
+    const list = [
+      task('newer', { target_date: ts(same), created_at: ts('2026-01-05T00:00:00Z') }),
+      task('older', { target_date: ts(same), created_at: ts('2026-01-02T00:00:00Z') }),
+    ]
+    assert.equal(ids(sortSteps(list, 'target_date')), 'older,newer')
   })
 
   it('date modes sort ascending with the undated LAST, not first', () => {

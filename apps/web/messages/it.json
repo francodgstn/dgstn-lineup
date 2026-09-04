@@ -7809,7 +7809,11 @@
     "createStepDefaultTitle": "Lavora su {dimension}",
     "createStepSubmit": "Crea compito",
     "parentGoalNone": "Generale",
-    "goalFromDimension": "Da {dimension}"
+    "goalFromDimension": "Da {dimension}",
+    "collapseGoal": "Comprimi obiettivo",
+    "expandGoal": "Espandi obiettivo",
+    "startDateLabel": "Inizio: {date}",
+    "tasksCompletedLabel": "{done}/{total} attività completate"
   },
   "OrgUpsell": {
     "title": "Gestisci più di uno studio?",

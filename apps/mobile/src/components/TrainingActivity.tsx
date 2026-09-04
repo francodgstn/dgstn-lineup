@@ -3,6 +3,7 @@ import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Card, Text, useTheme, Icon } from 'react-native-paper';
 import { AttendanceCalendar } from './AttendanceCalendar';
 import { TrainingChart } from './TrainingChart';
+import { useTranslations } from '../i18n';
 
 interface TrainingActivityProps {
   contactId: string;
@@ -16,12 +17,13 @@ export const TrainingActivity: React.FC<TrainingActivityProps> = ({
   contact
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Training');
   const [activeTab, setActiveTab] = useState<'CALENDAR' | 'STATS'>('CALENDAR');
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text variant="titleLarge" style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Training Activity</Text>
+        <Text variant="titleLarge" style={[styles.headerTitle, { color: theme.colors.onSurface }]}>{t('trainingActivity')}</Text>
         <View style={[styles.tabContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
           <TouchableOpacity
             onPress={() => setActiveTab('CALENDAR')}
@@ -37,7 +39,7 @@ export const TrainingActivity: React.FC<TrainingActivityProps> = ({
             <Text style={[
               styles.tabText,
               { color: activeTab === 'CALENDAR' ? theme.colors.primary : theme.colors.onSurfaceVariant }
-            ]}>CALENDAR</Text>
+            ]}>{t('tabCalendar').toUpperCase()}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setActiveTab('STATS')}
@@ -53,7 +55,7 @@ export const TrainingActivity: React.FC<TrainingActivityProps> = ({
             <Text style={[
               styles.tabText,
               { color: activeTab === 'STATS' ? theme.colors.primary : theme.colors.onSurfaceVariant }
-            ]}>STATS</Text>
+            ]}>{t('tabStats').toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
       </View>

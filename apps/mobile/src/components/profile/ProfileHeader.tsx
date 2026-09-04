@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Avatar, Icon, IconButton, Menu, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { Contact } from '../../types';
 import { useWelcomeMessage } from '../../hooks/useWelcomeMessage';
+import { useTranslations } from '../../i18n';
 
 interface ProfileHeaderProps {
   contact: Contact;
@@ -20,6 +21,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onEditProfile,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Profile');
   const welcomeMessage = useWelcomeMessage();
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState({ x: 0, y: 0 });
@@ -90,12 +92,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <Menu.Item
           leadingIcon="qrcode-scan"
           onPress={() => { setMenuVisible(false); onScanTeamQR(); }}
-          title="Scan team QR"
+          title={t('scanTeamQr')}
         />
         <Menu.Item
           leadingIcon="qrcode"
           onPress={() => { setMenuVisible(false); onShowQR(); }}
-          title="Show my QR"
+          title={t('showMyQr')}
         />
       </Menu>
     </View>

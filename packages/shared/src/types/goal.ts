@@ -286,16 +286,27 @@ export type StepSortMode = 'manual' | 'start_date' | 'target_date'
  *
  * Unset sorts LAST in every mode: a task with no `order` has not been placed,
  * and a task with no date has not been scheduled — neither belongs at the top.
- * The sort is stable (ES2019), so ties keep the caller's incoming order, which
- * is the `created_at desc` every surface already queries. That is what makes
- * manual mode a no-op until somebody actually drags something.
+ *
+ * TIES BREAK ON `created_at` ASCENDING, and that is not a detail. `order` is
+ * written ONLY by a drag (GoalsTab's reorderSteps) and never on create, so
+ * until somebody drags something EVERY step of a goal ties at
+ * MAX_SAFE_INTEGER. Leaning on the stable sort there meant inheriting the
+ * caller's incoming order — the `created_at desc` every surface queries — and
+ * a goal's steps are a SEQUENCE ("drill the entry", "spar it", "register"),
+ * so the untouched, overwhelmingly common case rendered backwards on both the
+ * coach's tab and the member's portal. Oldest-first is the order they were
+ * written in, which is the order they are meant to be read in.
  */
 export function sortSteps(steps: Goal[], mode: StepSortMode = 'manual'): Goal[] {
   const key = (g: Goal): number => {
     if (mode === 'manual') return g.order ?? Number.MAX_SAFE_INTEGER
     return toMillis(mode === 'start_date' ? g.start_date : g.target_date) ?? Number.MAX_SAFE_INTEGER
   }
-  return [...steps].sort((a, b) => key(a) - key(b))
+  return [...steps].sort((a, b) => {
+    const byKey = key(a) - key(b)
+    if (byKey !== 0) return byKey
+    return (toMillis(a.created_at) ?? 0) - (toMillis(b.created_at) ?? 0)
+  })
 }
 
 /**

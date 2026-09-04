@@ -44,7 +44,7 @@
 
 import { useMemo } from 'react'
 import { useTranslations } from 'next-intl'
-import { Target } from 'lucide-react'
+import { Flag } from 'lucide-react'
 import {
   DEFAULT_COACHING_DIMENSIONS,
   dimensionLabel,
@@ -99,7 +99,7 @@ export default function CoachingHome() {
   return (
     <div className="mt-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Target className="h-4 w-4" style={{ color: accent }} />
+        <Flag className="h-4 w-4" style={{ color: accent }} />
         <h1 className="text-lg font-bold" style={{ color: textMain }}>
           {t('pageTitle')}
         </h1>

@@ -16,10 +16,12 @@
  * names the document and says where to sign, which is legible without being a
  * promise the app cannot keep.
  *
- * ── ENGLISH ONLY, ON PURPOSE ────────────────────────────────────────────────
- * `apps/mobile` has no i18n at all (no next-intl, no locale files). Inventing a
- * translation layer for four sentences would be a bigger change than the feature
- * and would sit unused; the web surfaces carry the four-language copy.
+ * ── TRANSLATED VIA THE `Waiver` NAMESPACE ───────────────────────────────────
+ * A pure module-level function can't call `useTranslations` itself, so the
+ * caller passes one bound to the `Waiver` namespace (`useTranslations('Waiver')`)
+ * — see the three call sites for the pattern. `title`, when the server sent
+ * one, is the studio's own document name (Firestore-authored) and is never
+ * translated; only the surrounding sentence is.
  *
  * ── TWO RAILS, TWO VERBS ────────────────────────────────────────────────────
  * The app refuses on two paths and they are not the same act: the QR scanner
@@ -49,12 +51,16 @@ interface CallableError {
   }
 }
 
+/** What `waiverRefusal` needs from `useTranslations('Waiver')`. */
+export type WaiverTranslate = (key: string, values?: Record<string, string | number>) => string;
+
 /**
  * Returns null when this is not a waiver refusal, so a call site reads
- * `waiverRefusal(err) ?? …its own handling…` and nothing about waivers leaks
+ * `waiverRefusal(t, err) ?? …its own handling…` and nothing about waivers leaks
  * into an unrelated branch.
  */
 export function waiverRefusal(
+  t: WaiverTranslate,
   err: unknown,
   context: WaiverRefusalContext = 'checkin'
 ): WaiverRefusal | null {
@@ -62,10 +68,11 @@ export function waiverRefusal(
   const reason = e?.details?.reason
   if (typeof reason !== 'string' || !reason.startsWith('waiver_')) return null
 
-  const title = e?.details?.title?.trim() || 'a document';
+  // The studio's own document name (Firestore-authored) — never translated.
+  const title = e?.details?.title?.trim() || t('documentFallback');
   const signUrl = typeof e?.details?.signUrl === 'string' ? e.details.signUrl : null;
-  const verb = context === 'booking' ? 'book' : 'check in';
-  const noun = context === 'booking' ? 'Booking' : 'Check-in';
+  const verb = context === 'booking' ? t('verbBooking') : t('verbCheckin');
+  const noun = context === 'booking' ? t('nounBooking') : t('nounCheckin');
 
   // Each sentence says what is true and what to do. `waiver_unavailable` is the
   // one that is NOT the member's to fix — telling somebody to sign a document
@@ -73,8 +80,10 @@ export function waiverRefusal(
   // its own arm and everything else falls through to "sign it, here is where".
   const message =
     reason === 'waiver_unavailable'
-      ? `${noun} is temporarily unavailable. Please ask the studio.`
-      : `${title} needs to be signed before you can ${verb}.${signUrl ? ' Open it now to sign.' : " Open your studio's page to sign it."}`;
+      ? t('temporarilyUnavailable', { noun })
+      : signUrl
+        ? t('needsSignatureOpenNow', { title, verb })
+        : t('needsSignatureOpenStudioPage', { title, verb });
 
   return { message, signUrl }
 }
