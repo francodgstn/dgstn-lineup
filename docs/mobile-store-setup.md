@@ -57,10 +57,18 @@ moment the first build is uploaded.
 - **The app runs on a real device and the review login works** — verified
   2026-09-03 on build `0e3f3ee6`, which is what the store reviewer will do
   first. Two device checks remain open; see `docs/mobile-eas-setup.md` step 7.
-- The app collects **no advertising ID, no third-party analytics, no location,
-  and sends no push notifications**. The only thing it writes back is
-  `last_seen_at` plus app/OTA version (`utils/mobileAppTelemetry.ts`). This
-  makes the Data safety and App Privacy answers short and honest.
+- The app collects **no advertising ID, no third-party analytics and no
+  location**. What it writes back is `last_seen_at` plus app/OTA version
+  (`utils/mobileAppTelemetry.ts`) and, since 2026-09-04, a **push device token**
+  when the member has notifications enabled. This keeps the Data safety and App
+  Privacy answers short, but no longer quite as short — see the table below.
+- **Push is present but ASLEEP** (`apps/mobile/src/push/registerPushToken.ts`).
+  It never calls `requestPermissionsAsync`, so no member sees a dialog and a
+  fresh install registers nothing; a token is stored only for someone who
+  enabled notifications in their OS settings. Declare it anyway. The capability
+  ships in the binary and switching it on later is an OTA by design — so a
+  declaration that waits for the first notification is a declaration that goes
+  stale with no store build to hang the correction on.
 
 ## Decisions to take before touching a console
 
@@ -116,6 +124,8 @@ and writes:
   function", and user-deletable.
 - Collected: **App activity** (bookings, attendance) and **App info and
   performance** (app version) for app functionality and support.
+- Collected: **Device or other IDs** — the push device token, stored at
+  `contacts/{id}/push_tokens/{token}`. Purpose: app functionality. Not shared.
 - Not collected: advertising ID, location, contacts, photos, messages,
   financial info (there is no checkout in the mobile app), health data.
 - Encrypted in transit: **yes**. Deletion request route: **yes**, with the URL

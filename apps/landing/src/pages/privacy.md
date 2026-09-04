@@ -2,7 +2,7 @@
 layout: ../layouts/LegalLayout.astro
 title: Privacy Policy
 description: How Linyup processes personal data for website visitors, customers, and members using the Linyup app.
-lastUpdated: 3 September 2026
+lastUpdated: 4 September 2026
 ---
 
 # 2. Privacy Policy (Datenschutzerklärung / Politique de confidentialité)
@@ -157,7 +157,16 @@ which version a problem happened on.
 
 **What the app does not do.** No advertising and no advertising identifier.
 No third-party analytics or tracking SDK. No tracking of you across other
-apps or websites. No location collection. No push notifications.
+apps or websites. No location collection.
+
+**Notifications.** The app can be reached by notifications about your
+bookings — but only if you have turned them on yourself. It never asks: on a
+new install notifications are off, and the app registers your device only when
+you have already enabled them in your phone's settings. When you have, we store
+a **device token** — an identifier your phone issues so a message can reach it —
+with the app version it registered under. It addresses a device, not you.
+Turning notifications off in your phone's settings stops them, and a token that
+has stopped working is deleted.
 
 **The camera** is used for exactly one thing: scanning your studio's check-in
 QR code. The permission is requested the first time you scan, the image is
