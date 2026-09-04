@@ -26,7 +26,17 @@ export interface DemoTenantStatus {
 export interface ReviewAccessStatus {
   configured: boolean
   enabled: boolean
+  /** The legacy single address — still the reviewer's, and still written. */
   email: string | null
+  /** EVERY address this one code opens. The console showed only `email` while
+   *  the document grew a list (closed-test testers get one each), so an operator
+   *  read the blast radius of a live auth bypass as one account when it was
+   *  twenty-one. */
+  addresses: string[]
+  /** Every contact of the demo tenant, as {email, name} — the menu an operator
+   *  picks from. The server refuses an address that is not on this list, so
+   *  offering anything else would only produce a rejected save. */
+  candidates: Array<{ email: string; name: string }>
   expiresMs: number | null
   expired: boolean
   note: string | null
@@ -70,12 +80,27 @@ export async function getDemoTenantStatus(): Promise<DemoTenantStatus> {
 }
 
 export async function getReviewAccessStatus(): Promise<ReviewAccessStatus> {
-  const snap = await adminDb.collection('app_settings').doc(REVIEW_ACCESS_DOC).get()
+  const [snap, contacts] = await Promise.all([
+    adminDb.collection('app_settings').doc(REVIEW_ACCESS_DOC).get(),
+    adminDb.collection('contacts').where('teamId', '==', DEMO_TEAM_ID).get(),
+  ])
+  const candidates = contacts.docs
+    .map((d) => {
+      const c = d.data()
+      return {
+        email: ((c.email as string) ?? '').toLowerCase().trim(),
+        name: [c.firstname, c.lastname].filter(Boolean).join(' ') || d.id,
+      }
+    })
+    .filter((c) => !!c.email)
+    .sort((a, b) => a.email.localeCompare(b.email))
   if (!snap.exists) {
     return {
       configured: false,
       enabled: false,
       email: null,
+      addresses: [],
+      candidates: [],
       expiresMs: null,
       expired: true,
       note: null,
@@ -89,10 +114,21 @@ export async function getReviewAccessStatus(): Promise<ReviewAccessStatus> {
     configured: true,
     enabled: d.enabled === true,
     email: (d.email as string) ?? null,
+    // Same union the server does (`reviewAccessAddresses`): legacy + list,
+    // normalised and de-duplicated, so the count here is the count that logs in.
+    addresses: [
+      ...new Set(
+        [d.email, ...(Array.isArray(d.emails) ? d.emails : [])]
+          .filter((e): e is string => typeof e === 'string')
+          .map((e) => e.toLowerCase().trim())
+          .filter(Boolean)
+      ),
+    ],
     expiresMs,
     expired: typeof expiresMs === 'number' ? expiresMs <= Date.now() : true,
     note: (d.note as string) ?? null,
     updatedBy: (d.updated_by as string) ?? null,
+    candidates,
     // The CODE is deliberately not read back — see getReviewAccess in
     // packages/functions/src/ops/index.ts.
   }

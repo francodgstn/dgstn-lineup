@@ -35,9 +35,11 @@ export default async function DemoTenantSettingsPage() {
           <CardTitle>App-store review login</CardTitle>
           <CardDescription>
             The contacts&rsquo; app signs in with an emailed six-digit code, which a reviewer cannot
-            receive. This gives ONE contact address a known code that is never mailed. It is a
-            deliberate bypass: it applies to a single address, expires on its own, and every use is
-            logged. Turn it off once the build is approved.
+            receive. This gives a short list of contact addresses ONE known code that is never
+            mailed &mdash; the reviewer, plus a login per closed-test tester so nobody has to share
+            the account the reviewer depends on. It is a deliberate bypass: the list is capped,
+            it expires on its own, and every use is logged. Disabling it revokes every address at
+            once. Turn it off once the build is approved.
           </CardDescription>
         </CardHeader>
         <CardContent>
