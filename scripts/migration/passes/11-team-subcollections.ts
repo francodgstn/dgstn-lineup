@@ -67,7 +67,26 @@ function transformSubcollectionDoc(
   // team_members: denormalize the capability-model fields (capabilities/scope)
   // from the migrated role so the granular-role rules gate consistently.
   if (sub === 'team_members') {
-    return { ...data, ...memberCapsFor(((data as { role?: string }).role ?? 'viewer') as MemberRole) }
+    const role = ((data as { role?: string }).role ?? 'viewer') as MemberRole
+    return {
+      ...data,
+      ...memberCapsFor(role),
+      // AN OWNER IS A COACH. In HMD every club is run by the person who teaches
+      // in it, so a migrated owner who is not on the coach roster cannot be
+      // picked as a session's instructor or assigned to a contact — which is
+      // most of what they do (Franco, 2026-09-05).
+      //
+      // Written EXPLICITLY rather than relying on the default. `is_coach` absent
+      // means coach, so this would usually be unnecessary — but the source
+      // document is spread in above, and whatever hmd-lineup happened to store
+      // under that key comes with it. Stating it is the only way the outcome
+      // does not depend on data this migration does not control.
+      //
+      // Owners only: a `viewer` or an office `manager` is deliberately left to
+      // the default, which the studio can still turn off per member in
+      // Settings → Team.
+      ...(role === 'owner' ? { is_coach: true } : {}),
+    }
   }
 
   // automation_rules: rename the one condition type confirmed to silently break

@@ -1325,7 +1325,6 @@
     "emptyPast": "Nessun evento passato.",
     "detail_back": "Programma",
     "detail_tabOverview": "Panoramica",
-    "detail_tabAttendees": "Partecipanti",
     "detail_tabInvitations": "Inviti",
     "detail_sendInvitations": "Invia inviti",
     "detail_resendAll": "Reinvia tutti",
@@ -1338,7 +1337,6 @@
     "detail_status_cancelled": "Annullato",
     "detail_fieldDescription": "Descrizione",
     "detail_noDescription": "Nessuna descrizione fornita.",
-    "detail_attendeesEmpty": "Ancora nessun partecipante.",
     "detail_invitationsEmpty": "Nessun invito ancora inviato.",
     "detail_invStatus_sent": "Inviato",
     "detail_invStatus_opened": "Aperto",
@@ -1367,7 +1365,9 @@
     "invitation_confirmedDeclined": "Nessun problema. Grazie per la risposta.",
     "invitation_fee": "Quota: {amount}",
     "invitation_free": "Gratuito",
-    "detail_tabProgram": "Programma"
+    "detail_tabProgram": "Programma",
+    "detail_tabRsvps": "RSVP",
+    "detail_rsvpsEmpty": "Nessuno ha ancora accettato."
   },
   "EventProgram": {
     "emptyTitle": "Nessun programma",
@@ -1479,7 +1479,7 @@
     "templateInherited": "Ereditato dalla tua organizzazione — sola lettura.",
     "duplicateEvent": "Duplica",
     "duplicateTitle": "Duplica questo evento",
-    "duplicateDescription": "Copia le impostazioni e tutto il programma. Partecipanti, inviti e check-in non vengono copiati e la copia resta privata.",
+    "duplicateDescription": "Copia le impostazioni e tutto il programma. RSVP, inviti e check-in non vengono copiati e la copia resta privata.",
     "duplicateNewTitle": "Titolo",
     "duplicateNewStart": "Nuova data di inizio",
     "duplicateSuffix": "{title} (copia)",

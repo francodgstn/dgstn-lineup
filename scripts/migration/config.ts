@@ -118,8 +118,16 @@ export function rankingSystemLevelValues(systemId: string): Set<number> | null {
   return values
 }
 
-export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
-export const EMULATOR_AUTH_HOST      = 'localhost:9099'
+// WHICH emulator `--target-emulator` means.
+//
+// Slot 0's ports by default, which is the main checkout — but a worktree runs
+// its own suite on slot N (every port + N x 10000, see .claude/skills/local-env),
+// and this used to be hardcoded, so `--target-emulator` from a worktree reported
+// the emulators as "not running" while its own suite sat there listening. Every
+// other script in this repo already honours these variables; `local-env env`
+// prints them.
+export const EMULATOR_FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080'
+export const EMULATOR_AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099'
 export const EMULATOR_PROJECT_ID     = 'demo-linyup'
 
 export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
