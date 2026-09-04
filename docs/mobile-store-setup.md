@@ -62,6 +62,14 @@ moment the first build is uploaded.
   (`utils/mobileAppTelemetry.ts`) and, since 2026-09-04, a **push device token**
   when the member has notifications enabled. This keeps the Data safety and App
   Privacy answers short, but no longer quite as short — see the table below.
+- **Android push is NOT wired, and is parked until after the store review**
+  (decided 2026-09-04). iOS is done — App ID capability, and an APNs key on EAS.
+  Android needs a Firebase Android app per project, `android.googleServicesFile`
+  in `app.config.js`, and an FCM V1 key on EAS. It is not a Play Console setting,
+  which is where people look for it. The asymmetry that matters: the APNs key is
+  server-side so iOS can be switched on with an OTA, while `google-services.json`
+  is baked into the binary — Android push needs a NEW STORE BUILD, so it has to
+  be wired before the build that ships, not after.
 - **Push is present but ASLEEP** (`apps/mobile/src/push/registerPushToken.ts`).
   It never calls `requestPermissionsAsync`, so no member sees a dialog and a
   fresh install registers nothing; a token is stored only for someone who
