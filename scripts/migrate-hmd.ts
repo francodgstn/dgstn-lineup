@@ -210,7 +210,7 @@ async function run() {
   if (!only || only === 'org-website')         await pass13OrgWebsite(cfg)
   if (!only || only === 'season-calendar')     await pass14SeasonCalendar(cfg)
 
-  if (!only || only === 'verify' || values['verify']) await verify(teamIds)
+  if (!only || only === 'verify' || values['verify']) await verify(teamIds, !!cfg.teams?.length)
 
   console.log('\nMigration complete.')
 }
