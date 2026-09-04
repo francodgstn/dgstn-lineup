@@ -6,11 +6,36 @@
 // GOAL is read-only here, matching what firestore.rules actually enforces
 // (see the module note in useSpaceGoals.ts). A STEP is different — see
 // StepRow, which lets a member tick a coach-created one done too.
+//
+// PARITY WITH THE ADMIN CARD (contacts/[id]/GoalsTab.tsx's `GoalCard`) — read
+// its header and `GoalProgressBar`'s first, the design reasoning is not
+// restated here:
+//
+//   • COLLAPSE is a second, independent fold from `expanded` (which opens the
+//     evaluations history below). Collapsing hides the categories/provenance/
+//     date chips, the score+last-evaluated+overdue chips, the step list and
+//     the evaluations panel — but NOT the header or the status pill, and NOT
+//     the step rail, because "what is this, what state is it in, how far
+//     along" is exactly what a folded card still has to answer.
+//   • ARCHIVED GOALS ARE NEVER HANDED TO THIS COMPONENT. useSpaceGoals.ts
+//     filters them out of the query result entirely (steps included) — a
+//     member cannot archive, and a goal her coach filed away is gone from her
+//     view too, not merely dimmed. The `goalIsArchived` check below is a
+//     defensive SECOND guard (a stale cache, a future caller), not the
+//     primary one; there is deliberately no "Archived" badge to build,
+//     because the primary answer is "she never sees it", a stronger version
+//     of "must not clutter the list" than the admin's opacity treatment.
+//   • ORDERING: the admin's tab owns a `StepSortMode` toggle the member has no
+//     equivalent control for. `GoalsSection` fixes it to `'manual'` (the
+//     admin's own default) before steps ever reach this component — see the
+//     comment there for why. This component never re-sorts `steps` itself,
+//     matching `sortSteps`'s own contract of being applied ONCE, by whoever
+//     owns the list.
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { ChevronDown, ChevronUp, Info, Pencil, Plus, Star, Trash2 } from 'lucide-react'
-import { dimensionLabel, goalCategoryLabel, goalIsOverdue } from '@linyup/shared'
+import { ChevronDown, ChevronRight, ChevronUp, Info, Pencil, Plus, Star, Trash2 } from 'lucide-react'
+import { dimensionLabel, goalCategoryLabel, goalIsArchived, goalIsOverdue } from '@linyup/shared'
 import type { Goal, GoalStatus, PerformanceIndicator } from '@linyup/shared'
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog'
 import { QueryErrorState } from '@/components/ui/query-error'
@@ -20,6 +45,7 @@ import { RatingStars } from './RatingStars'
 import { StepRow } from './StepRow'
 import { GoalFormDialog } from './GoalFormDialog'
 import { EvaluationFormDialog } from './EvaluationFormDialog'
+import { GoalProgressBar } from './GoalProgressBar'
 import { useAddGoalEvaluation, useGoalEvaluations } from './useSpaceGoals'
 import type { SpaceGoalsState } from './useSpaceGoals'
 import { Tip } from '@/components/ui/tip'
@@ -31,8 +57,52 @@ const STATUS_KEYS: Record<GoalStatus, string> = {
   abandoned: 'statusAbandoned',
 }
 
+// ─── state chips: score, last evaluated, overdue ───────────────────────────
+// Space's twin of the admin's `GoalStateChips` — same three facts, same "say
+// nothing if there's nothing to say" rule, themed through useSpaceTheme()
+// instead of Tailwind's semantic tokens.
+function GoalStateChips({
+  goal,
+  t,
+  textMuted,
+}: {
+  goal: Goal
+  t: ReturnType<typeof useTranslations>
+  textMuted: string
+}) {
+  const overdue = goalIsOverdue(goal)
+  if (goal.latest_score == null && !goal.last_evaluated_at && !overdue) return null
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {goal.latest_score != null && (
+        <span className="inline-flex items-center gap-1.5">
+          <RatingStars value={goal.latest_score} readOnly size={14} emptyColor={textMuted} />
+          <span className="text-[11px]" style={{ color: textMuted }}>
+            {t('latestScoreLabel', { score: goal.latest_score })}
+          </span>
+        </span>
+      )}
+      {goal.last_evaluated_at && (
+        <span className="text-[11px]" style={{ color: textMuted }}>
+          {t('lastEvaluatedOn', { date: goal.last_evaluated_at.toDate().toLocaleDateString() })}
+        </span>
+      )}
+      {overdue && (
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          style={{ background: '#fee2e2', color: '#b91c1c' }}
+        >
+          {t('overdueBadge')}
+        </span>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   goal: Goal
+  /** Already ordered by the caller (`GoalsSection`) — see this file's header
+   *  for why the fixed order lives there and not here. */
   steps: Goal[]
   /** What a goal is ABOUT — labels the category chips and fills the picker. */
   categories: PerformanceIndicator[]
@@ -51,14 +121,18 @@ export function GoalCard({ goal, steps, categories, dimensions, createGoal, upda
   const { accent, textMain, textMuted, cardBg, cardBorder } = useSpaceTheme()
 
   const [expanded, setExpanded] = useState(false)
+  // NOT `expanded` above, which opens the evaluations history. This folds the
+  // card's own body away so a long goal list stays readable; the header, its
+  // status pill and the step rail stay visible — see the module header.
+  const [collapsed, setCollapsed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [addingStep, setAddingStep] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
 
   const own = goal.created_by === 'student'
   const canEvaluate = goal.status === 'open' || goal.status === 'in_progress'
-  const overdue = goalIsOverdue(goal)
   const deleteFailed = deleteGoal.isError && deleteGoal.variables === goal.id
+  const doneSteps = steps.filter((s) => s.status === 'achieved').length
 
   const evaluationsQuery = useGoalEvaluations(goal.id, expanded)
   const addEvaluation = useAddGoalEvaluation()
@@ -71,6 +145,13 @@ export function GoalCard({ goal, steps, categories, dimensions, createGoal, upda
     })
     if (ok) deleteGoal.mutate(goal.id)
   }
+
+  // Defensive second guard — see the module header. The primary guard is
+  // useSpaceGoals.ts never returning an archived goal in the first place.
+  // AFTER every hook call, deliberately: an early return may never sit
+  // between two hooks, or their call order would differ across renders the
+  // instant a goal's `archived_at` flips while this instance stays mounted.
+  if (goalIsArchived(goal)) return null
 
   return (
     <div className="rounded-xl p-3" style={{ background: cardBg, border: `1px solid ${cardBorder}` }}>
@@ -85,24 +166,39 @@ export function GoalCard({ goal, steps, categories, dimensions, createGoal, upda
             </p>
           )}
         </div>
-        {own ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <Tip label={t('editGoal')}>
-              <button type="button" onClick={() => setEditing(true)} aria-label={t('editGoal')}>
-                <Pencil className="h-3.5 w-3.5" style={{ color: textMuted }} />
-              </button>
-            </Tip>
-            <Tip label={t('deleteGoal')}>
-              <button type="button" onClick={handleDelete} disabled={deleteGoal.isPending} aria-label={t('deleteGoal')}>
-                <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
-              </button>
-            </Tip>
-          </div>
-        ) : (
-          <span title={t('goalCoachCreatedNote')} className="shrink-0">
-            <Info className="h-3.5 w-3.5" style={{ color: accent }} />
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <Tip label={collapsed ? t('expandGoal') : t('collapseGoal')}>
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? t('expandGoal') : t('collapseGoal')}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-3.5 w-3.5" style={{ color: textMuted }} />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" style={{ color: textMuted }} />
+              )}
+            </button>
+          </Tip>
+          {own ? (
+            <>
+              <Tip label={t('editGoal')}>
+                <button type="button" onClick={() => setEditing(true)} aria-label={t('editGoal')}>
+                  <Pencil className="h-3.5 w-3.5" style={{ color: textMuted }} />
+                </button>
+              </Tip>
+              <Tip label={t('deleteGoal')}>
+                <button type="button" onClick={handleDelete} disabled={deleteGoal.isPending} aria-label={t('deleteGoal')}>
+                  <Trash2 className="h-3.5 w-3.5" style={{ color: textMuted }} />
+                </button>
+              </Tip>
+            </>
+          ) : (
+            <span title={t('goalCoachCreatedNote')} className="shrink-0">
+              <Info className="h-3.5 w-3.5" style={{ color: accent }} />
+            </span>
+          )}
+        </div>
       </div>
 
       {deleteFailed && (
@@ -111,89 +207,100 @@ export function GoalCard({ goal, steps, categories, dimensions, createGoal, upda
         </p>
       )}
 
+      {/* Status — stays visible collapsed, together with the rail below: it
+          is the other half of "what state is this goal in". */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${accent}1f`, color: accent }}>
           {t(STATUS_KEYS[goal.status])}
         </span>
-        {overdue && (
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: '#fee2e2', color: '#b91c1c' }}>
-            {t('overdueBadge')}
-          </span>
-        )}
-        {(goal.categories ?? []).map((cat) => (
-          <span key={cat} className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: cardBorder, color: textMuted }}>
-            {goalCategoryLabel(cat, categories)}
-          </span>
-        ))}
-        {/* Provenance, not a category — the axis this goal was created FROM.
-            Drawn deliberately quieter than the category chips (outline, no
-            fill) so the two never read as one list. */}
-        {goal.from_dimension && (
-          <span
-            className="rounded-full border border-dashed px-2 py-0.5 text-[10px]"
-            style={{ borderColor: cardBorder, color: textMuted }}
-          >
-            {t('goalFromDimension', { dimension: dimensionLabel(goal.from_dimension, dimensions) })}
-          </span>
-        )}
-        {goal.target_date && (
-          <span className="text-[10px]" style={{ color: textMuted }}>
-            {t('targetDateLabel', { date: goal.target_date.toDate().toLocaleDateString() })}
-          </span>
-        )}
       </div>
 
-      {typeof goal.latest_score === 'number' && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <RatingStars value={goal.latest_score} readOnly size={14} emptyColor={textMuted} />
-          <span className="text-[11px]" style={{ color: textMuted }}>
-            {t('latestScoreLabel', { score: goal.latest_score })}
-            {goal.last_evaluated_at
-              ? ` · ${t('lastEvaluatedOn', { date: goal.last_evaluated_at.toDate().toLocaleDateString() })}`
-              : ''}
-          </span>
-        </div>
-      )}
-
-      {steps.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t pt-2" style={{ borderColor: cardBorder }}>
-          {steps.map((step) => (
-            <StepRow key={step.id} step={step} setStepDone={setStepDone} deleteGoal={deleteGoal} confirm={confirm} />
+      {/* What the goal is about + when it runs — folded away with the card. */}
+      {!collapsed && ((goal.categories?.length ?? 0) > 0 || goal.from_dimension || goal.start_date || goal.target_date) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {(goal.categories ?? []).map((cat) => (
+            <span key={cat} className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: cardBorder, color: textMuted }}>
+              {goalCategoryLabel(cat, categories)}
+            </span>
           ))}
+          {/* Provenance, not a category — the axis this goal was created
+              FROM. Drawn deliberately quieter than the category chips
+              (outline, no fill) so the two never read as one list. */}
+          {goal.from_dimension && (
+            <span
+              className="rounded-full border border-dashed px-2 py-0.5 text-[10px]"
+              style={{ borderColor: cardBorder, color: textMuted }}
+            >
+              {t('goalFromDimension', { dimension: dimensionLabel(goal.from_dimension, dimensions) })}
+            </span>
+          )}
+          {goal.start_date && (
+            <span className="text-[10px]" style={{ color: textMuted }}>
+              {t('startDateLabel', { date: goal.start_date.toDate().toLocaleDateString() })}
+            </span>
+          )}
+          {goal.target_date && (
+            <span className="text-[10px]" style={{ color: textMuted }}>
+              {t('targetDateLabel', { date: goal.target_date.toDate().toLocaleDateString() })}
+            </span>
+          )}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setAddingStep(true)}
-          className="inline-flex items-center gap-1 text-xs font-medium"
-          style={{ color: accent }}
-        >
-          <Plus className="h-3.5 w-3.5" /> {t('addStep')}
-        </button>
-        {canEvaluate && (
-          <button
-            type="button"
-            onClick={() => setEvaluating(true)}
-            className="inline-flex items-center gap-1 text-xs font-medium"
-            style={{ color: accent }}
-          >
-            <Star className="h-3.5 w-3.5" /> {t('addEvaluation')}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="ml-auto inline-flex items-center gap-1 text-xs"
-          style={{ color: textMuted }}
-        >
-          {t('evaluationsTitle')}
-          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
-      </div>
+      {/* Latest score / last evaluated / overdue — folded away with the card. */}
+      {!collapsed && <GoalStateChips goal={goal} t={t} textMuted={textMuted} />}
 
-      {expanded && (
+      {/* THE RAIL STAYS WHEN COLLAPSED — see GoalProgressBar and this file's
+          header for why. */}
+      {steps.length > 0 && (
+        <div className="mt-2">
+          <GoalProgressBar steps={steps} label={t('tasksCompletedLabel', { done: doneSteps, total: steps.length })} />
+        </div>
+      )}
+
+      {!collapsed && (
+        <>
+          {steps.length > 0 && (
+            <div className="mt-3 space-y-1.5 border-t pt-2" style={{ borderColor: cardBorder }}>
+              {steps.map((step) => (
+                <StepRow key={step.id} step={step} setStepDone={setStepDone} deleteGoal={deleteGoal} confirm={confirm} />
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setAddingStep(true)}
+              className="inline-flex items-center gap-1 text-xs font-medium"
+              style={{ color: accent }}
+            >
+              <Plus className="h-3.5 w-3.5" /> {t('addStep')}
+            </button>
+            {canEvaluate && (
+              <button
+                type="button"
+                onClick={() => setEvaluating(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium"
+                style={{ color: accent }}
+              >
+                <Star className="h-3.5 w-3.5" /> {t('addEvaluation')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="ml-auto inline-flex items-center gap-1 text-xs"
+              style={{ color: textMuted }}
+            >
+              {t('evaluationsTitle')}
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        </>
+      )}
+
+      {expanded && !collapsed && (
         <div className="mt-2 space-y-1.5 border-t pt-2" style={{ borderColor: cardBorder }}>
           {evaluationsQuery.isLoading ? (
             <div className="flex justify-center py-2">

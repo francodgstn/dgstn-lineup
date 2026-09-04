@@ -7756,7 +7756,11 @@
     "createStepDefaultTitle": "An {dimension} arbeiten",
     "createStepSubmit": "Aufgabe erstellen",
     "parentGoalNone": "Allgemein",
-    "goalFromDimension": "Aus {dimension}"
+    "goalFromDimension": "Aus {dimension}",
+    "collapseGoal": "Ziel einklappen",
+    "expandGoal": "Ziel ausklappen",
+    "startDateLabel": "Start: {date}",
+    "tasksCompletedLabel": "{done}/{total} Aufgaben erledigt"
   },
   "OrgUpsell": {
     "title": "Betreiben Sie mehr als ein Studio?",

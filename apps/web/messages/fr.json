@@ -7756,7 +7756,11 @@
     "createStepDefaultTitle": "Travailler sur {dimension}",
     "createStepSubmit": "Créer la tâche",
     "parentGoalNone": "Général",
-    "goalFromDimension": "À partir de {dimension}"
+    "goalFromDimension": "À partir de {dimension}",
+    "collapseGoal": "Réduire l'objectif",
+    "expandGoal": "Développer l'objectif",
+    "startDateLabel": "Début : {date}",
+    "tasksCompletedLabel": "{done}/{total} tâches terminées"
   },
   "OrgUpsell": {
     "title": "Vous gérez plusieurs studios ?",
