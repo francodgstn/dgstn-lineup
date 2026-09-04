@@ -15,9 +15,11 @@ import { APP_SETTINGS_COLLECTION } from '@linyup/shared'
 import { requireOperator } from '../utils/operator'
 import { purgeTeam } from '../saas-billing/purgeTeam'
 import { provisionDemoTenant, DEMO_TEAM_ID } from './demoTenant'
+import { CONTACTS_COLLECTION } from '@linyup/shared'
 import {
   REVIEW_ACCESS_DOC,
   REVIEW_ACCESS_MAX_DAYS,
+  REVIEW_ACCESS_MAX_EMAILS,
   clearReviewAccessCache,
 } from './reviewAccess'
 
@@ -63,6 +65,8 @@ export const setReviewAccess = onCall(async (request) => {
   const data = (request.data ?? {}) as {
     enabled?: boolean
     email?: string
+    /** Every address the code opens. Omit to leave the stored list alone. */
+    emails?: string[]
     code?: string
     days?: number
     note?: string
@@ -99,11 +103,58 @@ export const setReviewAccess = onCall(async (request) => {
     )
   }
 
+  // THE LIST. Every address must already BE a contact of the demo tenant.
+  //
+  // This is the guard that makes the list operable from a console at all: an
+  // operator can only open a door that the provisioner already built, so a typo
+  // cannot create a fixed-code login for an address nobody controls, and a real
+  // member's mailbox can never be listed — there is no contact for it in
+  // `linyup-demo`. Validation is against the tenant, not a regex, because a
+  // regex would happily accept somebody's actual email.
+  const emails = Array.isArray(data.emails)
+    ? [
+        ...new Set(
+          data.emails
+            .filter((e): e is string => typeof e === 'string')
+            .map((e) => e.toLowerCase().trim())
+            .filter(Boolean)
+        ),
+      ]
+    : null
+
+  if (emails) {
+    if (emails.length > REVIEW_ACCESS_MAX_EMAILS) {
+      throw new HttpsError(
+        'invalid-argument',
+        `At most ${REVIEW_ACCESS_MAX_EMAILS} addresses (got ${emails.length})`
+      )
+    }
+    const known = await admin
+      .firestore()
+      .collection(CONTACTS_COLLECTION)
+      .where('teamId', '==', DEMO_TEAM_ID)
+      .get()
+    const demoEmails = new Set(
+      known.docs
+        .map((d) => (d.data().email as string | undefined)?.toLowerCase().trim())
+        .filter((e): e is string => !!e)
+    )
+    const strangers = emails.filter((e) => !demoEmails.has(e))
+    if (strangers.length > 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Not contacts of the demo tenant: ${strangers.join(', ')}. Provision the tenant first ` +
+          `(pnpm provision:demo) — a fixed code may only open an address that already exists there.`
+      )
+    }
+  }
+
   const expiresAt = Timestamp.fromDate(new Date(Date.now() + days * 24 * 60 * 60 * 1000))
   await ref.set(
     {
       enabled: true,
       email,
+      ...(emails ? { emails } : {}),
       code: data.code,
       expires_at: expiresAt,
       note: data.note ?? null,
@@ -114,8 +165,11 @@ export const setReviewAccess = onCall(async (request) => {
   )
   clearReviewAccessCache()
   // eslint-disable-next-line no-console
-  console.log(`[review-otp] enabled for ${email} until ${expiresAt.toDate().toISOString()} by ${operator}`)
-  return { enabled: true, email, expiresAtMs: expiresAt.toMillis() }
+  console.log(
+    `[review-otp] enabled for ${emails ? `${emails.length} address(es)` : email} until ` +
+      `${expiresAt.toDate().toISOString()} by ${operator}`
+  )
+  return { enabled: true, email, addresses: emails?.length ?? 1, expiresAtMs: expiresAt.toMillis() }
 })
 
 /** What the console renders. The CODE IS NEVER RETURNED — an operator who has
@@ -139,5 +193,6 @@ export const getReviewAccess = onCall(async (request) => {
     expired: typeof expiresMs === 'number' ? expiresMs <= Date.now() : true,
     note: (d.note as string) ?? null,
     updatedBy: (d.updated_by as string) ?? null,
+    emails: Array.isArray(d.emails) ? (d.emails as string[]) : [],
   }
 })
