@@ -62,6 +62,10 @@
     "store": {
       "android": {
         "track": "internal"
+      },
+      "ios": {
+        "ascAppId": "6808572774",
+        "appleTeamId": "ZZVK94AKDV"
       }
     }
   }
