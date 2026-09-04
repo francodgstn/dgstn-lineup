@@ -24,8 +24,9 @@ import { parseArgs } from 'node:util'
 import { readFileSync } from 'node:fs'
 import { getApp } from 'firebase-admin/app'
 import { initApps, assertTargetEmulatorReachable, DEFAULT_ORG_ADMIN_EMAIL } from './migration/config'
+import { acquireMigrationLock } from './migration/lock'
 import type { MigrationConfig } from './migration/config'
-import { pass00Setup }              from './migration/passes/00-setup'
+import { pass00Setup, recheckBundleMembers } from './migration/passes/00-setup'
 import { pass00AuthUsers }          from './migration/passes/00-auth-users'
 import { pass01Users }              from './migration/passes/01-users'
 import { pass02Teams }              from './migration/passes/02-teams'
@@ -140,10 +141,24 @@ async function enableEmailPasswordSignIn(): Promise<void> {
   console.log('✓ Email/password sign-in enabled')
 }
 
+/** Which database this run writes to — the thing two runs must not share. */
+async function targetKey(): Promise<string> {
+  if (cfg.targetEmulator) {
+    const { EMULATOR_FIRESTORE_HOST, EMULATOR_PROJECT_ID } = await import('./migration/config')
+    return `emulator-${EMULATOR_PROJECT_ID}-${EMULATOR_FIRESTORE_HOST}`
+  }
+  const sa = JSON.parse(readFileSync(cfg.targetCredsPath!, 'utf-8')) as { project_id: string }
+  return sa.project_id
+}
+
 async function run() {
   // Fail fast if --target-emulator is set but the emulators aren't running —
   // before reading source creds or touching any data.
   if (cfg.targetEmulator) await assertTargetEmulatorReachable()
+
+  // A dry run writes nothing, so it can neither corrupt a live run nor be
+  // corrupted by one — leave the "just look at what it would do" path free.
+  if (!cfg.dryRun) acquireMigrationLock(await targetKey())
 
   initApps(cfg)
   if (cfg.dryRun) console.log('=== DRY RUN — no writes will be committed ===')
@@ -211,6 +226,10 @@ async function run() {
   if (!only || only === 'season-calendar')     await pass14SeasonCalendar(cfg)
 
   if (!only || only === 'verify' || values['verify']) await verify(teamIds, !!cfg.teams?.length)
+
+  // The bundle members, asked once more now that minutes have passed. Pass 0
+  // cannot answer this — see `recheckBundleMembers`.
+  if (!cfg.dryRun) await recheckBundleMembers()
 
   console.log('\nMigration complete.')
 }

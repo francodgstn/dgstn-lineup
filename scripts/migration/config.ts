@@ -45,7 +45,12 @@ const HMD_BELT_LEVELS = [
  * drifting out of date makes the migration warn about a member that no longer
  * exists rather than write a wrong document.
  */
-export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup'] as const
+export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup', 'hmd-belts'] as const
+// `hmd-belts` joined the bundle on 2026-09-05 and this copy did not, which is
+// the drift direction the comment above does NOT cover: an EXTRA member the
+// list does not know about is not warned about — it is simply never checked, so
+// the migration would have reported a healthy container while the belt ladder
+// silently failed to materialise. A stale entry is loud; a missing one is not.
 
 /**
  * hmd-lineup event type → Linyup event type.
