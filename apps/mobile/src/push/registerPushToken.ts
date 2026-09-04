@@ -8,6 +8,20 @@
 // first notification we ever decide to send is an OTA update rather than a
 // release train.
 //
+// THAT IS TRUE OF iOS ONLY, TODAY. The APNs key lives on Expo's servers, so
+// switching iOS on really is a JS change. ANDROID IS NOT: FCM reads
+// `google-services.json` at BUILD time, the repo has none, and `app.config.js`
+// sets no `android.googleServicesFile` — so `getExpoPushTokenAsync` fails on
+// Android and no OTA can fix it. Enabling notifications today would reach
+// iPhones and silently skip every Android device.
+//
+// PARKED until after the store review (2026-09-04), deliberately: wiring it
+// needs a Firebase Android app per PROJECT — the file is baked into the binary
+// and is project-specific, unlike the JS firebaseConfig this app switches by
+// env — plus an FCM V1 key on EAS, and it must be in the build BEFORE the store
+// build that ships. Whoever flips the switch: check this first, or the flip is
+// half a feature.
+//
 // SO THIS NEVER ASKS. `registerPushTokenIfAllowed` reads the permission and
 // stops if it is anything but already-granted — it does not call
 // `requestPermissionsAsync`, so a member sees no system dialog they have no
