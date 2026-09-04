@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from 'react-native';
 import { useMemo } from 'react';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { I18nProvider } from './src/i18n';
 import { TenantThemeProvider, useTenantTheme } from './src/contexts/TenantThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { buildTheme } from './src/theme';
@@ -58,12 +59,17 @@ function ThemedApp() {
 
   return (
     <PaperProvider theme={theme}>
+      {/* Outermost of the app providers: auth and the tenant theme both surface
+          copy, so nothing below here should render a string before a language
+          is chosen. */}
+      <I18nProvider>
       <AuthProvider>
         <SafeAreaProvider>
           <AppNavigator />
         </SafeAreaProvider>
         <StatusBar style={theme.dark ? 'light' : 'dark'} />
       </AuthProvider>
+      </I18nProvider>
     </PaperProvider>
   );
 }
