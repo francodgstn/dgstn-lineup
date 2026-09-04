@@ -43,6 +43,7 @@ import {
 import {
   provisionDemoTenant,
   DEMO_REVIEW_EMAIL,
+  DEMO_TESTERS,
   type ProvisionResult,
 } from '../../packages/functions/src/ops/demoTenant'
 import {
@@ -58,7 +59,9 @@ export interface ReviewTenantSeed extends ProvisionResult {
   expiresAt: Date
 }
 
-/** Provision `linyup-demo` and open the fixed-code login for its reviewer contact. */
+/** Provision `linyup-demo` and open the fixed-code login for its reviewer contact
+ *  AND the closed-test testers — one address each, so nobody shares the login the
+ *  store reviewer depends on. See `ops/reviewAccess.ts` for the guards. */
 export async function seedReviewTenant(opts: {
   db: Firestore
   seededBy: string
@@ -78,10 +81,14 @@ export async function seedReviewTenant(opts: {
     .set(
       {
         enabled: true,
+        // The reviewer stays in the legacy `email` field so an older deployment
+        // reading only that keeps working; `emails` is the full set and is what
+        // current code unions over.
         email: DEMO_REVIEW_EMAIL,
+        emails: [DEMO_REVIEW_EMAIL, ...DEMO_TESTERS.map((t) => t.email)],
         code,
         expires_at: Timestamp.fromDate(expiresAt),
-        note: `Seeded by ${opts.seededBy} — the member app's test login (docs/test-accounts.md).`,
+        note: `Seeded by ${opts.seededBy} — the member app's test login + ${DEMO_TESTERS.length} closed-test testers (docs/test-accounts.md).`,
         updated_at: FieldValue.serverTimestamp(),
         updated_by: opts.seededBy,
       },

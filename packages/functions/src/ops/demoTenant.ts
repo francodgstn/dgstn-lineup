@@ -127,6 +127,37 @@ const CONTACTS: Array<{ id: string; firstname: string; lastname: string }> = [
 
 const SUBSCRIPTION_TYPE_ID = `${DEMO_TEAM_ID}-sub-unlimited`
 
+// ── The closed-test testers ─────────────────────────────────────────────────
+// Play's closed test needs a dozen people signed in for fourteen days. They
+// used to have to SHARE the reviewer's login, which meant any curious tester
+// could rename or delete the one account the store reviewer depends on. So each
+// gets their own contact, and `app_settings/review_access` lists them all — the
+// demo tenant never sends email (its messaging policy is `silent`), so a fixed
+// code is the only way any of them can sign in at all.
+//
+// They get a history and a score but deliberately NO upcoming bookings: booking
+// a class is then something a tester actually does, which is the engagement
+// Google's check looks for, and it keeps this provisioner clear of session
+// capacity and the one-seat-writer rule.
+const TESTER_FIRSTNAMES = [
+  'Anna', 'Ben', 'Clara', 'David', 'Elena', 'Felix', 'Greta', 'Hugo', 'Ida', 'Jan',
+  'Kira', 'Luca', 'Maya', 'Nino', 'Olga', 'Pavel', 'Rosa', 'Samir', 'Tessa', 'Uwe',
+]
+
+export const DEMO_TESTERS = TESTER_FIRSTNAMES.map((firstname, i) => {
+  const n = String(i + 1).padStart(2, '0')
+  return {
+    id: `${DEMO_TEAM_ID}-tester-${n}`,
+    firstname,
+    lastname: 'Tester',
+    email: `tester${n}@example.com`,
+    // Spread so the leaderboard reads like a group of people rather than a
+    // generated sequence, and so the reviewer is never bottom.
+    score: 12 + ((i * 7) % 44),
+    streak: 1 + (i % 5),
+  }
+})
+
 export interface ProvisionResult {
   teamId: string
   slug: string
@@ -136,6 +167,7 @@ export interface ProvisionResult {
     activities: number
     sessions: number
     contacts: number
+    testers: number
     bookings: number
     attended: number
   }
@@ -272,6 +304,37 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
         deleted_at: null,
         created_at: FieldValue.serverTimestamp(),
         subscription_type_id: SUBSCRIPTION_TYPE_ID,
+        // See DEMO_TESTERS: a reseed is the repair for a curious 'Delete
+        // account' tap, including on the reviewer's own login.
+        deletion_requested_at: null,
+        deletion_scheduled_for: null,
+      },
+      { merge: true }
+    )
+  }
+
+  for (const t of DEMO_TESTERS) {
+    await db.collection(CONTACTS_COLLECTION).doc(t.id).set(
+      {
+        teamId: DEMO_TEAM_ID,
+        firstname: t.firstname,
+        lastname: t.lastname,
+        email: t.email,
+        phone: null,
+        acquisition_stage: 'member',
+        entry: 'manual',
+        provisional: false,
+        archived_at: null,
+        deleted_at: null,
+        subscription_type_id: SUBSCRIPTION_TYPE_ID,
+        current_month_score: t.score,
+        current_streak: t.streak,
+        max_streak: t.streak,
+        // A tester who tapped 'Delete account' out of curiosity must not stay
+        // scheduled for deletion across a reseed — this provisioner is the
+        // repair, so it clears the countdown rather than merging around it.
+        deletion_requested_at: null,
+        deletion_scheduled_for: null,
       },
       { merge: true }
     )
@@ -332,7 +395,14 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
       // rows. Scoring reads the `participants` subcollection — `bookings` alone
       // leaves all of it at zero.
       if (offset < 0) {
-        const attendees = CONTACTS.slice(0, 4)
+        // Four regulars plus a rotating pair of testers: every tester picks up
+        // some history without any one session exceeding its twelve seats.
+        const rotate = Math.abs(offset) * 2
+        const attendees = [
+          ...CONTACTS.slice(0, 4),
+          DEMO_TESTERS[rotate % DEMO_TESTERS.length],
+          DEMO_TESTERS[(rotate + 1) % DEMO_TESTERS.length],
+        ]
         for (const c of attendees) {
           await db
             .collection(SESSIONS_COLLECTION)
@@ -450,7 +520,8 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
     counts: {
       activities: ACTIVITIES.length,
       sessions: sessionCount,
-      contacts: CONTACTS.length,
+      contacts: CONTACTS.length + DEMO_TESTERS.length,
+      testers: DEMO_TESTERS.length,
       bookings: bookingCount,
       attended: attendedCount,
     },
