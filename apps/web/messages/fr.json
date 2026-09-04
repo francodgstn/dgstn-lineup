@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Registre des actifs",
     "assetRegisterDescription": "Gardez trace de ce que votre club possède — équipement, agencements, véhicules et informatique — avec quantités, emplacements, photos et une valeur indicative par élément. Alimente l'état des actifs dans Finances.",
     "assetRegisterNavLabel": "Actifs",
-    "removeConfirmRequiredBy": "{requirers} a besoin de {name} et est toujours installé. Supprimez d'abord {requirers}, ou conservez {name}."
+    "removeConfirmRequiredBy": "{requirers} a besoin de {name} et est toujours installé. Supprimez d'abord {requirers}, ou conservez {name}.",
+    "hmdBeltsName": "Ordre des ceintures HMD",
+    "hmdBeltsDescription": "Les conditions de passage pour le Hwal Moo Do et le Korean Dragon — le temps écoulé depuis le dernier examen, et les stages, tournois et passages de ceinture exigés à chaque grade."
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",

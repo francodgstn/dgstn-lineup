@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Asset register",
     "assetRegisterDescription": "Keep track of what your club owns — equipment, fittings, vehicles and IT — with quantities, locations, photos and an indicative value per item. Feeds the statement of assets in Finance.",
     "assetRegisterNavLabel": "Assets",
-    "removeConfirmRequiredBy": "{requirers} needs {name} and is still installed. Remove {requirers} first, or keep {name}."
+    "removeConfirmRequiredBy": "{requirers} needs {name} and is still installed. Remove {requirers} first, or keep {name}.",
+    "hmdBeltsName": "HMD Belt Ladder",
+    "hmdBeltsDescription": "The grading requirements for Hwal Moo Do and Korean Dragon — time since the last exam, and the camps, tournaments and belt tests each grade asks for."
   },
   "AiAssistant": {
     "launcherLabel": "AI assistant",

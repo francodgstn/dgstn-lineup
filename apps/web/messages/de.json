@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Anlagenverzeichnis",
     "assetRegisterDescription": "Behalte den Überblick über das Vermögen deines Vereins — Geräte, Einrichtung, Fahrzeuge und IT — mit Mengen, Standorten, Fotos und einem Richtwert je Position. Liefert die Daten für den Anlagenspiegel in der Finanzverwaltung.",
     "assetRegisterNavLabel": "Anlagen",
-    "removeConfirmRequiredBy": "{requirers} benötigt {name} und ist noch installiert. Entferne zuerst {requirers} oder behalte {name}."
+    "removeConfirmRequiredBy": "{requirers} benötigt {name} und ist noch installiert. Entferne zuerst {requirers} oder behalte {name}.",
+    "hmdBeltsName": "HMD-Gürtelordnung",
+    "hmdBeltsDescription": "Die Prüfungsanforderungen für Hwal Moo Do und Korean Dragon — Zeit seit der letzten Prüfung sowie die Camps, Turniere und Gürtelprüfungen, die jeder Grad verlangt."
   },
   "AiAssistant": {
     "launcherLabel": "KI-Assistent",

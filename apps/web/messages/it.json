@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Registro dei beni",
     "assetRegisterDescription": "Tieni traccia di ciò che il club possiede — attrezzature, arredi, veicoli e IT — con quantità, ubicazioni, foto e un valore indicativo per voce. Alimenta il prospetto dei beni in Contabilità.",
     "assetRegisterNavLabel": "Beni",
-    "removeConfirmRequiredBy": "{requirers} richiede {name} ed è ancora installato. Rimuovi prima {requirers}, oppure mantieni {name}."
+    "removeConfirmRequiredBy": "{requirers} richiede {name} ed è ancora installato. Rimuovi prima {requirers}, oppure mantieni {name}.",
+    "hmdBeltsName": "Scala cinture HMD",
+    "hmdBeltsDescription": "I requisiti di passaggio per Hwal Moo Do e Korean Dragon — il tempo trascorso dall'ultimo esame e gli stage, i tornei e gli esami di cintura richiesti da ogni grado."
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",

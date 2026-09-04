@@ -10,6 +10,7 @@ import { whatsappManifest } from './whatsapp/manifest'
 import { websiteManifest } from './website/manifest'
 import { hmdManifest } from './hmd/manifest'
 import { hmdFightingCupManifest } from './hmd-fighting-cup/manifest'
+import { hmdBeltsManifest } from './hmd-belts/manifest'
 import { referralsManifest } from './referrals/manifest'
 import { onlineCoursesManifest } from './online-courses/manifest'
 import { productsManifest } from './products/manifest'
@@ -33,6 +34,7 @@ export const PLUGIN_REGISTRY: PluginManifest[] = [
   websiteManifest,
   hmdManifest,
   hmdFightingCupManifest,
+  hmdBeltsManifest,
   referralsManifest,
   onlineCoursesManifest,
   productsManifest,

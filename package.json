@@ -48,6 +48,7 @@
     "sandbox:reset": "tsx scripts/reset-sandbox-db.ts",
     "purge:team": "tsx --tsconfig tsconfig.scripts.json scripts/purge-team.ts",
     "messaging:policy": "tsx scripts/messaging-policy.ts",
+    "snapshot:ranks": "tsx scripts/snapshot-ranks.ts",
     "backfill:finance": "tsx scripts/backfill-finance-journal.ts",
     "backfill:document-versions": "tsx scripts/backfill-document-versions.ts",
     "audit:document-visibility": "tsx scripts/audit-document-visibility.ts",

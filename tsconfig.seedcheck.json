@@ -11,13 +11,6 @@
     "baseUrl": ".",
     "paths": { "@linyup/shared": ["packages/shared/src/index.ts"] }
   },
-  "include": [
-    "scripts/seed-emulator.ts",
-    "scripts/seed-sandbox.ts",
-    "scripts/seed-staging.ts",
-    "scripts/seed-lead.ts",
-    "scripts/lib/**/*.ts",
-    "scripts/migration/**/*.ts",
-    "scripts/migrate-hmd.ts"
-  ]
+  "//": "A GLOB, NOT A LIST. This named a handful of paths against a directory of dozens, so every backfill, purge-team, reset-sandbox-db and stripe-sync was typechecked by nobody — scripts/ is not a workspace, so `turbo run typecheck` never sees it. scripts/migrate-hmd.ts sat in that blind spot until it broke and was added by hand, which is the tell: a list that must be remembered will be forgotten again.",
+  "include": ["scripts/**/*.ts"]
 }
