@@ -1291,6 +1291,22 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Push notification tokens — device registrations for the (not yet
+      // built) mobile push feature. See `PushToken`
+      // (packages/shared/src/types/push.ts) for why the doc id IS the token.
+      //
+      // UNLIKE every other subcollection here, staff get NO arm at all — not
+      // `canAccessContact`, not `hasRole('admin')`, nothing. A studio has no
+      // legitimate reason to enumerate which devices a member's account is
+      // signed into, and the Cloud Function that will eventually SEND
+      // (`sendPush`, packages/functions/src/push/) runs on the Admin SDK,
+      // which bypasses these rules entirely — so no staff/admin arm is needed
+      // to make sending work either. Only the contact's own session
+      // (`isSelfContact`) may create, update, delete or read its own tokens.
+      match /push_tokens/{tokenId} {
+        allow read, write: if isSelfContact(contactId);
+      }
+
       // Rules apply to all other child collections. Single-segment on purpose:
       // the only deeper paths (goals/{id}/evaluations) are matched explicitly
       // above, and a recursive wildcard here could not exclude credit_grants /
@@ -1306,11 +1322,18 @@ service cloud.firestore {
         // bookings, goals, credit balance, …). Rules are additive, so this
         // exclusion has to live on the catch-all itself — a separate staff-only
         // match would be OR'd with this grant and change nothing.
-        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
-                      || hasRole('admin')
-                      || (subcollection != 'contact_notes'
-                          && (isSelfContact(contactId)
-                              || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)))));
+        //
+        // `push_tokens` is excluded from the WHOLE grant, not just the
+        // self-read branch — this catch-all's `canAccessContact` / `hasRole('admin')`
+        // arm must not hand staff a blanket read either, same additive-rules trap,
+        // and the explicit `/push_tokens/{tokenId}` match above is the ONLY grant
+        // for it (isSelfContact, and nothing else).
+        allow read: if subcollection != 'push_tokens'
+                      && (canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                          || hasRole('admin')
+                          || (subcollection != 'contact_notes'
+                              && (isSelfContact(contactId)
+                                  || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId))))));
         // `goals` is ALSO excluded — not because it is function-only like the two
         // below, but because rules are additive: this catch-all's blanket grant
         // (no field restriction at all) would otherwise override the field-lock
@@ -1328,11 +1351,18 @@ service cloud.firestore {
         // false` — a staff member could create/update a period row directly and
         // race `onContactSubscriptionChange`'s reconciliation. `delete` is
         // unaffected either way (both matches allow it for staff).
+        //
+        // `push_tokens` joins this list for the reason stated on the explicit
+        // match above and on the read grant just above: staff (even with
+        // `contacts.manage`) get no write here either — this is the trap this
+        // comment block warns about on every other entry, so a token
+        // subcollection is called out by name rather than assumed covered.
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
                       && subcollection != 'plan_purchases'
                       && subcollection != 'goals'
                       && subcollection != 'subscription_history'
+                      && subcollection != 'push_tokens'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 
