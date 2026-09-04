@@ -171,6 +171,14 @@ export default ({ config }) => {
           recordAudioAndroid: false,
         },
       ],
+      // Notifications are present but ASLEEP. Nothing prompts and nothing sends
+      // (see src/push/registerPushToken.ts) — this entry exists so the native
+      // capability ships once, in a store build, and every decision afterwards
+      // (when to ask, what is worth interrupting somebody for, what a tap opens)
+      // is JS and reaches every install over the air. Adding it later instead
+      // would put a store build and its review queue in front of the first
+      // notification we ever want to send.
+      'expo-notifications',
     ],
     splash: {
       image: variant.splash,

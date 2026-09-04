@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { registerPushTokenIfAllowed } from '../push/registerPushToken';
 import { onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { StorageService } from '../services/storage';
@@ -61,6 +62,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [codeId, setCodeId] = useState<string | null>(null);
   const [verifiedCode, setVerifiedCode] = useState<string | null>(null);
   const [contact, setContact] = useState<Contact | null>(null);
+
+  // Push registration rides the session, not a screen: whichever way a member
+  // arrives — fresh sign-in or a restored session — this is the moment their
+  // contact and team are both known. It NEVER PROMPTS (see
+  // push/registerPushToken.ts) and never throws, so on a fresh install it is a
+  // no-op; it exists so the wiring ships in the same store build as the native
+  // module and the day we start asking is a JS change.
+  useEffect(() => {
+    if (!contact?.id || !contact.teamId) return;
+    void registerPushTokenIfAllowed(contact.id, contact.teamId);
+  }, [contact?.id, contact?.teamId]);
   const [matchedContacts, setMatchedContacts] = useState<Contact[] | null>(null);
   const [teamSummaries, setTeamSummaries] = useState<{ id: string; name: string }[] | null>(null);
   const [appNotIncludedTeams, setAppNotIncludedTeams] = useState<AppNotIncludedTeam[] | null>(null);
