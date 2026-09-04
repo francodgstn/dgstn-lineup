@@ -53,6 +53,8 @@ const { values } = parseArgs({
     'dry-run':         { type: 'boolean', default: false },
     'overwrite':       { type: 'boolean', default: false },
     'only':            { type: 'string' },
+    'teams':           { type: 'string' },
+    'reset':           { type: 'boolean', default: false },
     'from-team':       { type: 'string' },
     'verify':          { type: 'boolean', default: false },
   },
@@ -79,6 +81,39 @@ const cfg: MigrationConfig = {
   overwrite:       values['overwrite'] ?? false,
   only:            values['only'],
   fromTeam:        values['from-team'],
+  teams:           values['teams']
+    ?.split(',')
+    .map((t) => t.trim())
+    .filter(Boolean),
+}
+
+// ── --reset: start from an empty target ────────────────────────────────────
+// EMULATOR ONLY, and refused otherwise rather than guarded by a confirmation.
+// The flag exists for the sample loop — change a transform, wipe, re-import
+// three clubs, look — and a wipe of a real project is not a faster version of
+// that, it is a different and unrecoverable act. `--target-creds` has no reason
+// to reach this code path at all.
+const wantsReset = values['reset'] ?? false
+if (wantsReset && !targetEmulator) {
+  console.error(
+    'Error: --reset wipes the target and is allowed only with --target-emulator.\n' +
+      '       To clear a real project use the dedicated reset scripts, which ask first.'
+  )
+  process.exit(1)
+}
+
+async function resetEmulator(): Promise<void> {
+  const { EMULATOR_FIRESTORE_HOST, EMULATOR_PROJECT_ID } = await import('./migration/config')
+  const url =
+    `http://${EMULATOR_FIRESTORE_HOST}/emulator/v1/projects/` +
+    `${EMULATOR_PROJECT_ID}/databases/(default)/documents`
+  if (cfg.dryRun) {
+    console.log(`[dry-run] would wipe every document at ${EMULATOR_FIRESTORE_HOST}`)
+    return
+  }
+  const res = await fetch(url, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Emulator reset failed: ${res.status} ${await res.text()}`)
+  console.log(`🧹 Wiped Firestore at ${EMULATOR_FIRESTORE_HOST}`)
 }
 
 async function enableEmailPasswordSignIn(): Promise<void> {
@@ -119,8 +154,13 @@ async function run() {
   }
   console.log(`Org admin: ${cfg.orgAdminEmail}`)
 
+  if (wantsReset) await resetEmulator()
+
   await enableEmailPasswordSignIn()
   const only = cfg.only
+  if (cfg.teams?.length) {
+    console.log(`Sample import — clubs: ${cfg.teams.join(', ')}`)
+  }
 
   if (!only || only === 'setup')               await pass00Setup(cfg)
   if (!only || only === 'auth-users')          await pass00AuthUsers(cfg)
@@ -130,9 +170,14 @@ async function run() {
   if (!only || only === 'teams')               teamIds = await pass02Teams(cfg)
 
   if (only && only !== 'teams' && teamIds.length === 0) {
-    const { targetDb } = await import('./migration/config')
+    const { targetDb, matchesTeamSample } = await import('./migration/config')
     const snap = await targetDb().collection('teams').get()
-    teamIds = snap.docs.map((d) => d.id)
+    // The SAMPLE applies here too. Without this a `--only contacts --teams X`
+    // run would resolve every club already on the target and import the lot —
+    // the opposite of what was asked for, after the flag appeared to work.
+    teamIds = snap.docs
+      .filter((d) => matchesTeamSample(cfg.teams, d.id, String(d.data().name ?? '')))
+      .map((d) => d.id)
     console.log(`Loaded ${teamIds.length} teamIds from target for pass '${only}'`)
   }
 
@@ -153,7 +198,8 @@ async function run() {
 
   if (!only || only === 'contacts')            await pass05Contacts(cfg, teamIds)
   if (!only || only === 'sessions')            await pass06Sessions(cfg, teamIds, activityMap)
-  if (!only || only === 'events')              await pass08Events(cfg)
+  // teamIds only when SAMPLING — a full run passes undefined and copies everything.
+  if (!only || only === 'events')              await pass08Events(cfg, cfg.teams?.length ? teamIds : undefined)
   // Both read the check-ins pass08 has just written, so they follow it.
   if (!only || only === 'exam-checkins')       await pass09ExamCheckins(cfg)
   if (!only || only === 'cup-checkins')        await pass09CupCheckins(cfg)
