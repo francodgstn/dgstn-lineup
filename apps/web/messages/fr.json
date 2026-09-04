@@ -3177,7 +3177,11 @@
     "pastDueWarning": "Le dernier paiement a échoué. Mettez à jour le moyen de paiement pour garder l'organisation active.",
     "updatePayment": "Mettre à jour le moyen de paiement",
     "statusExpired": "Essai terminé",
-    "expiredNotice": "L'essai est terminé. Les studios facturés via cette organisation sont passés au plan Free et en ont été dissociés. Abonnez-vous pour rouvrir l'organisation, puis invitez-les à nouveau."
+    "expiredNotice": "L'essai est terminé. Les studios facturés via cette organisation sont passés au plan Free et en ont été dissociés. Abonnez-vous pour rouvrir l'organisation, puis invitez-les à nouveau.",
+    "compedBadge": "Non facturé",
+    "compedFree": "Gratuit",
+    "compedNote": "Linyup ne facture rien à cette organisation. Il n'y a ni abonnement ni facture à régler.",
+    "perMonthSuffix": "/mois"
   },
   "OrgSettings": {
     "title": "Paramètres",

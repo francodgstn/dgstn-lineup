@@ -3177,7 +3177,11 @@
     "pastDueWarning": "Die letzte Zahlung ist fehlgeschlagen. Aktualisiere die Zahlungsmethode, damit die Organisation aktiv bleibt.",
     "updatePayment": "Zahlungsmethode aktualisieren",
     "statusExpired": "Testphase beendet",
-    "expiredNotice": "Die Testphase ist beendet. Die über diese Organisation abgerechneten Studios wurden auf den Free-Plan gesetzt und von ihr getrennt. Abonnieren Sie, um die Organisation wieder zu öffnen, und laden Sie die Studios anschliessend erneut ein."
+    "expiredNotice": "Die Testphase ist beendet. Die über diese Organisation abgerechneten Studios wurden auf den Free-Plan gesetzt und von ihr getrennt. Abonnieren Sie, um die Organisation wieder zu öffnen, und laden Sie die Studios anschliessend erneut ein.",
+    "compedBadge": "Keine Abrechnung",
+    "compedFree": "Kostenlos",
+    "compedNote": "Linyup stellt dieser Organisation nichts in Rechnung. Es gibt kein Abonnement und keine offene Rechnung.",
+    "perMonthSuffix": "/Mt."
   },
   "OrgSettings": {
     "title": "Einstellungen",

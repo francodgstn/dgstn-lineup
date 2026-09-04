@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useParams, useSearchParams } from 'next/navigation'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/lib/firebase'
+import { functions, db } from '@/lib/firebase'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 import { useOrg } from '@/contexts/OrgContext'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +23,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CreditCard, CheckCircle2, AlertTriangle, FileText, ExternalLink } from 'lucide-react'
-import { subscriptionEndsAt, subscriptionIsCancelling } from '@linyup/shared'
+import {
+  ORGANIZATIONS_COLLECTION,
+  ORG_TEAMS_SUBCOLLECTION,
+  orgMonthlyForStudios,
+  subscriptionEndsAt,
+  subscriptionIsCancelling,
+} from '@linyup/shared'
 import { SubscriptionCancellationNote } from '@/components/payments/SubscriptionCancellationNote'
 import {
   useCancelSaasSubscription,
@@ -69,11 +76,22 @@ function formatCurrency(amount: number, currency: string) {
 
 // ─── invoices ─────────────────────────────────────────────────────────────────
 
-function InvoicesSection({ orgId, hasGateway }: { orgId: string; hasGateway: boolean }) {
+function InvoicesSection({
+  orgId,
+  hasGateway,
+  comped,
+}: {
+  orgId: string
+  hasGateway: boolean
+  /** A comped organisation is never charged. Nothing to fetch, nothing to show. */
+  comped: boolean
+}) {
   const t = useTranslations('OrgBilling')
+  // A comped organisation is never charged, so it has nothing to list — and
+  // fetching anyway is what put "open invoices" in front of HMD.
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
     queryKey: ['saas-invoices', orgId],
-    enabled: hasGateway,
+    enabled: hasGateway && !comped,
     queryFn: async () => {
       // getOrgInvoices, not getSaasInvoices: the latter guards on team ownership,
       // so an org id put through it was refused and this list rendered as
@@ -84,7 +102,7 @@ function InvoicesSection({ orgId, hasGateway }: { orgId: string; hasGateway: boo
     },
   })
 
-  if (!hasGateway) return null
+  if (!hasGateway || comped) return null
 
   return (
     <Card>
@@ -141,7 +159,7 @@ export default function OrgBillingPage() {
   const searchParams = useSearchParams()
   const checkoutResult = searchParams.get('checkout')
 
-  const { subscription, loading, isAdmin } = useOrg()
+  const { org, subscription, loading, isAdmin } = useOrg()
   const [cancelOpen, setCancelOpen] = useState(false)
 
   // UX-73: the four billing callables were inline `httpsCallable` calls reporting
@@ -168,6 +186,35 @@ export default function OrgBillingPage() {
     // though it had worked. Same rule as settings/billing.
     cancel.mutate(orgId, { onSuccess: () => setCancelOpen(false) })
   }
+
+  // ── IS THIS ORGANISATION BILLED AT ALL? ──────────────────────────────────
+  // `flags.comped` means the platform agreed to bill it nothing, indefinitely.
+  // Everything below it on this page — the status badge, the Subscribe button,
+  // the invoice list — is written for an organisation that pays, and shown to
+  // one that does not it is a screen full of wrong answers. HMD read "open
+  // invoices" on staging for exactly this reason (Franco, 2026-09-05).
+  //
+  // The callables already refuse a comped tenant (`assertNotComped`), so this is
+  // the display catching up with a decision the server had already made.
+  const comped = org?.flags?.comped === true
+
+  // What it WOULD cost, struck through — the point is not to hide the price but
+  // to show what is being waived. Counted from the roster because the
+  // organisation tier is priced per studio; the minimum applies below two.
+  const { data: studioCount = 0 } = useQuery<number>({
+    queryKey: ['org-active-teams-count', orgId],
+    enabled: !!orgId && comped,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const snap = await getDocs(
+        query(
+          collection(db, ORGANIZATIONS_COLLECTION, orgId, ORG_TEAMS_SUBCOLLECTION),
+          where('status', '==', 'active')
+        )
+      )
+      return snap.size
+    },
+  })
 
   const status = subscription?.status ?? 'trial'
   const hasActiveSubscription = status === 'active' || status === 'past_due'
@@ -210,6 +257,33 @@ export default function OrgBillingPage() {
             <div className="space-y-2">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-4 w-48" />
+            </div>
+          ) : comped ? (
+            /* NOT BILLED. Deliberately static: no status badge (there is no
+               subscription to have a status), no Subscribe, no cancel, no
+               billing portal. An action here would either fail at the callable
+               or start charging an organisation that was promised it would not
+               be. */
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-lg">Organization</span>
+                <Badge
+                  variant="secondary"
+                  className="bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100"
+                >
+                  {t('compedBadge')}
+                </Badge>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-muted-foreground line-through">
+                  {formatCurrency(orgMonthlyForStudios(studioCount) * 100, 'CHF')}
+                  {t('perMonthSuffix')}
+                </span>
+                <span className="text-lg font-semibold">{t('compedFree')}</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {org?.flags?.comped_reason?.trim() || t('compedNote')}
+              </p>
             </div>
           ) : (
             <>
@@ -319,7 +393,7 @@ export default function OrgBillingPage() {
         </CardContent>
       </Card>
 
-      <InvoicesSection orgId={orgId} hasGateway={hasGateway} />
+      <InvoicesSection orgId={orgId} hasGateway={hasGateway} comped={comped} />
 
       <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <AlertDialogContent>

@@ -3177,7 +3177,11 @@
     "pastDueWarning": "L'ultimo pagamento non è andato a buon fine. Aggiorna il metodo di pagamento per mantenere attiva l'organizzazione.",
     "updatePayment": "Aggiorna metodo di pagamento",
     "statusExpired": "Prova terminata",
-    "expiredNotice": "La prova è terminata. Gli studi fatturati tramite questa organizzazione sono passati al piano Free e sono stati scollegati. Abbonati per riaprire l'organizzazione, poi invitali di nuovo."
+    "expiredNotice": "La prova è terminata. Gli studi fatturati tramite questa organizzazione sono passati al piano Free e sono stati scollegati. Abbonati per riaprire l'organizzazione, poi invitali di nuovo.",
+    "compedBadge": "Non fatturato",
+    "compedFree": "Gratuito",
+    "compedNote": "Linyup non addebita nulla a questa organizzazione. Non c'è alcun abbonamento né fattura da saldare.",
+    "perMonthSuffix": "/mese"
   },
   "OrgSettings": {
     "title": "Impostazioni",

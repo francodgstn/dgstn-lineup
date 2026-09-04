@@ -3177,7 +3177,11 @@
     "pastDueWarning": "The last payment failed. Update the payment method to keep the organisation active.",
     "updatePayment": "Update payment method",
     "statusExpired": "Trial ended",
-    "expiredNotice": "The trial has ended. The studios billed through this organisation moved to the Free plan and were unlinked from it. Subscribe to reopen the organisation, then invite them back."
+    "expiredNotice": "The trial has ended. The studios billed through this organisation moved to the Free plan and were unlinked from it. Subscribe to reopen the organisation, then invite them back.",
+    "compedBadge": "Not billed",
+    "compedFree": "Free",
+    "compedNote": "Linyup charges this organisation nothing. There is no subscription and no invoice to settle.",
+    "perMonthSuffix": "/mo"
   },
   "OrgSettings": {
     "title": "Settings",
