@@ -25,6 +25,18 @@ import { MessagingPolicyCard } from './messaging-policy-card'
 
 export const dynamic = 'force-dynamic'
 
+/** A count with its share of the member base. The share is what makes the count
+ *  mean anything: 12 active is a triumph at 20 members and a problem at 400. */
+function UsageFigure({ n, of }: { n: number; of: number }) {
+  const pct = of > 0 ? Math.round((n / of) * 100) : null
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-lg font-semibold tabular-nums">{n}</span>
+      {pct !== null && <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>}
+    </span>
+  )
+}
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -60,6 +72,7 @@ export default async function AccountDetailPage({
 
   const sub = account.subscription
   const usage = account.contactUsage
+  const appUsage = account.appUsage
   const messaging = await getMessagingInfo(account.id)
 
   // The tenant's own front door. `/public/{slug}` is the team root and renders
@@ -101,6 +114,31 @@ export default async function AccountDetailPage({
           </a>
         )}
       </div>
+
+      {/* ACTIVE MEMBERS. `last_seen_at` is stamped when the member app comes to
+          the foreground and when a contact session is established on the web, so
+          this counts members who OPENED something — not members who did
+          anything. Said plainly under the figures, because an engagement number
+          whose definition is a guess is worse than no engagement number. */}
+      {appUsage && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Member app &amp; Space usage</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Field label="Active today" value={<UsageFigure n={appUsage.activeToday} of={appUsage.members} />} />
+              <Field label="Active 7 days" value={<UsageFigure n={appUsage.activeWeek} of={appUsage.members} />} />
+              <Field label="Active 30 days" value={<UsageFigure n={appUsage.activeMonth} of={appUsage.members} />} />
+              <Field label="Members" value={<span className="tabular-nums">{appUsage.members}</span>} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Counts contacts who opened the member app or signed into the public Space.
+              Not a measure of what they did there.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Studio → Linyup: the platform subscription the studio pays Linyup. */}

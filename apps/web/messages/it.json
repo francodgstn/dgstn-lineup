@@ -7890,5 +7890,12 @@
     "hoursAdapt": "Adatta le ore ai dati",
     "nParticipants": "{n, plural, one {# partecipante} other {# partecipanti}}",
     "nNewBookings": "{n, plural, one {# nuova prenotazione} other {# nuove prenotazioni}}"
+  },
+  "AppUsage": {
+    "title": "Membri attivi",
+    "today": "Oggi",
+    "week": "7 giorni",
+    "month": "30 giorni",
+    "note": "Su {members} membri. Conta chi ha aperto l'app o effettuato l'accesso alla tua pagina pubblica — non cosa ha fatto."
   }
 }

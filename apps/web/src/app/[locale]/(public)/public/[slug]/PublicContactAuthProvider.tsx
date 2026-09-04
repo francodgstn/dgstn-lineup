@@ -3,7 +3,9 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { onAuthStateChanged, signInWithCustomToken, signOut } from 'firebase/auth'
-import { functions } from '@/lib/firebase'
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { CONTACTS_COLLECTION } from '@linyup/shared'
+import { db, functions } from '@/lib/firebase'
 import { auth } from '@/lib/firebase-auth'
 import { reportPublicLoadFailure } from '@/lib/publicQueryError'
 import {
@@ -154,6 +156,25 @@ export function PublicContactAuthProvider({ children }: { children: ReactNode })
   // shows the wrong wall happens before it runs. The `window` guard is belt and
   // braces — PublicTeamProvider renders a spinner until it has resolved the team
   // client-side, so this provider never mounts on the server.
+  // LAST SEEN. The mobile app has always stamped this on foreground
+  // (apps/mobile/src/services/firestore.ts); the web never did, even though the
+  // contact self-write rule has always admitted it — `affectedKeys().hasOnly([
+  // 'weight', 'last_seen_at', 'mobile_app'])`, and a subset passes. The cost of
+  // that gap is silent: any "active members" figure means active MOBILE members,
+  // and a member who only ever opens the Space reads as never having shown up.
+  //
+  // Keyed on the contact id rather than hung off each sign-in path, so restoring
+  // a stored session counts too and the four `setContact` call sites do not each
+  // have to remember. Failures are swallowed: this is telemetry, and it must
+  // never be the reason a member cannot see their bookings.
+  useEffect(() => {
+    const contactId = contact?.id
+    if (!contactId) return
+    void updateDoc(doc(db, CONTACTS_COLLECTION, contactId), {
+      last_seen_at: serverTimestamp(),
+    }).catch(() => undefined)
+  }, [contact?.id])
+
   const [restoring, setRestoring] = useState<boolean>(
     () => typeof window !== 'undefined' && loadSession() !== null
   )
