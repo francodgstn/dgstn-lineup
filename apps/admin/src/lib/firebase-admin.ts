@@ -63,11 +63,29 @@ export interface FirebaseTarget {
   label: string
   /** True on the production project — the shell renders the label as a warning. */
   isProd: boolean
+  /** Where this project's tenants are served to the public, so the console can
+   *  link an operator straight at what a member would see. Null when the
+   *  project has no public surface the console can name. */
+  publicBaseUrl: string | null
+}
+
+// The same project → public URL map the member app carries in
+// apps/mobile/app.config.js (`webAppUrl`). Kept in step with it by hand rather
+// than imported: the console is a separate deployable and must not gain a
+// dependency on the mobile app to render a link.
+const PUBLIC_BASE_URL: Record<string, string> = {
+  'demo-linyup': 'http://localhost:3000',
+  'linyup-staging': 'https://app-stg.linyup.com',
+  'linyup-sandbox': 'https://demo.linyup.com',
+  'linyup-prod': 'https://app.linyup.com',
 }
 
 export function describeFirebaseTarget(): FirebaseTarget {
   return {
     label: useEmulators ? `${projectId} · emulator` : projectId,
     isProd: !useEmulators && projectId === 'linyup-prod',
+    publicBaseUrl: useEmulators
+      ? PUBLIC_BASE_URL['demo-linyup']
+      : (PUBLIC_BASE_URL[projectId] ?? null),
   }
 }

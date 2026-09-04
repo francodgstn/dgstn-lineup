@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { getAccount } from '@/lib/queries/account'
 import type { AccountType } from '@/lib/queries/accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ import { StatusBadge, PlanBadge, PaymentsBadge } from '@/components/status-badge
 import { Badge } from '@/components/ui/badge'
 import { formatChf, formatDate } from '@/lib/format'
 import { getMessagingInfo, MAIL_LEDGER_NOTE } from '@/lib/queries/messaging'
+import { describeFirebaseTarget } from '@/lib/firebase-admin'
 import { CompCard } from './comp-card'
 import { InternalCard } from './internal-card'
 import { ConnectToggle } from './connect-toggle'
@@ -61,6 +62,18 @@ export default async function AccountDetailPage({
   const usage = account.contactUsage
   const messaging = await getMessagingInfo(account.id)
 
+  // The tenant's own front door. `/public/{slug}` is the team root and renders
+  // whatever surface the studio chose as its default, so this is the page a
+  // member or prospect actually lands on — the fastest way for an operator to
+  // see a tenant as the world sees it. Teams only: org slugs do not resolve
+  // there (the public route matches `type == 'team'`), and a link that 404s is
+  // worse than no link.
+  const target = describeFirebaseTarget()
+  const publicUrl =
+    account.type === 'team' && account.slug && target.publicBaseUrl
+      ? `${target.publicBaseUrl}/public/${account.slug}`
+      : null
+
   return (
     <div className="flex flex-col gap-6">
       <Link
@@ -75,6 +88,18 @@ export default async function AccountDetailPage({
         <PlanBadge plan={account.plan} />
         <StatusBadge status={account.status} />
         <span className="text-sm text-muted-foreground capitalize">· {account.type}</span>
+        {publicUrl && (
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={publicUrl}
+          >
+            <ExternalLink className="size-3.5" />
+            <span className="font-mono text-xs">/{account.slug}</span>
+          </a>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
