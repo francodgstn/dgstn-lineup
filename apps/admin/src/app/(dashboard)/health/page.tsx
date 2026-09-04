@@ -96,7 +96,7 @@ function EnvironmentSection({ env }: { env: OpsEnvironment }) {
 
 /**
  * Plain links rather than a `<select>`: three options, no client JavaScript, the
- * choice is shareable as a URL, and it matches `SettingsTabs` next door instead
+ * choice is shareable as a URL, and it matches `SettingsNav` next door instead
  * of introducing a second navigation idiom in the same console.
  */
 function EnvironmentPicker({ selected }: { selected: OpsEnvironment }) {
@@ -139,7 +139,7 @@ export default async function HealthPage({
   const selected = opsEnvironmentById(env) ?? currentOpsEnvironment()
 
   return (
-    <div className="flex max-w-3xl flex-col gap-10">
+    <div className="flex max-w-5xl flex-col gap-10">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">Health</h1>
