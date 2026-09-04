@@ -154,14 +154,30 @@ manually before `eas submit` can target a track. Play Console → Testing →
 Closed, not internal. Internal testing does not count toward the requirement.
 
 **e. Add the testers, and start the clock.** Closed testing → Testers → email
-list or Google Group. **Recruit 15, not 12** — one person opting out on day 10
-resets your margin, and the 12 must be opted in *simultaneously and
-continuously* for the full 14 days.
+list or **Google Group** — at any size past a dozen the group is worth it, since
+roster churn is then one address to edit rather than a re-pasted list. Recruit
+more than 12: one person opting out on day 10 costs your margin, and the 12 must
+be opted in *simultaneously and continuously* for the full 14 days.
 
-Since 2026 Google also checks the testers genuinely used the app, so a
-tester-swap service is now the risky route rather than the shortcut. Real
-members of a real studio are both compliant and useful: they book a class,
-which is exactly the engagement Google is looking for.
+Since 2026 Google also checks the testers genuinely used the app, so opting in
+and never launching fails the review. Whoever the testers are, the instruction
+that matters is *open it*.
+
+**What was actually done (2026-09-04): a paid tester service, ~103 testers, ONE
+shared login.** Their intake form takes a single demo credential, so every
+tester signs in as `tester01@example.com` / `123456` — the code goes in the form's
+*Password* field, which their own instructions cover for OTP flows. Not the
+reviewer's address: that stays for Google, so nothing 103 people do can reach it.
+
+Sharing one contact is cosmetic, not dangerous, and the two things that would
+have made it dangerous are already closed: a contact session may write only
+`weight` / `last_seen_at` / `mobile_app`, so nobody can rename the account or
+change its email and lock everyone out; and `requestContactDeletion` schedules 30
+days ahead while the account keeps working, so a curious tap breaks nothing
+inside a 14-day window. What IS shared: one booking per session, one score, one
+radar. So tell testers to open the app and look around — **do not tell 103 people
+to book a class**, because the first one succeeds and the rest see it already
+booked and may report the app as broken.
 
 **Write down the date the twelfth tester opted in.** That is day 0.
 

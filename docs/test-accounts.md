@@ -31,8 +31,25 @@ into:
 | Window  | `app_settings/review_access.expires_at` — the maximum the callable allows (60 days) from the seed. The sandbox reseeds nightly and never lapses; staging is seeded by hand and **will** — re-run `pnpm staging:seed` or re-enable from the console. |
 
 The code is never mailed (`sendContactVerificationCode` logs `[review-otp]`
-instead), bypasses the per-email rate limit, and applies to this one address
-only. It is a deliberate auth bypass whose guards are its design —
+instead) and bypasses the per-email rate limit. Since 2026-09-04 it applies to
+a LIST of addresses rather than one — the reviewer plus `tester01@example.com` …
+`tester20@example.com`, twenty synthetic contacts the provisioner creates so
+closed-test testers never have to share the account the store reviewer depends
+on. The list is operable from `Settings → Demo tenant`, and an address may only
+be listed if a contact with that email already exists in the demo tenant, which
+is what keeps a fixed code off a real mailbox.
+
+**The closed test uses ONE shared login** (2026-09-04): the tester service takes
+a single demo credential, so all of its testers sign in as
+`tester01@example.com` / `123456`. Deliberately NOT the reviewer's address —
+sharing that one would put the account Google's reviewer needs in 103 people's
+hands. What sharing costs is only cosmetic: one booking per session, one score,
+one radar. What it cannot cost is the login itself — the contact self-write rule
+admits only `weight` / `last_seen_at` / `mobile_app`, so no tester can rename the
+contact or change its email, and `requestContactDeletion` merely schedules 30
+days out while the account keeps working.
+
+It is a deliberate auth bypass whose guards are its design —
 `packages/functions/src/ops/reviewAccess.ts` — and the committed default is
 acceptable only because it opens a synthetic contact on an internal, silent,
 payment-less studio in environments whose owner passwords are already
