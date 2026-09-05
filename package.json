@@ -44,6 +44,7 @@
     "promote:team": "tsx --tsconfig tsconfig.scripts.json scripts/promote-team.ts",
     "staging:seed": "tsx scripts/seed-staging.ts",
     "staging:reset": "tsx scripts/reset-staging-db.ts --confirm",
+    "reset:org": "tsx --tsconfig tsconfig.scripts.json scripts/reset-org-tenant.ts",
     "lead:seed": "tsx scripts/seed-lead.ts",
     "sandbox:seed": "tsx scripts/seed-sandbox.ts",
     "sandbox:reset": "tsx scripts/reset-sandbox-db.ts",

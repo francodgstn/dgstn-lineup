@@ -322,6 +322,13 @@ function writePolicyAndTouchTeam(
     required: entries,
     updated_at: FieldValue.serverTimestamp(),
   })
+  // `set(..., {merge:true})` CREATES a missing document, which is a live bug in
+  // `touchTeamForSurfaceRecompute` (see its header — it resurrected thirteen
+  // deleted studios). It is safe HERE and stays as it is: this runs inside a
+  // manager callable that has already authorized against a live team, not in a
+  // trigger that fires on delete. Do not copy the shape into one that does — and
+  // do not "fix" this into `tx.update`, which would fail the whole transaction
+  // rather than the no-op the trigger path wants.
   tx.set(teamRef(teamId), { surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
 }
 

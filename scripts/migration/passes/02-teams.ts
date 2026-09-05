@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import type { MigrationConfig } from '../config'
-import { sourceDb, targetDb, ORG_ID, matchesTeamSample } from '../config'
+import { sourceDb, targetDb, ORG_ID, matchesTeamSample, EXCLUDED_SOURCE_TEAMS } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { transformTeam } from '../transforms/teams'
 
@@ -20,7 +20,27 @@ export async function pass02Teams(cfg: MigrationConfig): Promise<string[]> {
   const bw     = new BatchWriter(tgt, cfg.dryRun)
   const teamIds: string[] = []
 
-  const snap = await src.collection('teams').get()
+  const all = await src.collection('teams').get()
+
+  // ── EXCLUSIONS FIRST, and they are absolute ───────────────────────────────
+  // Applied BEFORE the sample and before the unmatched-name check, so an
+  // excluded club cannot be reached by naming it in `--teams` either. Dropped
+  // here rather than in each pass because every downstream pass is scoped by the
+  // ids this one returns, so one filter removes the club's contacts, sessions
+  // and check-ins with it.
+  const excluded = all.docs.filter((d) => EXCLUDED_SOURCE_TEAMS.includes(d.id))
+  if (excluded.length > 0) {
+    console.log(
+      `   excluded ${excluded.length} club(s): ` +
+        excluded.map((d) => `${String(d.data().name ?? '(unnamed)')} [${d.id}]`).join(', ')
+    )
+  }
+  const snap = {
+    docs: all.docs.filter((d) => !EXCLUDED_SOURCE_TEAMS.includes(d.id)),
+    get size() {
+      return this.docs.length
+    },
+  }
 
   // ── THE SAMPLE, resolved once and reported ────────────────────────────────
   // `--teams` exists so a transform can be changed and looked at in seconds
