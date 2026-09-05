@@ -194,6 +194,22 @@ async function run() {
       .filter((d) => matchesTeamSample(cfg.teams, d.id, String(d.data().name ?? '')))
       .map((d) => d.id)
     console.log(`Loaded ${teamIds.length} teamIds from target for pass '${only}'`)
+
+    // RESOLVING FEWER CLUBS THAN WERE NAMED IS A FAILURE, not a smaller run.
+    // `verify` then checks the clubs it found and prints "All counts OK" for a
+    // migration that is missing one — which is exactly what happened: a club
+    // whose team document had lost its `name` matched nothing here, and two of
+    // three clubs were verified under a green banner.
+    if (cfg.teams?.length && teamIds.length !== cfg.teams.length) {
+      console.error(
+        `\n❌ --teams named ${cfg.teams.length} club(s) but only ${teamIds.length} ` +
+          `resolved on the target.\n` +
+          `   Verifying the ones that matched would report success for an incomplete\n` +
+          `   migration. Check that each named club exists AND still has its 'name'\n` +
+          `   field — a trigger-resurrected stub has no name and matches nothing.\n`
+      )
+      process.exit(1)
+    }
   }
 
   let activityMap = new Map<string, { name: string; type: string }>()

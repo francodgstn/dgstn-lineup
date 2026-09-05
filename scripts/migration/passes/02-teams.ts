@@ -70,7 +70,35 @@ export async function pass02Teams(cfg: MigrationConfig): Promise<string[]> {
       // plan — so a full re-set would silently un-configure a working tenant to
       // fix a field the source owns. The partial merge below is what the source
       // is actually authoritative for.
-      if (existing.exists) {
+      //
+      // ── "EXISTS" IS NOT THE SAME AS "IS A TENANT" ───────────────────────
+      // A team document can be RESURRECTED as a stub by a trigger.
+      // `touchTeamForSurfaceRecompute` (functions/src/utils/plugins.ts) writes
+      // `surfaces_updated_at` with `set(..., {merge: true})`, which CREATES the
+      // document, and it is called from the content public_profile syncs — which
+      // fire on delete as much as on write. So `--reset`, deleting a club's
+      // events and activities, fires those syncs and leaves behind a team doc
+      // holding one timestamp and nothing else.
+      //
+      // Pass 2 then saw `exists`, merged four fields, and never wrote the name.
+      // It cost HMD Team Galli its identity on a run that reported success:
+      // `verify` counts documents, not fields, so nothing anywhere noticed. The
+      // club with the most data was the one it hit, because it generated the
+      // most delete events.
+      //
+      // A document with no `name` has no accumulated tenant state to protect —
+      // that is exactly what the guard above exists for — so it is treated as
+      // absent and written whole. Reported rather than quietly repaired: the
+      // resurrection is a real defect in the triggers, and silently papering
+      // over it here is how it would never be found.
+      const stub = existing.exists && !existing.data()?.name
+      if (stub) {
+        console.warn(
+          `   ⚠️  teams/${d.id} existed with no name — a trigger-resurrected stub. ` +
+            `Writing it whole.`
+        )
+      }
+      if (existing.exists && !stub) {
         bw.merge(tgtRef, ALWAYS_MERGE)
       } else {
         bw.set(tgtRef, transformTeam(d.id, srcData))
