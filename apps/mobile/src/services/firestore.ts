@@ -1,6 +1,6 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
-import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION } from '@linyup/shared';
+import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION, densifyWeeklyCounts, isoWeekKeysBack } from '@linyup/shared';
 import {
   Contact,
   TeamPublicProfile,
@@ -467,18 +467,32 @@ export const FirestoreService = {
     }
   },
 
-  // Get weekly reports for a contact (attendance chart data)
-  async getContactWeeklyReports(contactId: string): Promise<WeeklyReport[]> {
+  // Get weekly reports for a contact (attendance chart data).
+  //
+  // A WEEK WITH NO ROW IS A WEEK WITH NO ATTENDANCE: `weeklyReports` writes a
+  // document only for a contact who turned up, so the stored rows are sparse and
+  // row count says nothing about elapsed time. Ask for a window of weeks and let
+  // the shared densifier fill the gaps with zero — the same rule the web chart
+  // reads through, so the two platforms cannot disagree about what a missing
+  // week means.
+  //
+  // Nothing calls this yet; the window also replaces an unbounded fetch that
+  // would have pulled every row a long-standing contact has (migrated HMD
+  // contacts carry years of them).
+  async getContactWeeklyReports(contactId: string, weeks = 16): Promise<WeeklyReport[]> {
     try {
+      const window = isoWeekKeysBack(weeks);
       const reportsRef = collection(db, CONTACTS_COLLECTION, contactId, 'contact_weekly_reports');
-      const q = query(reportsRef, orderBy('iso_week', 'asc'));
+      const q = query(reportsRef, where('iso_week', '>=', window[0]), orderBy('iso_week', 'asc'));
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        iso_week: doc.data().iso_week,
-        sessions_count: doc.data().sessions_count || 0,
-      }));
+      return densifyWeeklyCounts(
+        snapshot.docs.map(doc => ({
+          iso_week: doc.data().iso_week as string,
+          sessions_count: (doc.data().sessions_count as number) || 0,
+        })),
+        weeks,
+      ).map(r => ({ id: r.iso_week, ...r }));
     } catch (error) {
       console.error('Error fetching weekly reports:', error);
       return [];

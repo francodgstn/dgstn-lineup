@@ -10,6 +10,7 @@
 //   month → M2026-07
 
 import type { UsageLimitPeriod } from '../types/contact'
+import { isoWeekParts } from './isoWeeks'
 
 export const USAGE_TIMEZONE = 'Europe/Zurich'
 
@@ -25,19 +26,6 @@ function zonedYmd(date: Date, timeZone: string): { y: number; m: number; d: numb
   return { y: get('year'), m: get('month'), d: get('day') }
 }
 
-/** ISO week-year + week number for a calendar date (pure Gregorian math). */
-function isoWeek(y: number, m: number, d: number): { year: number; week: number } {
-  // UTC-noon avoids DST edges in the arithmetic below.
-  const date = new Date(Date.UTC(y, m - 1, d, 12))
-  const dayOfWeek = date.getUTCDay() || 7 // Mon=1 … Sun=7
-  // Shift to the Thursday of this ISO week — its year IS the ISO week-year.
-  date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek)
-  const weekYear = date.getUTCFullYear()
-  const yearStart = new Date(Date.UTC(weekYear, 0, 1, 12))
-  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7)
-  return { year: weekYear, week }
-}
-
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 /** The window key for a limit period at a moment in time (team timezone). */
@@ -51,7 +39,7 @@ export function usageWindowKey(
     case 'day':
       return `D${y}-${pad2(m)}-${pad2(d)}`
     case 'week': {
-      const { year, week } = isoWeek(y, m, d)
+      const { year, week } = isoWeekParts(y, m, d)
       return `W${year}-${pad2(week)}`
     }
     case 'month':
