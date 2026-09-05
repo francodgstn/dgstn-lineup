@@ -29,13 +29,43 @@ import { deleteSiteI18nSidecars } from '../translate/translateSite'
  * rewriting the team document. Nothing reads `surfaces_updated_at`; it exists
  * solely to re-run the recompute. Call it from any flow that flips a surface's
  * published state (see website callables + the content public_profile syncs).
+ *
+ * ── `update`, NEVER `set(..., {merge:true})` — IT RESURRECTS DELETED TEAMS ──
+ * This used to be a merge write, which CREATES the document when it is absent.
+ * Most callers are `onDocumentWritten` triggers on a team's courses, forms,
+ * documents, events, activities and availability — and those fire on DELETE as
+ * much as on write. So tearing a tenant down ran this against a team that was
+ * already gone and brought it back, which then fired `onTeamCreated` and SEEDED
+ * it: default payment modes, the `lib_trial_cleanup` automation rule, default
+ * plugins, and a `public_profile` mirror from `syncTeamPublicProfile`.
+ *
+ * Not hypothetical. Deleting HMD's sixteen studios from staging (2026-09-05)
+ * left THIRTEEN of them standing as half-provisioned ghosts, each carrying
+ * `payment_modes`, `surfaces_updated_at`, an `automation_rules` rule and a
+ * public profile — a tenant that had been deleted, advertising itself. The same
+ * chain runs under `saas-billing/purgeTeam.ts`, which deletes the same content
+ * for a real customer.
+ *
+ * An earlier, quieter symptom of the same bug: the migration's pass 2 saw the
+ * resurrected stub, concluded the team already existed, and skipped writing its
+ * name — so a club lost its identity on a run that reported success.
+ *
+ * `update` fails with NOT_FOUND instead of creating, and NOT_FOUND is exactly
+ * the case where there is nothing to recompute. No other error is swallowed.
  */
 export async function touchTeamForSurfaceRecompute(teamId: string): Promise<void> {
-  await admin
-    .firestore()
-    .collection(TEAMS_COLLECTION)
-    .doc(teamId)
-    .set({ surfaces_updated_at: FieldValue.serverTimestamp() }, { merge: true })
+  try {
+    await admin
+      .firestore()
+      .collection(TEAMS_COLLECTION)
+      .doc(teamId)
+      .update({ surfaces_updated_at: FieldValue.serverTimestamp() })
+  } catch (err) {
+    // NOT_FOUND (gRPC 5) — the team is being deleted, or already is. Nothing to
+    // recompute, and re-creating it is the bug this catch exists to prevent.
+    if ((err as { code?: number }).code === 5) return
+    throw err
+  }
 }
 
 /**
