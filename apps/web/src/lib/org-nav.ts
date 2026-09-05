@@ -106,6 +106,21 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
     // second copy of it verbatim above (Franco, 2026-08-28).
     ownsHeader: true,
   },
+  {
+    // A CORE ORG FEATURE, not a setting (Franco, 2026-09-05).
+    //
+    // It sat in the rail's "standards you set" group, beside Ranking, on the
+    // reading that an organisation DEFINES its affiliation types. But the page
+    // is a ROSTER — who holds the federation's licence, badge or membership,
+    // and whether it is current — which is something an organiser opens during
+    // a working day, not something they configure once. Filing it behind a rail
+    // of settings is what made it hard to find.
+    id: 'org-affiliations',
+    path: 'affiliations',
+    labelKey: 'tabAffiliations',
+    icon: IdCard,
+    dynamicLabel: 'affiliationTerm',
+  },
   { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe, ownsHeader: true },
   // THE WAY IN TO THE RAIL, and the reason it is a row rather than a menu item.
   //
@@ -206,14 +221,6 @@ export function orgLandingPath(role: OrgRole | null): string {
  */
 export const ORG_RAIL_ITEMS: (OrgNavItem & { group: OrgRailGroupKey })[] = [
   { id: 'org-ranking', path: 'ranking', labelKey: 'tabRanking', icon: Shield, group: 'standards' },
-  {
-    id: 'org-affiliations',
-    path: 'affiliations',
-    labelKey: 'tabAffiliations',
-    icon: IdCard,
-    group: 'standards',
-    dynamicLabel: 'affiliationTerm',
-  },
   { id: 'org-places', path: 'places', labelKey: 'tabPlaces', icon: MapPin, group: 'shared', ownsHeader: true },
   { id: 'org-members', path: 'members', labelKey: 'tabMembers', icon: Users, group: 'administration', adminOnly: true },
   { id: 'org-plugins', path: 'plugins', labelKey: 'tabPlugins', icon: Blocks, group: 'administration', adminOnly: true },

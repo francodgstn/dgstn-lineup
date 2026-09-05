@@ -1325,7 +1325,6 @@
     "emptyPast": "Nessun evento passato.",
     "detail_back": "Programma",
     "detail_tabOverview": "Panoramica",
-    "detail_tabAttendees": "Partecipanti",
     "detail_tabInvitations": "Inviti",
     "detail_sendInvitations": "Invia inviti",
     "detail_resendAll": "Reinvia tutti",
@@ -1338,7 +1337,6 @@
     "detail_status_cancelled": "Annullato",
     "detail_fieldDescription": "Descrizione",
     "detail_noDescription": "Nessuna descrizione fornita.",
-    "detail_attendeesEmpty": "Ancora nessun partecipante.",
     "detail_invitationsEmpty": "Nessun invito ancora inviato.",
     "detail_invStatus_sent": "Inviato",
     "detail_invStatus_opened": "Aperto",
@@ -1367,7 +1365,9 @@
     "invitation_confirmedDeclined": "Nessun problema. Grazie per la risposta.",
     "invitation_fee": "Quota: {amount}",
     "invitation_free": "Gratuito",
-    "detail_tabProgram": "Programma"
+    "detail_tabProgram": "Programma",
+    "detail_tabRsvps": "RSVP",
+    "detail_rsvpsEmpty": "Nessuno ha ancora accettato."
   },
   "EventProgram": {
     "emptyTitle": "Nessun programma",
@@ -1479,7 +1479,7 @@
     "templateInherited": "Ereditato dalla tua organizzazione — sola lettura.",
     "duplicateEvent": "Duplica",
     "duplicateTitle": "Duplica questo evento",
-    "duplicateDescription": "Copia le impostazioni e tutto il programma. Partecipanti, inviti e check-in non vengono copiati e la copia resta privata.",
+    "duplicateDescription": "Copia le impostazioni e tutto il programma. RSVP, inviti e check-in non vengono copiati e la copia resta privata.",
     "duplicateNewTitle": "Titolo",
     "duplicateNewStart": "Nuova data di inizio",
     "duplicateSuffix": "{title} (copia)",
@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Registro dei beni",
     "assetRegisterDescription": "Tieni traccia di ciò che il club possiede — attrezzature, arredi, veicoli e IT — con quantità, ubicazioni, foto e un valore indicativo per voce. Alimenta il prospetto dei beni in Contabilità.",
     "assetRegisterNavLabel": "Beni",
-    "removeConfirmRequiredBy": "{requirers} richiede {name} ed è ancora installato. Rimuovi prima {requirers}, oppure mantieni {name}."
+    "removeConfirmRequiredBy": "{requirers} richiede {name} ed è ancora installato. Rimuovi prima {requirers}, oppure mantieni {name}.",
+    "hmdBeltsName": "Scala cinture HMD",
+    "hmdBeltsDescription": "I requisiti di passaggio per Hwal Moo Do e Korean Dragon — il tempo trascorso dall'ultimo esame e gli stage, i tornei e gli esami di cintura richiesti da ogni grado."
   },
   "AiAssistant": {
     "launcherLabel": "Assistente IA",
@@ -3175,7 +3177,11 @@
     "pastDueWarning": "L'ultimo pagamento non è andato a buon fine. Aggiorna il metodo di pagamento per mantenere attiva l'organizzazione.",
     "updatePayment": "Aggiorna metodo di pagamento",
     "statusExpired": "Prova terminata",
-    "expiredNotice": "La prova è terminata. Gli studi fatturati tramite questa organizzazione sono passati al piano Free e sono stati scollegati. Abbonati per riaprire l'organizzazione, poi invitali di nuovo."
+    "expiredNotice": "La prova è terminata. Gli studi fatturati tramite questa organizzazione sono passati al piano Free e sono stati scollegati. Abbonati per riaprire l'organizzazione, poi invitali di nuovo.",
+    "compedBadge": "Non fatturato",
+    "compedFree": "Gratuito",
+    "compedNote": "Linyup non addebita nulla a questa organizzazione. Non c'è alcun abbonamento né fattura da saldare.",
+    "perMonthSuffix": "/mese"
   },
   "OrgSettings": {
     "title": "Impostazioni",

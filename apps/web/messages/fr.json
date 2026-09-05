@@ -1325,7 +1325,6 @@
     "emptyPast": "Aucun événement passé.",
     "detail_back": "Planning",
     "detail_tabOverview": "Aperçu",
-    "detail_tabAttendees": "Participants",
     "detail_tabInvitations": "Invitations",
     "detail_sendInvitations": "Envoyer les invitations",
     "detail_resendAll": "Renvoyer tout",
@@ -1338,7 +1337,6 @@
     "detail_status_cancelled": "Annulé",
     "detail_fieldDescription": "Description",
     "detail_noDescription": "Aucune description fournie.",
-    "detail_attendeesEmpty": "Aucun participant pour l'instant.",
     "detail_invitationsEmpty": "Aucune invitation envoyée.",
     "detail_invStatus_sent": "Envoyée",
     "detail_invStatus_opened": "Ouverte",
@@ -1367,7 +1365,9 @@
     "invitation_confirmedDeclined": "Pas de problème. Merci pour votre réponse.",
     "invitation_fee": "Frais : {amount}",
     "invitation_free": "Gratuit",
-    "detail_tabProgram": "Programme"
+    "detail_tabProgram": "Programme",
+    "detail_tabRsvps": "RSVP",
+    "detail_rsvpsEmpty": "Personne n'a encore accepté."
   },
   "EventProgram": {
     "emptyTitle": "Pas encore de programme",
@@ -1479,7 +1479,7 @@
     "templateInherited": "Hérité de votre organisation — lecture seule.",
     "duplicateEvent": "Dupliquer",
     "duplicateTitle": "Dupliquer cet événement",
-    "duplicateDescription": "Copie les réglages et tout le programme. Les participants, invitations et pointages ne sont pas copiés, et la copie reste privée.",
+    "duplicateDescription": "Copie les réglages et tout le programme. Les RSVP, invitations et pointages ne sont pas copiés, et la copie reste privée.",
     "duplicateNewTitle": "Titre",
     "duplicateNewStart": "Nouvelle date de début",
     "duplicateSuffix": "{title} (copie)",
@@ -2847,7 +2847,9 @@
     "assetRegisterName": "Registre des actifs",
     "assetRegisterDescription": "Gardez trace de ce que votre club possède — équipement, agencements, véhicules et informatique — avec quantités, emplacements, photos et une valeur indicative par élément. Alimente l'état des actifs dans Finances.",
     "assetRegisterNavLabel": "Actifs",
-    "removeConfirmRequiredBy": "{requirers} a besoin de {name} et est toujours installé. Supprimez d'abord {requirers}, ou conservez {name}."
+    "removeConfirmRequiredBy": "{requirers} a besoin de {name} et est toujours installé. Supprimez d'abord {requirers}, ou conservez {name}.",
+    "hmdBeltsName": "Ordre des ceintures HMD",
+    "hmdBeltsDescription": "Les conditions de passage pour le Hwal Moo Do et le Korean Dragon — le temps écoulé depuis le dernier examen, et les stages, tournois et passages de ceinture exigés à chaque grade."
   },
   "AiAssistant": {
     "launcherLabel": "Assistant IA",
@@ -3175,7 +3177,11 @@
     "pastDueWarning": "Le dernier paiement a échoué. Mettez à jour le moyen de paiement pour garder l'organisation active.",
     "updatePayment": "Mettre à jour le moyen de paiement",
     "statusExpired": "Essai terminé",
-    "expiredNotice": "L'essai est terminé. Les studios facturés via cette organisation sont passés au plan Free et en ont été dissociés. Abonnez-vous pour rouvrir l'organisation, puis invitez-les à nouveau."
+    "expiredNotice": "L'essai est terminé. Les studios facturés via cette organisation sont passés au plan Free et en ont été dissociés. Abonnez-vous pour rouvrir l'organisation, puis invitez-les à nouveau.",
+    "compedBadge": "Non facturé",
+    "compedFree": "Gratuit",
+    "compedNote": "Linyup ne facture rien à cette organisation. Il n'y a ni abonnement ni facture à régler.",
+    "perMonthSuffix": "/mois"
   },
   "OrgSettings": {
     "title": "Paramètres",

@@ -45,7 +45,12 @@ const HMD_BELT_LEVELS = [
  * drifting out of date makes the migration warn about a member that no longer
  * exists rather than write a wrong document.
  */
-export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup'] as const
+export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup', 'hmd-belts'] as const
+// `hmd-belts` joined the bundle on 2026-09-05 and this copy did not, which is
+// the drift direction the comment above does NOT cover: an EXTRA member the
+// list does not know about is not warned about — it is simply never checked, so
+// the migration would have reported a healthy container while the belt ladder
+// silently failed to materialise. A stale entry is loud; a missing one is not.
 
 /**
  * hmd-lineup event type → Linyup event type.
@@ -118,8 +123,54 @@ export function rankingSystemLevelValues(systemId: string): Set<number> | null {
   return values
 }
 
-export const EMULATOR_FIRESTORE_HOST = 'localhost:8080'
-export const EMULATOR_AUTH_HOST      = 'localhost:9099'
+/**
+ * Does this club belong to the requested sample?
+ *
+ * Matches an id EXACTLY, or a name case-insensitively after collapsing
+ * whitespace — HMD's club names are typed by people ("M  Marzella", "M
+ * Marzella") and a sample selector that misses on a double space is a selector
+ * nobody trusts. Absent selector ⇒ everything, so every existing invocation is
+ * unchanged.
+ *
+ * Substring, not equality, on the name: "Basel" should find "HMD Basel" without
+ * anyone having to reproduce the club's full registered name from memory.
+ */
+export function matchesTeamSample(
+  sample: string[] | undefined,
+  teamId: string,
+  teamName: string
+): boolean {
+  if (!sample?.length) return true
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  const name = norm(teamName)
+  return sample.some((want) => {
+    const w = norm(want)
+    return teamId === want.trim() || name === w || name.includes(w)
+  })
+}
+
+// WHICH emulator `--target-emulator` means.
+//
+// Slot 0's ports by default — the main checkout — plus `LINYUP_SLOT` for a
+// worktree, which runs its own suite on every port + N x 10000 (see
+// .claude/skills/local-env). These were hardcoded, so `--target-emulator` from a
+// worktree reported the emulators as "not running" while that worktree's own
+// suite sat there listening.
+//
+// ── AND IT IS DELIBERATELY *NOT* `FIRESTORE_EMULATOR_HOST` ──────────────────
+// Every other script in the repo reads that variable, and this one must not:
+// firebase-admin reads it too, globally, for every app. `initApps` depends on it
+// being UNSET while the SOURCE app is created — the moment it is set, the source
+// is the emulator as well, the migration reads an empty database, and it reports
+// "0 clubs available" as though the customer's Firestore were empty. A silent
+// wrong answer, reachable by following the documented `local-env env`
+// incantation, which is why `initApps` now CLEARS the variables rather than
+// trusting them to be absent.
+const SLOT = Number(process.env.LINYUP_SLOT ?? 0) || 0
+const slotPort = (base: number) => base + SLOT * 10000
+
+export const EMULATOR_FIRESTORE_HOST = `localhost:${slotPort(8080)}`
+export const EMULATOR_AUTH_HOST = `localhost:${slotPort(9099)}`
 export const EMULATOR_PROJECT_ID     = 'demo-linyup'
 
 export const DEFAULT_ORG_ADMIN_EMAIL = 'franco.dgstn@gmail.com'
@@ -130,6 +181,21 @@ export interface MigrationConfig {
   targetEmulator: boolean
   dryRun: boolean
   only?: string
+  /**
+   * Import only these clubs — by NAME (case-insensitive, trimmed) or by id.
+   *
+   * A full HMD run copies sixteen clubs and sixteen hundred contacts, which is
+   * minutes of waiting for anyone changing a transform and wanting to see what
+   * it did. Three clubs is the same shapes at a hundredth of the cost.
+   *
+   * It is a SAMPLE, and the difference matters when reading the result: an
+   * unlisted club's contacts, sessions and check-ins are absent, so a
+   * cross-club count will not tie out and `verify` compares only what was
+   * asked for. Never use it for a real target.
+   *
+   * Absent ⇒ every club, which is the behaviour every existing invocation gets.
+   */
+  teams?: string[]
   /**
    * Re-apply the CURRENT transforms to documents that already exist on the
    * target, instead of skipping them.
@@ -203,6 +269,17 @@ let _targetAuth: Auth
 export function initApps(cfg: MigrationConfig) {
   // 1. Init source app and immediately lock in its Firestore + Auth instances
   //    while emulator env vars are still unset.
+  // THE SOURCE IS NEVER AN EMULATOR. firebase-admin resolves these variables
+  // globally, so an ambient value — `local-env env` exports both, and it is the
+  // documented way to point a script at a worktree's slot — would silently make
+  // the customer's production database resolve to localhost. The migration then
+  // reads nothing, and says so in the language of a successful run.
+  //
+  // Cleared here rather than merely "expected to be unset", because the comment
+  // that expected it was true right up until somebody exported them.
+  delete process.env.FIRESTORE_EMULATOR_HOST
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST
+
   const sourceApp = initializeApp({ credential: cert(cfg.sourceCredsPath) }, 'source')
   _sourceDb   = asReadonly(getFirestore(sourceApp))
   _sourceAuth = getAuth(sourceApp)

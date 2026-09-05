@@ -9,7 +9,7 @@ async function countCollection(db: ReadonlyFirestore | Firestore, name: string):
   return snap.data().count
 }
 
-export async function verify(teamIds: string[]): Promise<void> {
+export async function verify(teamIds: string[], sampled = false): Promise<void> {
   console.log('\n=== Verification ===')
   const src = sourceDb()
   const tgt = targetDb()
@@ -43,7 +43,20 @@ export async function verify(teamIds: string[]): Promise<void> {
     // so a raw count over-reports there too. It is left raw and flagged rather
     // than silently reconciled, because "how many users are active" is the
     // migration's own judgement and not something this check should re-derive.
-    const s = teamScoped.includes(col) ? await countScoped(col) : await countCollection(src, col)
+    // A SAMPLE IMPORTS THREE CLUBS OUT OF SIXTEEN, and `teams` is the one row
+    // that would call that a failure: its source side is a raw collection count,
+    // so it compares the whole federation against the handful that was asked
+    // for. The expected number under `--teams` is the size of the sample.
+    //
+    // Every other row already survives sampling — the team-scoped ones are
+    // scoped to the same ids, and `users` and `referrals` are migrated whole
+    // either way.
+    const s =
+      sampled && col === 'teams'
+        ? teamIds.length
+        : teamScoped.includes(col)
+          ? await countScoped(col)
+          : await countCollection(src, col)
     const t = await countCollection(tgt, col)
     results.push({ collection: col, src: s, tgt: t, ok: col === 'users' ? true : t >= s })
   }
@@ -77,6 +90,12 @@ export async function verify(teamIds: string[]): Promise<void> {
     "  note: team-scoped rows count only source docs on a MIGRATED team; 'users' is raw," +
       ' and the target legitimately exceeds it (pass 1 migrates active users only).'
   )
+  if (sampled) {
+    console.log(
+      `  note: SAMPLE run — ${teamIds.length} club(s) of the source's total. Counts are` +
+        ' scoped to them, so this proves the sample is complete, NOT the federation.'
+    )
+  }
 
   // Spot-check: 3 contacts per team
   for (const teamId of teamIds.slice(0, 3)) {

@@ -3,7 +3,7 @@ import { sourceDb, targetDb, mapSourceEventType } from '../config'
 import { BatchWriter } from '../batch-writer'
 import { transformEvent } from '../transforms/events'
 
-export async function pass08Events(cfg: MigrationConfig): Promise<void> {
+export async function pass08Events(cfg: MigrationConfig, teamIds?: string[]): Promise<void> {
   console.log('Pass 8: events + invitations + attendees + global checkins')
   const src = sourceDb()
   const tgt = targetDb()
@@ -78,6 +78,19 @@ export async function pass08Events(cfg: MigrationConfig): Promise<void> {
       }
 
       const checkinData = cd.data() as Record<string, unknown>
+
+      // ── THE SAMPLE REACHES CHECK-INS TOO ─────────────────────────────────
+      // Events are org-wide and all of them come over; a CHECK-IN belongs to a
+      // club. Copying every one under `--teams` would leave the target holding
+      // attendance for contacts the sample never imported — rows that point at
+      // nothing, which is worse than absent because the belt engine counts them
+      // as participation while no contact page can show them.
+      //
+      // `teamIds` is undefined on a full run, and then this does nothing.
+      if (teamIds && !teamIds.includes(String(checkinData.teamId ?? ''))) {
+        bw.skip()
+        continue
+      }
 
       // Basic field guard: ensure required fields are present before writing.
       // If teamId is missing, leave it absent rather than inventing a value.

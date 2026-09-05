@@ -20,35 +20,57 @@
 
 import { useTranslations } from 'next-intl'
 import { useQuery } from '@tanstack/react-query'
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '@/lib/firebase'
-import { CONTACTS_COLLECTION, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION } from '@linyup/shared'
+import {
+  CONTACTS_COLLECTION,
+  CONTACT_WEEKLY_REPORTS_SUBCOLLECTION,
+  densifyWeeklyCounts,
+  isoWeekKeysBack,
+} from '@linyup/shared'
 
 export interface WeeklyReport {
   iso_week: string
   sessions_count: number
 }
 
-/** The contact's weekly attendance rollups, oldest first.
- *  Read by BOTH the header sparkline and the card below. */
+/** The contact's weekly attendance rollups, oldest first, ONE ENTRY PER WEEK.
+ *  Read by BOTH the header sparkline and the card below.
+ *
+ *  ── A WEEK WITH NO ROW IS A WEEK WITH NO ATTENDANCE ───────────────────────
+ *  `weeklyReports` writes a document only for a contact who turned up that week
+ *  (it builds its map from session participants), so these rows are SPARSE.
+ *  This hook used to take the last N rows and hand them over as the last N
+ *  weeks — so somebody who came sixteen times across two years and then stopped
+ *  produced a flat, healthy sixteen-week line, and the chart could not express
+ *  a drop-off at all. That is the one thing it exists to show.
+ *
+ *  So the WINDOW is asked for by date and the gaps are filled with zero. The
+ *  range is on the same field as the ordering, so no composite index is needed.
+ *
+ *  Migrated HMD history is dense — hmd-lineup wrote a row per contact per week
+ *  whether they attended or not — and reads back identically here, because a
+ *  stored zero and an absent week now mean the same thing. */
 export function useContactWeeklyReports(contactId: string, weeks = 16) {
   return useQuery<WeeklyReport[]>({
     queryKey: ['contact-weekly-reports', contactId, weeks],
     queryFn: async () => {
+      const window = isoWeekKeysBack(weeks)
       const snap = await getDocs(
         query(
           collection(db, CONTACTS_COLLECTION, contactId, CONTACT_WEEKLY_REPORTS_SUBCOLLECTION),
-          orderBy('iso_week', 'desc'),
-          limit(weeks),
+          where('iso_week', '>=', window[0]),
+          orderBy('iso_week', 'asc'),
         ),
       )
-      return snap.docs
-        .map((d) => ({
+      return densifyWeeklyCounts(
+        snap.docs.map((d) => ({
           iso_week: d.data().iso_week as string,
           sessions_count: (d.data().sessions_count as number) ?? 0,
-        }))
-        .reverse()
+        })),
+        weeks,
+      )
     },
   })
 }

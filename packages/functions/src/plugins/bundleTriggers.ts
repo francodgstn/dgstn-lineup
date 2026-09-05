@@ -1,7 +1,8 @@
 // Install-document reconciliation triggers — one per install path.
 //
-// TWO reconcilers ride each trigger: `reconcileBundle` (a container's members)
-// and `reconcileRequirements` (a plugin's dependencies). They are separate
+// THREE passes ride each trigger: `reconcileBundle` (a container's members),
+// `reconcileRequirements` (a plugin's dependencies) and `applyPluginSeeds` (the
+// content a plugin installs with). They are separate
 // relations with separate maps and separate provenance rules — see
 // `plugin-requirements.ts` for why a requirement is deliberately not a bundle
 // member — but they share these triggers rather than declaring a second pair on
@@ -24,12 +25,17 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import { reconcileBundle } from './bundleReconcile'
 import { reconcileRequirements } from './requirementsReconcile'
+import { applyPluginSeeds } from './seeds'
 
 export const onTeamBundleInstallChange = onDocumentWritten(
   { document: 'teams/{teamId}/installed_plugins/{pluginId}', retry: true },
   async (event) => {
     await reconcileBundle({ kind: 'team', teamId: event.params.teamId }, event.params.pluginId)
     await reconcileRequirements({ kind: 'team', teamId: event.params.teamId }, event.params.pluginId)
+    // AFTER the reconcilers: a member materialized by `reconcileBundle` above
+    // gets its own trigger invocation, which is where ITS seeds are applied.
+    // This call is for the plugin whose document actually changed.
+    await applyPluginSeeds({ kind: 'team', teamId: event.params.teamId }, event.params.pluginId)
   },
 )
 
@@ -38,5 +44,6 @@ export const onOrgBundleInstallChange = onDocumentWritten(
   async (event) => {
     await reconcileBundle({ kind: 'org', orgId: event.params.orgId }, event.params.pluginId)
     await reconcileRequirements({ kind: 'org', orgId: event.params.orgId }, event.params.pluginId)
+    await applyPluginSeeds({ kind: 'org', orgId: event.params.orgId }, event.params.pluginId)
   },
 )

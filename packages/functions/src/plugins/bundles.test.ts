@@ -218,8 +218,10 @@ describe('the reconciler is the only writer of a member install doc', () => {
   it('the migration installs the CONTAINER, never a member', () => {
     const setup = code(readAt(join(ROOT, 'scripts', 'migration', 'passes', '00-setup.ts')))
     assert.ok(
-      setup.includes('const containerPluginId'),
-      'the migration must install the hmd container',
+      /CONTAINER_PLUGIN_ID\s*=\s*'hmd'/.test(setup),
+      'the migration must install the hmd container. Pins the VALUE, not just the identifier: ' +
+        'the previous form matched the declaration name alone and failed on a rename that ' +
+        'changed nothing about the behaviour it is guarding.',
     )
     for (const member of bundleMembers('hmd')) {
       assert.ok(
