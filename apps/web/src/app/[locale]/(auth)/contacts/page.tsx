@@ -40,7 +40,7 @@ import {
   planHasHardContactCap, resolveIntroOffer,
 } from '@linyup/shared'
 import type { Contact, ContactGroup, AcquisitionStage, ContactEntry, ContactSource, ContactRequest, RankingSystem, SubscriptionType, SubscriptionPrice, OrgAffiliationStatusDef, SaasPlan, EngagementBand, EngagementThresholds, CustomFieldDefinition, CustomFieldType } from '@linyup/shared'
-import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS } from '@linyup/shared'
+import { ACQUISITION_STAGES, CONTACT_ENTRIES, CONTACT_SOURCES, ENGAGEMENT_BANDS, planGrantExpiryMs } from '@linyup/shared'
 // The ONE contact predicate — see packages/shared/src/utils/contactFilter.ts.
 // Never re-implement matching here; extend the resolver instead.
 import {
@@ -67,18 +67,21 @@ import {
 import { BulkGroupsDialog } from '@/plugins/contact-groups/BulkGroupsDialog'
 import { SaveAsGroupDialog } from '@/plugins/contact-groups/SaveAsGroupDialog'
 import { BulkOutreachDialog } from '@/components/contacts/BulkOutreachDialog'
+import { BulkSetCustomFieldDialog } from '@/plugins/custom-fields/BulkSetCustomFieldDialog'
+import type { CustomFieldValue } from '@/plugins/custom-fields/CustomFieldInput'
 import { toast } from 'sonner'
 import { GROUP_RULE_HANDOFF_KEY } from '@/plugins/contact-groups/GroupRuleDialog'
 import { setGroupRule } from '@/plugins/contact-groups/hooks'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck, StickyNote } from 'lucide-react'
+import { UserPlus, X, Plus, AlertCircle, ChevronDown, ChevronUp, ChevronRight, Archive, Trash2, RotateCcw, MoreHorizontal, ArrowRightLeft, Mail, Pencil, Award, CreditCard, Tag, Check, Bookmark, BookmarkPlus, BarChart2, Eye, FolderTree, ShieldCheck, UserCheck, StickyNote, ListPlus } from 'lucide-react'
 import type { Route } from 'next'
 import { RosterCard } from '@/components/dashboard/RosterCard'
 import { DemographicsCard } from '@/components/dashboard/DemographicsCard'
 import { getPrimaryRank } from '@/lib/rank-utils'
 import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -723,10 +726,12 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
                   NOT called "pin": that word belongs to the open-tabs strip, and
                   this is not a destination at all — see THE NAV-MEMORY CENSUS in
                   contexts/NavPinsContext.tsx. */}
-              <button type="button" onClick={() => togglePresetPin(q.id)}
-                className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                title={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
-              ><Eye className="h-3 w-3" /></button>
+              <Tip label={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}>
+                <button type="button" onClick={() => togglePresetPin(q.id)}
+                  className={`shrink-0 p-1 transition-all ${isPinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                  aria-label={isPinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+                ><Eye className="h-3 w-3" /></button>
+              </Tip>
             </div>
           )
         })}
@@ -737,10 +742,12 @@ function SavedMenu({ filters, onChange, saved, save, remove, togglePin, pinnedPr
             {saved.map((q) => (
               <div key={q.id} className="flex items-center gap-1 rounded hover:bg-accent group px-1">
                 <button type="button" onClick={() => apply(q)} className="flex-1 px-1 py-1.5 text-sm text-left truncate">{q.name}</button>
-                <button type="button" onClick={() => togglePin(q.id)}
-                  className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
-                  title={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
-                ><Eye className="h-3 w-3" /></button>
+                <Tip label={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}>
+                  <button type="button" onClick={() => togglePin(q.id)}
+                    className={`shrink-0 p-1 transition-all ${q.pinned ? 'text-primary opacity-100' : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary'}`}
+                    aria-label={q.pinned ? t('savedHideFromFilterBar') : t('savedShowInFilterBar')}
+                  ><Eye className="h-3 w-3" /></button>
+                </Tip>
                 <button type="button" onClick={() => remove(q.id)}
                   className="shrink-0 p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
                 ><X className="h-3 w-3" /></button>
@@ -2353,9 +2360,12 @@ function BulkSetSubscriptionDialog({
             >
               <div className="flex items-center gap-2">
                 <p className="font-medium flex-1">{st.name}</p>
-                <Badge variant={st.source === 'aggregator' ? 'secondary' : 'outline'} className="text-xs shrink-0">
-                  {tSettings(st.source === 'aggregator' ? 'subTypeSourceAggregator' : 'subTypeSourceInternal')}
-                </Badge>
+                {/* The exception, not the rule — see SubscriptionTypesManager. */}
+                {st.source === 'aggregator' && (
+                  <Badge variant="secondary" className="text-xs shrink-0">
+                    {tSettings('subTypeSourceAggregator')}
+                  </Badge>
+                )}
               </div>
               {st.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{st.description}</p>}
             </button>
@@ -2709,7 +2719,7 @@ export default function ContactsPage() {
   // The create dialog always opens — at the Free hard cap it restricts the entry
   // choice to 'booking' (a non-counting provisional lead) instead of blocking.
   const openCreateDialog = () => setDialogOpen(true)
-  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | null>(null)
+  const [bulkEditMode, setBulkEditMode] = useState<'rank' | 'subscription' | 'stage' | 'group-add' | 'group-remove' | 'custom-field' | null>(null)
 
   // confirm dialogs
   const [confirmArchive, setConfirmArchive] = useState<string[]>([])
@@ -2838,15 +2848,18 @@ export default function ContactsPage() {
     invalidateContacts()
   }
 
-  // THE SAME FIVE FIELDS the per-contact dialog writes, every time — see the
-  // note on BulkSetSubscriptionDialog. The three price fields are written even
-  // when they are null: an omitted key on `updateDoc` leaves the PREVIOUS plan's
-  // price standing, which is exactly the defect this replaced, and it reaches
-  // the subscription history and the transitions ledger, not just the screen.
+  // THE SAME FIELDS the per-contact dialog writes, every time — see the note on
+  // BulkSetSubscriptionDialog. The price fields are written even when they are
+  // null: an omitted key on `updateDoc` leaves the PREVIOUS plan's price
+  // standing, which is exactly the defect this replaced, and it reaches the
+  // subscription history and the transitions ledger, not just the screen. The
+  // grant's end date obeys the same rule and for a sharper reason — inherited
+  // from a previous plan it would expire the one being assigned right now.
   const bulkSetSubscription = async (
     type: SubscriptionType | null,
     price: SubscriptionPrice | null
   ) => {
+    const grantExpiryMs = planGrantExpiryMs(price)
     await Promise.all([...selected].map((id) =>
       updateDoc(doc(db, CONTACTS_COLLECTION, id), {
         subscription_type_id: type?.id ?? null,
@@ -2854,10 +2867,29 @@ export default function ContactsPage() {
         subscription_price_id: price?.id ?? null,
         subscription_recurrence: price?.recurrence ?? null,
         subscription_amount: price?.amount ?? null,
+        subscription_expires_at:
+          grantExpiryMs === null ? null : Timestamp.fromMillis(grantExpiryMs),
         subscription_type_updated_at: serverTimestamp(),
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.
         ...(type ? { provisional: deleteField(), provisional_expires_at: deleteField() } : {}),
+        updatedAt: serverTimestamp(),
+      })
+    ))
+    invalidateContacts()
+  }
+
+  // THE SAME `custom_fields.{id}` dotted path bulkSetRank uses for
+  // `ranks.{systemId}` — an `updateDoc` key with a dot in it is a Firestore
+  // field PATH, so this only ever touches the one field being set, leaving
+  // every other custom field on the contact (and every contact not selected)
+  // untouched. `null` means "clear" (the dialog never calls this for a field
+  // nobody explicitly touched) — same `deleteField()` shape bulkSetRank uses.
+  const bulkSetCustomField = async (fieldId: string, value: CustomFieldValue | null) => {
+    const fieldKey = `custom_fields.${fieldId}`
+    await Promise.all([...selected].map((id) =>
+      updateDoc(doc(db, CONTACTS_COLLECTION, id), {
+        [fieldKey]: value !== null ? value : deleteField(),
         updatedAt: serverTimestamp(),
       })
     ))
@@ -2941,7 +2973,7 @@ export default function ContactsPage() {
           <QuickLinks
             links={[
               { href: '/bookings' as Route, label: tNav('bookings') },
-              { href: '/payments' as Route, label: tNav('paymentsAndSubscriptions') },
+              { href: '/payments' as Route, label: tNav('payments') },
             ]}
           />
           {!loadingActive && !usage.isUnlimited && (
@@ -3228,6 +3260,7 @@ export default function ContactsPage() {
               { label: t('bulkAddToGroup'),      icon: FolderTree, onClick: () => setBulkEditMode('group-add') },
               { label: t('bulkRemoveFromGroup'), icon: FolderTree, onClick: () => setBulkEditMode('group-remove') },
             ] : []),
+            ...(customFieldDefs.length > 0 ? [{ label: t('bulkSetCustomField'), icon: ListPlus, onClick: () => setBulkEditMode('custom-field') }] : []),
           ] : []}
           // The menu itself is no longer plan-gated: gating the whole thing made
           // it vanish, so a Coach had no way to discover outreach exists or to
@@ -3325,6 +3358,14 @@ export default function ContactsPage() {
           onConfirm={(groupId) => bulkGroupUpdate(groupId, bulkEditMode === 'group-remove' ? 'remove' : 'add')}
         />
       )}
+
+      <BulkSetCustomFieldDialog
+        open={bulkEditMode === 'custom-field'}
+        onOpenChange={(v) => { if (!v) setBulkEditMode(null) }}
+        definitions={customFieldDefs}
+        count={selected.size}
+        onConfirm={bulkSetCustomField}
+      />
 
       <AskToSignDialog
         open={askToSignOpen}

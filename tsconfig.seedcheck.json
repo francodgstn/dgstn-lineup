@@ -11,6 +11,6 @@
     "baseUrl": ".",
     "paths": { "@linyup/shared": ["packages/shared/src/index.ts"] }
   },
-  "//": "A GLOB, NOT A LIST. This named seven paths and scripts/ holds 27 files, so twenty of them — every backfill, purge-team, reset-sandbox-db, stripe-sync — were typechecked by nobody. scripts/migrate-hmd.ts sat in that blind spot until 2026-08-27 and was only added by hand after it broke. Anything added under scripts/ is now checked without anybody remembering to list it.",
+  "//": "A GLOB, NOT A LIST. This named a handful of paths against a directory of dozens, so every backfill, purge-team, reset-sandbox-db and stripe-sync was typechecked by nobody — scripts/ is not a workspace, so `turbo run typecheck` never sees it. scripts/migrate-hmd.ts sat in that blind spot until it broke and was added by hand, which is the tell: a list that must be remembered will be forgotten again.",
   "include": ["scripts/**/*.ts"]
 }

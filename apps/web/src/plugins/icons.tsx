@@ -22,8 +22,10 @@
 import {
   Award,
   BadgePercent,
+  Boxes,
   Calculator,
   ClipboardList,
+  Dumbbell,
   FileText,
   FolderTree,
   Gift,
@@ -45,8 +47,10 @@ import type { LucideIcon } from 'lucide-react'
 export const PLUGIN_ICON_MAP: Record<string, LucideIcon> = {
   Award,
   BadgePercent,
+  Boxes,
   Calculator,
   ClipboardList,
+  Dumbbell,
   FileText,
   FolderTree,
   Gift,

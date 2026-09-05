@@ -1,3 +1,4 @@
+import type { SurfaceThemePresetId } from './themePreset'
 import type { PerformanceIndicator } from './goal'
 import type { Timestamp } from './common'
 import type { TermsAcceptance } from '../legal'
@@ -658,15 +659,27 @@ export interface Team {
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `bioLinkTheme` and
+   * `bioLinkBackground` below, which stay only so a bio-link authored before
+   * presets keeps its look until the studio picks one (no backfill).
+   */
+  bioLinkThemePreset?: SurfaceThemePresetId
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkBackground?: BioLinkBackground
   /**
-   * The team's coaching dimensions — the ONE list naming both goal categories
-   * and performance-check-in axes. Read through `resolveCoachingDimensions`,
-   * which falls back to `DEFAULT_COACHING_DIMENSIONS` when absent, and mirrored
-   * onto `TeamPublicProfile` so the member surfaces (which cannot read this
+   * The team's performance-check-in axes — HOW SOMEONE IS DOING, the radar's
+   * dimensions. Read through `resolveCoachingDimensions`, which falls back to
+   * `DEFAULT_COACHING_DIMENSIONS` when absent, and mirrored onto
+   * `TeamPublicProfile` so the member surfaces (which cannot read this
    * document) see the same vocabulary.
+   *
+   * NOT goal categories — that is `goal_categories` below, and the two lists
+   * answer different questions (see the header of types/goal.ts).
    *
    * Replacing the canonical five disables the NAMED performance profiles:
    * `detectPerformanceProfile` returns a null `profile_key` unless all five are
@@ -674,6 +687,17 @@ export interface Team {
    * Weakest/strongest axis keeps working for any vocabulary.
    */
   performance_indicators?: PerformanceIndicator[]
+  /**
+   * The team's goal categories — WHAT A GOAL IS ABOUT. Read through
+   * `resolveGoalCategories`, which falls back to `DEFAULT_GOAL_CATEGORIES`
+   * (technique / attitude / attendance / physical / mental) when absent, and
+   * mirrored onto `TeamPublicProfile` for the member surfaces.
+   *
+   * Same shape as `performance_indicators`, a different list on purpose: a
+   * category is a label on a piece of work, with no scale and no heuristic
+   * reading it, so a team may replace the whole list freely.
+   */
+  goal_categories?: PerformanceIndicator[]
 
   // Outreach / email template custom variables
   outreach_placeholders?: Record<string, string>
@@ -877,6 +901,57 @@ export interface PublicCoach {
   photoUrl?: string
 }
 
+// ─── Gamification settings (teams/{id}.settings.gamification) ─────────────────
+// Badge thresholds + coach-assigned badge definitions — the studio's
+// customisation of the gamification plugin. SAME SHAPE as the mobile app's
+// hand-mirror (`apps/mobile/src/types/index.ts`'s `GamificationSettings` /
+// `BadgeThresholds` / `CoachBadgeConfig`, pre-existing there); this is the
+// shared definition it should read from instead of hand-mirroring further.
+// Mirrored (public, read-only) onto `TeamPublicProfile.gamification_settings`
+// because the Space/mobile member surfaces run on a contact session and
+// cannot read `teams/{id}` — see that field's doc comment. Nothing private:
+// a threshold number and a badge label a member is about to see themselves
+// earn.
+export interface GamificationBadgeThresholds {
+  attendance: { enabled: boolean; first_class: number; dedicated: number; committed: number; centurion: number; veteran: number }
+  streak: { enabled: boolean; on_fire: number; unstoppable: number; legendary: number }
+  score: { enabled: boolean; rising_star: number; monthly_star: number; superstar: number }
+  leaderboard: { enabled: boolean; leader: number; top5: number; hall_of_fame: number }
+  explorer: { enabled: boolean; explorer: number }
+}
+
+export interface GamificationCoachBadge {
+  key: string
+  label: string
+  icon?: string
+  description?: string
+}
+
+export interface GamificationSettings {
+  badge_thresholds?: GamificationBadgeThresholds
+  coach_badges?: GamificationCoachBadge[]
+}
+
+/**
+ * The PUBLIC-safe slice of `teams/{id}.settings.gamification` — exactly the
+ * two fields `GamificationSettings` declares. The stored bag ALSO carries the
+ * studio's scoring configuration (`default_base_score`, `monthly_cap`,
+ * `streak_min_sessions`, `time_multipliers` — see the admin gamification
+ * page), which is not a member-facing setting and must never ride onto the
+ * world-readable `TeamPublicProfile.gamification_settings` mirror; a type cast
+ * erases nothing at runtime, so the narrowing has to be done by hand, here.
+ * Returns null when nothing public is configured and never emits an
+ * `undefined` value (the Admin SDK refuses them).
+ */
+export function pickPublicGamificationSettings(raw: unknown): GamificationSettings | null {
+  if (!raw || typeof raw !== 'object') return null
+  const { badge_thresholds, coach_badges } = raw as Partial<GamificationSettings>
+  const out: GamificationSettings = {}
+  if (badge_thresholds && typeof badge_thresholds === 'object') out.badge_thresholds = badge_thresholds
+  if (Array.isArray(coach_badges)) out.coach_badges = coach_badges
+  return Object.keys(out).length > 0 ? out : null
+}
+
 export interface TeamPublicProfile {
   name: string
   description?: string
@@ -896,16 +971,25 @@ export interface TeamPublicProfile {
   profileImage?: string
   heroImage?: string
   socialLinks?: SocialLink[]
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `bioLinkTheme` and
+   * `bioLinkBackground` below, which stay only so a bio-link authored before
+   * presets keeps its look until the studio picks one (no backfill).
+   */
+  bioLinkThemePreset?: SurfaceThemePresetId
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkTheme?: BioLinkTheme
   bioLinkAccentColor?: string
+  /** LEGACY, read only while `bioLinkThemePreset` is absent. */
   bioLinkBackground?: BioLinkBackground
   bookingSettings?: BookingSettings
   /** Opt-in custom field definitions the public book form may render — only
    *  those flagged `publicOnBookingForm`. See CustomFieldDefinition. */
   publicCustomFields?: PublicCustomFieldDefinition[]
   /**
-   * The team's coaching dimensions — the ONE list that names both goal
-   * categories and performance-check-in axes (see `resolveCoachingDimensions`).
+   * The team's performance-check-in axes — the radar's dimensions, NOT goal
+   * categories (see `resolveCoachingDimensions`, and `goal_categories` below).
    *
    * Mirrored because the member surfaces need it and cannot reach the source:
    * `teams/{id}` is members-only, and the Space runs on a contact session. Read
@@ -916,6 +1000,12 @@ export interface TeamPublicProfile {
    * Nothing private: a label the member is about to be asked to rate.
    */
   performance_indicators?: PerformanceIndicator[]
+  /**
+   * The team's goal categories (see `resolveGoalCategories`), mirrored for the
+   * same reason and equally public: a label the member is about to be offered
+   * when filing a goal of their own in the Space.
+   */
+  goal_categories?: PerformanceIndicator[]
   // Team-wide cancellation policy shown on public booking pages and appended to
   // confirmation emails when the activity has no `cancellationPolicy` of its
   // own. Denormalized by syncTeamPublicProfile from
@@ -1060,12 +1150,49 @@ export interface TeamPublicProfile {
   //
   // Absent/empty ⇒ this studio accepts none, and the question is not asked.
   partner_apps?: string[]
+  // Whether the `gamification` plugin is installed (team's own, or its org's) —
+  // denormalized by syncTeamPublicProfile through the same org-aware
+  // `resolveActivePluginInstalls` probe as `kiosk`/`gift-cards`, because the
+  // Space's Gamification tab (score/streak/leaderboard/badges) runs on a
+  // contact session and cannot read `teams/{id}/installed_plugins`. This is
+  // ONLY the install gate for showing the tab; the data it displays (the
+  // contact's own score/streak/badges, and `teams/{id}/leaderboard/current`)
+  // is read separately and is already permitted for a contact session by
+  // firestore.rules (`isSelfContact`, and the `leaderboard` subcollection's own
+  // `sessionExpires` arm) — no rules change needed for either.
+  gamificationEnabled?: boolean
+  // The badge thresholds + coach-badge definitions themselves (see
+  // GamificationSettings above), so the Space and the mobile app render a
+  // studio's OWN customisation rather than the built-in defaults. Denormalized
+  // from `teams/{id}.settings.gamification` by syncTeamPublicProfile,
+  // regardless of `gamificationEnabled` (the plugin gate governs whether a
+  // reader SHOWS the tab, not whether the settings exist to mirror). Absent ⇒
+  // the reader falls back to its own defaults, same as before this field
+  // existed.
+  gamification_settings?: GamificationSettings | null
   // The team's PUBLIC + active subscription types, mirrored by
   // syncSubscriptionTypesToPublicProfile for the website pricing table, the
   // public shop and the booking form's access lines. The field name predates
   // the meaning — it is "public", not aggregator-only — and is kept because it
   // is what every stored document and reader already says.
   aggregator_subscription_types?: PublicSubscriptionTypeEntry[]
+  // The EFFECTIVE ranking systems (belts/ranks) this team's contacts are
+  // scored against — team's own, or its organisation's when the org has
+  // configured any (see `effectiveRankingSystems`, utils/rankingSystems.ts;
+  // "when set, overrides" is the org doc's own rule, applied here rather than
+  // re-decided by each reader). Denormalized because the member surfaces
+  // (Space, mobile) run on a contact session and cannot read `teams/{id}` or
+  // `organizations/{id}`. Nothing private: level names and colours a member
+  // already sees on their own rank. LIMITATION: an org-only write (no team
+  // write) does not re-trigger this sync — see syncTeamPublicProfile's header.
+  ranking_systems?: RankingSystem[]
+  // The organisation's custom label for the affiliation concept (e.g.
+  // "Membership", "Lizenz") — mirrors `Organization.affiliation_term`, null
+  // when independent or when the org has set none (readers resolve
+  // term[locale] ?? term['en'] ?? a hardcoded default themselves, same as the
+  // org-facing surfaces do). Same staleness limitation as `ranking_systems`
+  // above: an org-only write does not re-trigger this team mirror.
+  affiliation_term?: Partial<Record<'en' | 'de' | 'fr' | 'it', string>> | null
 }
 
 /** One entry of `TeamPublicProfile.aggregator_subscription_types` — the

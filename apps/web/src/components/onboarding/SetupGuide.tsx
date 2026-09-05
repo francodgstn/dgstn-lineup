@@ -73,6 +73,7 @@ import {
 import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { Tip } from '@/components/ui/tip'
 
 /** Ask the guide to open — dispatched from anywhere that would otherwise have
  *  to reproduce the list (the dashboard queue's setup row, How-to). Same
@@ -375,24 +376,26 @@ export function SetupGuide() {
           {/* MINIMIZE and DISMISS are two controls because they are two
               different answers — "not now" and "never" — and one control that
               did both would make the reversible one look final. */}
-          <button
-            type="button"
-            aria-label={t('setup.minimize')}
-            title={t('setup.minimize')}
-            onClick={() => setMinimizedPersisted(true)}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label={t('setup.dismiss')}
-            title={t('setup.dismiss')}
-            onClick={() => void setSetupDismissed(currentTeamId, true)}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('setup.minimize')}>
+            <button
+              type="button"
+              aria-label={t('setup.minimize')}
+              onClick={() => setMinimizedPersisted(true)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
+          <Tip label={t('setup.dismiss')}>
+            <button
+              type="button"
+              aria-label={t('setup.dismiss')}
+              onClick={() => void setSetupDismissed(currentTeamId, true)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         </div>
 
         <div className="flex items-center gap-2 px-3 pt-3">

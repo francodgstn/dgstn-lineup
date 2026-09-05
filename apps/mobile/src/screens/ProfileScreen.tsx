@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
-  KeyboardAvoidingView,
   LayoutAnimation,
   Linking,
   Platform,
@@ -14,26 +13,21 @@ import {
   View,
   StatusBar,
 } from 'react-native';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import {
-  Button,
   IconButton,
   Surface,
   Text,
   TouchableRipple,
   useTheme,
-  Avatar,
   Icon,
   Snackbar,
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslations, useLocale, LOCALES } from '../i18n';
 import { FirestoreService } from '../services/firestore';
-import { Contact, SessionPublicProfile, TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus, RankingSystem } from '../types';
+import { TeamPublicProfile, Leaderboard, SessionWithStatus, ContactAlert, GamificationSettings, AppointmentWithStatus, RankingSystem } from '../types';
 import { LoadingOverlay } from '../components/LoadingOverlay';
-import { formatDateValue, formatResidence, formatGender } from '../utils/profileUtils';
+import { formatDateValue, formatAddress, formatGender, resolveAffiliationTerm, resolveSubscriptionTypeName } from '../utils/profileUtils';
 import { waiverRefusal } from '../utils/waiverRefusal';
 
 // Redesigned Components
@@ -51,10 +45,16 @@ import { AlertsCard } from '../components/AlertsCard';
 import { BadgesCard } from '../components/profile/BadgesCard';
 import { SocialActionsCard } from '../components/profile/SocialActionsCard';
 import { TeamCard } from '../components/profile/TeamCard';
+import { useTenantTheme } from '../contexts/TenantThemeContext';
+import { brandFromProfile } from '../utils/tenantTheme';
 import { TeamQrScannerModal } from '../components/profile/TeamQrScannerModal';
 import { SessionPickerModal } from '../components/profile/SessionPickerModal';
 import { GoalsSection } from '../components/profile/GoalsSection';
 import { PerformanceProfileSection } from '../components/profile/PerformanceProfileSection';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type TabType = 'DASH' | 'FEED' | 'TRAIN' | 'TEAM' | 'SELF';
 
@@ -67,6 +67,7 @@ interface CheckInFeedback {
 
 const CheckInFeedbackCard: React.FC<{ feedback: CheckInFeedback; onDismiss: () => void }> = ({ feedback, onDismiss }) => {
   const theme = useTheme();
+  const t = useTranslations('Profile');
 
   const isSuccess = feedback.type === 'success';
   const isError = feedback.type === 'error';
@@ -84,18 +85,19 @@ const CheckInFeedbackCard: React.FC<{ feedback: CheckInFeedback; onDismiss: () =
   let subtitle = '';
 
   if (isSuccess && feedback.sessionName) {
-    title = 'Checked in!';
+    title = t('checkedIn');
     const parts: string[] = [feedback.sessionName];
     if (feedback.sessionStart) {
       const d = new Date(feedback.sessionStart);
       const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       const today = new Date();
       const isToday = d.toDateString() === today.toDateString();
-      parts.push(isToday ? `Today at ${time}` : `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} at ${time}`);
+      const dateStr = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      parts.push(isToday ? t('todayAt', { time }) : t('dateAt', { date: dateStr, time }));
     }
     subtitle = parts.join(' · ');
   } else {
-    title = isError ? 'Check-in failed' : 'Check-in';
+    title = isError ? t('checkInFailedTitle') : t('checkInTitle');
     subtitle = feedback.message || '';
   }
 
@@ -122,11 +124,15 @@ const CheckInFeedbackCard: React.FC<{ feedback: CheckInFeedback; onDismiss: () =
 
 export const ProfileScreen: React.FC = () => {
   const theme = useTheme();
+  const t = useTranslations('Profile');
+  const tWaiver = useTranslations('Waiver');
+  const { locale, setLocale } = useLocale();
   const insets = useSafeAreaInsets();
   const { contact, logout, refreshContact, email, showContactSelection, selectContact, matchedContacts } = useAuth();
   const scrollRef = useRef<any>(null);
 
   const [teamProfile, setTeamProfile] = useState<TeamPublicProfile | null>(null);
+  const { setBrand } = useTenantTheme();
   const [affiliationTerm, setAffiliationTerm] = useState<string>('Affiliation');
   const [rankingSystems, setRankingSystems] = useState<RankingSystem[]>([]);
   const [subscriptionTypeName, setSubscriptionTypeName] = useState<string | null>(null);
@@ -157,7 +163,7 @@ export const ProfileScreen: React.FC = () => {
 
   // Self check-in state
   const [showScannerModal, setShowScannerModal] = useState(false);
-  const [scanSessions, setScanSessions] = useState<Array<{ id: string; activityName: string; start: any; end: any }>>([]);
+  const [scanSessions, setScanSessions] = useState<{ id: string; activityName: string; start: any; end: any }[]>([]);
   const [showSessionPicker, setShowSessionPicker] = useState(false);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [pendingTeamSlug, setPendingTeamSlug] = useState<string | null>(null);
@@ -178,17 +184,23 @@ export const ProfileScreen: React.FC = () => {
     try {
       let loadedProfile = null;
       if (contact.teamId) {
+        // ONE read of the public_profile mirror carries everything below —
+        // ranking systems and affiliation term are already the team's
+        // EFFECTIVE values (org-aware, resolved server-side by
+        // syncTeamPublicProfile), so no separate org lookup is needed or
+        // possible (a contact session cannot read organizations/{id}).
         loadedProfile = await FirestoreService.getTeamPublicProfile(contact.teamId);
         setTeamProfile(loadedProfile);
-        const term = await FirestoreService.getOrgAffiliationTerm(contact.teamId);
-        setAffiliationTerm(term);
-        // Org-aware: an org-managed tenant keeps its ranking systems on the ORG.
-        setRankingSystems(await FirestoreService.getRankingSystems(contact.teamId));
-        if (contact.subscription_type_id) {
-          const name = await FirestoreService.getSubscriptionTypeName(contact.teamId, contact.subscription_type_id);
-          setSubscriptionTypeName(name);
-        }
+        // The studio's look (preset + accent + logo) → the whole app's theme,
+        // persisted for the next cold start. utils/tenantTheme.ts.
+        if (loadedProfile) setBrand(brandFromProfile(loadedProfile));
+        setAffiliationTerm(resolveAffiliationTerm(loadedProfile?.affiliation_term));
+        setRankingSystems(loadedProfile?.ranking_systems ?? []);
       }
+      // The plan name lives on the contact's own denormalised subscription
+      // snapshot — never `teams/{id}/subscription_types/*`, which a contact
+      // session cannot read.
+      setSubscriptionTypeName(resolveSubscriptionTypeName(contact));
       if (contact.teamId) {
         const lb = await FirestoreService.getTeamLeaderboard(contact.teamId);
         setLeaderboard(lb);
@@ -207,13 +219,10 @@ export const ProfileScreen: React.FC = () => {
         setAgendaSessions(agenda);
       }
 
-      const contactAlerts = await FirestoreService.getContactAlerts(contact.id);
+      const contactAlerts = await FirestoreService.getContactAlerts(contact.id, contact.total_sessions);
       setAlerts(contactAlerts);
 
-      if (contact.teamId) {
-        const settings = await FirestoreService.getTeamGamificationSettings(contact.teamId);
-        setGamificationSettings(settings);
-      }
+      setGamificationSettings(loadedProfile?.gamification_settings ?? null);
 
       if (loadedProfile?.referralEnabled) {
         const stats = await FirestoreService.getMyReferralStats();
@@ -233,7 +242,7 @@ export const ProfileScreen: React.FC = () => {
         // FETCH on it meant a member with a confirmed booking could not even see
         // it, let alone cancel it. The query costs nothing where there is nothing
         // to find: a studio with no appointment sessions matches no documents.
-        const slots = await FirestoreService.getUpcomingAppointments(contact.teamId, contact.id);
+        const slots = await FirestoreService.getUpcomingAppointments(contact.teamId);
         setAppointments(slots);
       } else {
         setAppointments([]);
@@ -281,7 +290,7 @@ export const ProfileScreen: React.FC = () => {
     if (!contact?.id) return;
     const parsed = parseFloat(weightInput.replace(',', '.'));
     if (isNaN(parsed) || parsed < 0) {
-      Alert.alert('Invalid Weight', 'Please enter a valid weight in kg.');
+      Alert.alert(t('invalidWeightTitle'), t('invalidWeightMessage'));
       return;
     }
     setIsSavingWeight(true);
@@ -289,8 +298,8 @@ export const ProfileScreen: React.FC = () => {
       await FirestoreService.updateContactWeight(contact.id, parsed);
       await refreshContact();
       setIsEditingWeight(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update weight');
+    } catch {
+      Alert.alert(t('errorTitle'), t('updateWeightFailed'));
     } finally {
       setIsSavingWeight(false);
     }
@@ -307,19 +316,19 @@ export const ProfileScreen: React.FC = () => {
   // — when the server sent a link — a way to go and sign it on the phone they are
   // already holding. Everything else keeps the existing generic message.
   const handleCheckInError = (err: unknown) => {
-    const waiver = waiverRefusal(err);
+    const waiver = waiverRefusal(tWaiver, err);
     if (!waiver) {
       showFeedback({
         type: 'error',
-        message: (err as { message?: string })?.message || 'Check-in failed. Please try again.',
+        message: (err as { message?: string })?.message || t('checkInFailedGeneric'),
       });
       return;
     }
     if (waiver.signUrl) {
       const url = waiver.signUrl;
-      Alert.alert('Signature needed', waiver.message, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+      Alert.alert(t('signatureNeededTitle'), waiver.message, [
+        { text: t('notNow'), style: 'cancel' },
+        { text: t('open'), onPress: () => { Linking.openURL(url).catch(() => undefined); } },
       ]);
       return;
     }
@@ -343,7 +352,7 @@ export const ProfileScreen: React.FC = () => {
     try {
       const result = await FirestoreService.selfCheckIn({ teamSlug: slug });
       if (result.status === 'no_sessions') {
-        showFeedback({ type: 'info', message: 'No active sessions at this time.' });
+        showFeedback({ type: 'info', message: t('noActiveSessions') });
       } else if (result.status === 'session_required') {
         setScanSessions(result.sessions);
         setShowSessionPicker(true);
@@ -356,7 +365,7 @@ export const ProfileScreen: React.FC = () => {
     } finally {
       setCheckInLoading(false);
     }
-  }, [refreshAgenda]);
+  }, [refreshAgenda, t]);
 
   const handleSessionPicked = useCallback(async (sessionId: string) => {
     if (!pendingTeamSlug) return;
@@ -368,7 +377,7 @@ export const ProfileScreen: React.FC = () => {
         showFeedback({ type: 'success', sessionName: result.sessionName, sessionStart: result.sessionStart });
         refreshAgenda();
       } else {
-        showFeedback({ type: 'error', message: 'Check-in failed. Please try again.' });
+        showFeedback({ type: 'error', message: t('checkInFailedGeneric') });
       }
     } catch (err: unknown) {
       handleCheckInError(err);
@@ -376,7 +385,7 @@ export const ProfileScreen: React.FC = () => {
       setCheckInLoading(false);
       setPendingTeamSlug(null);
     }
-  }, [pendingTeamSlug, refreshAgenda]);
+  }, [pendingTeamSlug, refreshAgenda, t]);
 
   const handleShowQR = useCallback(async () => {
     setIsLoadingQR(true);
@@ -386,21 +395,21 @@ export const ProfileScreen: React.FC = () => {
       if (result?.success && result.qrData) {
         setQrData(result.qrData);
       } else {
-        Alert.alert('Error', 'Failed to generate QR code.');
+        Alert.alert(t('errorTitle'), t('qrGenerateFailed'));
         setShowQRModal(false);
       }
-    } catch (error) {
+    } catch {
       setShowQRModal(false);
     } finally {
       setIsLoadingQR(false);
     }
-  }, []);
+  }, [t]);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('logoutTitle'), t('logoutConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: t('signOut'),
         style: 'destructive',
         onPress: () => {
           logout().catch((err) => {
@@ -434,27 +443,27 @@ export const ProfileScreen: React.FC = () => {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete your account?',
+      t('deleteAccountTitle'),
       // No day count here on purpose: this app does not depend on @linyup/shared,
       // so a number typed in would be a second copy of
       // CONTACT_DELETION_GRACE_DAYS that nothing keeps in step. The server
       // returns the real date and the next alert states it.
-      'Your account will be scheduled for deletion. You can sign in and cancel any time before it happens.\n\nYour name and contact details are removed. Records your studio has to keep — payments and signed documents — stay, but are no longer linked to you by name.',
+      t('deleteAccountBody'),
       [
-        { text: 'Keep my account', style: 'cancel' },
+        { text: t('keepAccount'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               const res = await FirestoreService.requestAccountDeletion();
               await refreshContact();
               Alert.alert(
-                'Deletion scheduled',
-                `Your account will be deleted on ${new Date(res.scheduledForMs).toLocaleDateString()}. Sign in before then and tap Cancel deletion to stop it.`
+                t('deletionScheduledTitle'),
+                t('deletionScheduledBody', { date: new Date(res.scheduledForMs).toLocaleDateString() })
               );
             } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Could not schedule deletion.');
+              Alert.alert(t('errorTitle'), err instanceof Error ? err.message : t('scheduleFailed'));
             }
           },
         },
@@ -466,13 +475,13 @@ export const ProfileScreen: React.FC = () => {
     try {
       await FirestoreService.cancelAccountDeletion();
       await refreshContact();
-      Alert.alert('Deletion cancelled', 'Your account will not be deleted.');
+      Alert.alert(t('deletionCancelledTitle'), t('deletionCancelledBody'));
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Could not cancel.');
+      Alert.alert(t('errorTitle'), err instanceof Error ? err.message : t('cancelFailed'));
     }
   };
 
-  if (!contact) return <LoadingOverlay visible message="Loading profile..." />;
+  if (!contact) return <LoadingOverlay visible message={t('loadingProfile')} />;
 
 
   const handleShowContactSelection = async () => {
@@ -487,11 +496,11 @@ export const ProfileScreen: React.FC = () => {
       if (result.success) {
         setShowContactModal(false);
       } else {
-        Alert.alert('Error', result.error || 'Failed to switch contact');
+        Alert.alert(t('errorTitle'), result.error || t('switchContactFailed'));
       }
     } catch (error) {
       console.error('Error switching contact:', error);
-      Alert.alert('Error', 'An unexpected error occurred while switching contact');
+      Alert.alert(t('errorTitle'), t('switchContactUnexpected'));
     } finally {
       setIsSwitchingContact(false);
     }
@@ -527,6 +536,7 @@ export const ProfileScreen: React.FC = () => {
           {teamProfile && (
             <TeamCard
               teamName={teamProfile.name}
+              logoUrl={teamProfile.profileImage ?? null}
               subscriptionName={subscriptionTypeName}
               subscriptionRecurrence={contact.subscription_recurrence}
               lastSeenAt={contact.last_seen_at}
@@ -568,7 +578,7 @@ export const ProfileScreen: React.FC = () => {
 
         {teamProfile && (teamProfile.referralEnabled || teamProfile.socialLinks?.some(l => l.platform === 'instagram' || l.platform === 'review')) && (
           <View>
-            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>Support the Team</Text>
+            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>{t('supportTheTeam')}</Text>
             <SocialActionsCard teamProfile={teamProfile} rewardedCount={rewardedCount} />
           </View>
         )}
@@ -587,7 +597,7 @@ export const ProfileScreen: React.FC = () => {
           ]}
         >
           <Icon source="account-switch" size={24} color={theme.colors.primary} />
-          <Text variant="labelLarge" style={{ color: theme.colors.primary, fontWeight: '700', textAlign: 'center' }}>SWITCH ACCOUNT</Text>
+          <Text variant="labelLarge" style={{ color: theme.colors.primary, fontWeight: '700', textAlign: 'center' }}>{t('switchAccount').toUpperCase()}</Text>
         </Pressable>
 
         <Pressable
@@ -598,9 +608,51 @@ export const ProfileScreen: React.FC = () => {
           ]}
         >
           <Icon source="logout" size={24} color="#EF4444" />
-          <Text variant="labelLarge" style={{ color: '#EF4444', fontWeight: '700', textAlign: 'center' }}>SIGN OUT</Text>
+          <Text variant="labelLarge" style={{ color: '#EF4444', fontWeight: '700', textAlign: 'center' }}>{t('signOut').toUpperCase()}</Text>
         </Pressable>
       </View>
+
+      {/* Language — a personal preference, same product decision as the web
+          Space's header switcher: compact locale codes, tap to switch
+          immediately, no confirmation. Persisted (I18nProvider), so it
+          survives the next cold start; the sign-in screen reads it too. */}
+      <Surface style={[styles.infoCard, { marginTop: 16 }]} elevation={1}>
+        <View style={styles.infoSection}>
+          <Text variant="titleMedium" style={styles.infoSectionTitle}>{t('language').toUpperCase()}</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {LOCALES.map((l) => {
+              const active = l === locale;
+              return (
+                <TouchableRipple
+                  key={l}
+                  onPress={() => setLocale(l)}
+                  borderless
+                  style={{ borderRadius: 12, flex: 1 }}
+                >
+                  <View
+                    style={{
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      backgroundColor: active ? theme.colors.primaryContainer : theme.colors.surfaceVariant,
+                    }}
+                  >
+                    <Text
+                      variant="labelLarge"
+                      style={{
+                        color: active ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant,
+                        fontWeight: active ? '800' : '600',
+                      }}
+                    >
+                      {l.toUpperCase()}
+                    </Text>
+                  </View>
+                </TouchableRipple>
+              );
+            })}
+          </View>
+        </View>
+      </Surface>
 
       {/* Account closure. Set apart from the action row above: it is not one of
           the things you do here, it is the way out. A pending deletion takes
@@ -610,10 +662,10 @@ export const ProfileScreen: React.FC = () => {
         {deletionPending ? (
           <Surface style={{ padding: 16, borderRadius: 12, gap: 8 }} elevation={1}>
             <Text variant="titleSmall" style={{ color: '#B45309', fontWeight: '700' }}>
-              Deletion scheduled
+              {t('deletionScheduledCard')}
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {`Your account will be deleted on ${deletionDate}. You can stop this any time before then.`}
+              {t('deletionScheduledCardBody', { date: deletionDate })}
             </Text>
             <Pressable
               onPress={handleCancelDeletion}
@@ -626,7 +678,7 @@ export const ProfileScreen: React.FC = () => {
               })}
             >
               <Text variant="labelLarge" style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>
-                CANCEL DELETION
+                {t('cancelDeletion').toUpperCase()}
               </Text>
             </Pressable>
           </Surface>
@@ -636,7 +688,7 @@ export const ProfileScreen: React.FC = () => {
               variant="bodySmall"
               style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', textDecorationLine: 'underline' }}
             >
-              Delete my account
+              {t('deleteMyAccount')}
             </Text>
           </Pressable>
         )}
@@ -644,15 +696,15 @@ export const ProfileScreen: React.FC = () => {
 
       <Surface style={styles.infoCard} elevation={1}>
         <View style={styles.infoSection}>
-          <Text variant="titleMedium" style={styles.infoSectionTitle}>CONTACT INFORMATION</Text>
+          <Text variant="titleMedium" style={styles.infoSectionTitle}>{t('contactInformation').toUpperCase()}</Text>
 
           <View style={styles.infoRow}>
             <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(14, 165, 233, 0.15)' : '#E0F2FE' }]}>
               <Icon source="email-outline" size={20} color={theme.dark ? '#5DB0FF' : '#0EA5E9'} />
             </View>
             <View style={styles.infoTextContainer}>
-              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>EMAIL ADDRESS</Text>
-              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.email || email || 'N/A'}</Text>
+              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{t('emailAddress').toUpperCase()}</Text>
+              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.email || email || t('notAvailable')}</Text>
             </View>
           </View>
 
@@ -661,20 +713,20 @@ export const ProfileScreen: React.FC = () => {
               <Icon source="phone-outline" size={20} color={theme.dark ? '#4ADE80' : '#22C55E'} />
             </View>
             <View style={styles.infoTextContainer}>
-              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>PHONE NUMBER</Text>
-              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.phone || 'N/A'}</Text>
+              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{t('phoneNumber').toUpperCase()}</Text>
+              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.phone || t('notAvailable')}</Text>
             </View>
           </View>
 
-          {contact.residence && (
+          {contact.address && (
             <View style={styles.infoRow}>
               <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(249, 115, 22, 0.15)' : '#FFF7ED' }]}>
                 <Icon source="map-marker-outline" size={20} color={theme.dark ? '#FB923C' : '#F97316'} />
               </View>
               <View style={styles.infoTextContainer}>
-                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>RESIDENCE</Text>
+                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{t('address').toUpperCase()}</Text>
                 <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>
-                  {formatResidence(contact.residence)}
+                  {formatAddress(contact.address)}
                 </Text>
               </View>
             </View>
@@ -684,42 +736,32 @@ export const ProfileScreen: React.FC = () => {
         <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
 
         <View style={styles.infoSection}>
-          <Text variant="titleMedium" style={styles.infoSectionTitle}>PERSONAL DETAILS</Text>
+          <Text variant="titleMedium" style={styles.infoSectionTitle}>{t('personalDetails').toUpperCase()}</Text>
 
           <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99, 102, 241, 0.15)' : '#EEF2FF' }]}>
-              <Icon source="cake-variant-outline" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="cake-variant-outline" size={20} color={theme.colors.primary} />
             </View>
             <View style={styles.infoTextContainer}>
-              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>BIRTHDATE & BIRTHPLACE</Text>
+              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{t('birthdateBirthplace').toUpperCase()}</Text>
               <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>
-                {formatDateValue(contact.birthdate) || 'N/A'}{contact.birthplace ? ` in ${contact.birthplace}` : ''}
+                {formatDateValue(contact.birthdate) || t('notAvailable')}{contact.birthplace ? t('inPlace', { place: contact.birthplace }) : ''}
               </Text>
             </View>
           </View>
 
           <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(168, 85, 247, 0.15)' : '#F5F3FF' }]}>
-              <Icon source="gender-male-female" size={20} color={theme.dark ? '#A855F7' : '#7C3AED'} />
+            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="gender-male-female" size={20} color={theme.colors.primary} />
             </View>
             <View style={styles.infoTextContainer}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>GENDER</Text>
+                <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>{t('gender').toUpperCase()}</Text>
                 <TouchableRipple onPress={() => setShowGenderInfo(true)}>
                   <Icon source="information-outline" size={14} color={theme.colors.onSurfaceVariant} />
                 </TouchableRipple>
               </View>
-              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{formatGender(contact.gender) || 'N/A'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(59, 130, 246, 0.15)' : '#DBEAFE' }]}>
-              <Icon source="card-account-details-outline" size={20} color={theme.dark ? '#60A5FA' : '#3B82F6'} />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text variant="labelSmall" style={[styles.infoLabel, { color: theme.colors.onSurfaceVariant }]}>COD. FISC. • AHV/AVS • TAX ID</Text>
-              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.taxnumber || 'N/A'}</Text>
+              <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{formatGender(t, contact.gender) || t('notAvailable')}</Text>
             </View>
           </View>
         </View>
@@ -727,19 +769,19 @@ export const ProfileScreen: React.FC = () => {
         <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
 
         <View style={styles.infoSection}>
-          <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant }]}>EMERGENCY CONTACT</Text>
-          {contact.emergencyContact ? (
+          <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant }]}>{t('emergencyContact').toUpperCase()}</Text>
+          {contact.emergency_contacts?.[0] ? (
             <View style={styles.infoRow}>
               <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2' }]}>
                 <Icon source="account-alert-outline" size={20} color={theme.dark ? '#F87171' : '#EF4444'} />
               </View>
               <View style={styles.infoTextContainer}>
-                <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.emergencyContact.name}</Text>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{contact.emergencyContact.phone}</Text>
+                <Text variant="bodyLarge" style={{ color: theme.colors.onSurface }}>{contact.emergency_contacts[0].name}</Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{contact.emergency_contacts[0].phone}</Text>
               </View>
             </View>
           ) : (
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, paddingLeft: 52 }}>No emergency contact configured.</Text>
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, paddingLeft: 52 }}>{t('noEmergencyContact')}</Text>
           )}
         </View>
 
@@ -748,7 +790,7 @@ export const ProfileScreen: React.FC = () => {
           style={[styles.requestUpdateButton, { borderTopColor: theme.colors.outlineVariant }]}
         >
           <View style={styles.requestUpdateContent}>
-            <Text style={[styles.requestUpdateText, { color: theme.colors.primary }]}>Request Information Update</Text>
+            <Text style={[styles.requestUpdateText, { color: theme.colors.primary }]}>{t('requestInfoUpdate')}</Text>
             <Icon source="chevron-right" size={20} color={theme.colors.primary} />
           </View>
         </TouchableRipple>
@@ -761,10 +803,10 @@ export const ProfileScreen: React.FC = () => {
     <View style={styles.placeholderTab}>
       <Icon source="newspaper-variant-outline" size={48} color={theme.dark ? '#94A3B8' : '#64748B'} />
       <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
-        Feed coming soon
+        {t('feedComingSoon')}
       </Text>
       <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-        News, events and updates from your team will appear here.
+        {t('feedComingSoonBody')}
       </Text>
     </View>
   );
@@ -782,10 +824,10 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.placeholderTab}>
           <Icon source="trophy-outline" size={48} color={theme.dark ? '#EAB308' : '#F59E0B'} />
           <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
-            No scores yet this month
+            {t('noScoresYet')}
           </Text>
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
-            Attend sessions to earn points!
+            {t('attendToEarnPoints')}
           </Text>
         </View>
       );
@@ -806,19 +848,19 @@ export const ProfileScreen: React.FC = () => {
 
     return (
       <View>
-        <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>Monthly Leaderboard</Text>
+        <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>{t('monthlyLeaderboard')}</Text>
         <Surface style={[styles.infoCard, { backgroundColor: theme.colors.surface }]} elevation={1}>
         <View style={{ padding: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{leaderboard.month}</Text>
             <Surface style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, backgroundColor: theme.colors.secondaryContainer }} elevation={0}>
-              <Text variant="labelSmall" style={{ color: theme.colors.onSecondaryContainer, fontWeight: '700' }}>TOP 5</Text>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSecondaryContainer, fontWeight: '700' }}>{t('top5Chip').toUpperCase()}</Text>
             </Surface>
           </View>
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
             {(['points', 'streak', 'best_streak'] as const).map((opt) => {
               const active = lbSort === opt;
-              const label = opt === 'points' ? 'Points' : opt === 'streak' ? 'Streak' : 'Best streak';
+              const label = opt === 'points' ? t('sortPoints') : opt === 'streak' ? t('sortStreak') : t('sortBestStreak');
               return (
                 <TouchableRipple key={opt} onPress={() => setLbSort(opt)} borderless style={{ borderRadius: 12 }}>
                   <View style={active ? {
@@ -871,7 +913,7 @@ export const ProfileScreen: React.FC = () => {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium" style={{ fontWeight: isCurrentUser ? '700' : '400', color: theme.colors.onSurface }} numberOfLines={1}>
-                    {fullName}{isTrial && <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}> - Trial</Text>}
+                    {fullName}{isTrial && <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}> - {t('trialSuffix')}</Text>}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -893,8 +935,6 @@ export const ProfileScreen: React.FC = () => {
     // surfaces, surfaced by the app's own navigation rather than as plain links.
     const generalLinks = (teamProfile?.links || []).filter((l) => !l.target);
     const websiteLink = teamProfile?.socialLinks?.find((s) => s.platform === 'website');
-    const legalLinks = teamProfile?.legalLinks;
-    const hasLegal = !!(legalLinks?.gtcUrl || legalLinks?.privacyPolicyUrl || legalLinks?.regulationUrl);
     const coaches = teamProfile?.coaches || [];
 
     const toggleTeamCard = () => {
@@ -925,7 +965,7 @@ export const ProfileScreen: React.FC = () => {
             {/* LINKS toggle row — always visible */}
             <TouchableRipple onPress={toggleTeamCard} style={styles.infoSection}>
               <View style={styles.teamCardHandleInner}>
-                <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>LINKS</Text>
+                <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant, marginBottom: 0 }]}>{t('links').toUpperCase()}</Text>
                 <Icon source={teamCardCollapsed ? 'chevron-down' : 'chevron-up'} size={18} color={theme.colors.onSurfaceVariant} />
               </View>
             </TouchableRipple>
@@ -937,7 +977,7 @@ export const ProfileScreen: React.FC = () => {
                   <>
                     <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
                     <View style={styles.infoSection}>
-                      <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant }]}>COACHES</Text>
+                      <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant }]}>{t('coaches').toUpperCase()}</Text>
                       {coaches.map((coach, idx) => (
                         <View key={idx} style={[styles.infoRow, { paddingVertical: 4 }]}>
                           <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(34,197,94,0.12)' : '#F0FDF4' }]}>
@@ -959,11 +999,11 @@ export const ProfileScreen: React.FC = () => {
                       {websiteLink && (
                         <TouchableRipple onPress={() => Linking.openURL(websiteLink.url).catch(() => undefined)}>
                           <View style={[styles.infoRow, { paddingVertical: 4 }]}>
-                            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}>
-                              <Icon source="web" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                              <Icon source="web" size={20} color={theme.colors.primary} />
                             </View>
                             <View style={styles.infoTextContainer}>
-                              <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>Website</Text>
+                              <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>{t('website')}</Text>
                             </View>
                             <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
                           </View>
@@ -972,8 +1012,8 @@ export const ProfileScreen: React.FC = () => {
                       {generalLinks.map((link, idx) => (
                         <TouchableRipple key={idx} onPress={() => { if (link.url) Linking.openURL(link.url).catch(() => undefined) }}>
                           <View style={[styles.infoRow, { paddingVertical: 4 }]}>
-                            <View style={[styles.infoIconContainer, { backgroundColor: theme.dark ? 'rgba(99,102,241,0.15)' : '#EEF2FF' }]}>
-                              <Icon source="link-variant" size={20} color={theme.dark ? '#818CF8' : '#6366F1'} />
+                            <View style={[styles.infoIconContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                              <Icon source="link-variant" size={20} color={theme.colors.primary} />
                             </View>
                             <View style={styles.infoTextContainer}>
                               <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600' }}>{link.label}</Text>
@@ -989,42 +1029,6 @@ export const ProfileScreen: React.FC = () => {
                   </>
                 )}
 
-                {/* Legal links */}
-                {hasLegal && (
-                  <>
-                    <View style={[styles.separator, { backgroundColor: theme.colors.outlineVariant, marginHorizontal: 20 }]} />
-                    <View style={[styles.infoSection, { gap: 0 }]}>
-                      <Text variant="titleMedium" style={[styles.infoSectionTitle, { color: theme.colors.onSurfaceVariant, marginBottom: 8 }]}>LEGAL</Text>
-                      {legalLinks?.gtcUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.gtcUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="file-document-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>General Terms & Conditions</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                      {legalLinks?.privacyPolicyUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.privacyPolicyUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="shield-lock-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>Privacy Policy</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                      {legalLinks?.regulationUrl ? (
-                        <TouchableRipple onPress={() => Linking.openURL(legalLinks.regulationUrl!).catch(() => undefined)}>
-                          <View style={[styles.infoRow, { paddingVertical: 10 }]}>
-                            <Icon source="clipboard-text-outline" size={18} color={theme.colors.onSurfaceVariant} />
-                            <Text variant="bodyMedium" style={{ flex: 1, color: theme.colors.onSurface }}>Regulation</Text>
-                            <Icon source="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-                          </View>
-                        </TouchableRipple>
-                      ) : null}
-                    </View>
-                  </>
-                )}
               </>
             )}
 
@@ -1034,7 +1038,7 @@ export const ProfileScreen: React.FC = () => {
         {/* Support us — standalone card */}
         {teamProfile && hasSupportUs && (
           <View>
-            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>Support Us</Text>
+            <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>{t('supportUs')}</Text>
             <SocialActionsCard teamProfile={teamProfile} rewardedCount={rewardedCount} />
           </View>
         )}
@@ -1076,14 +1080,13 @@ export const ProfileScreen: React.FC = () => {
               borderless
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
-                <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface, marginBottom: 0 }]}>Appointments</Text>
+                <Text variant="titleLarge" style={[styles.sectionLabel, { color: theme.colors.onSurface, marginBottom: 0 }]}>{t('appointments')}</Text>
                 <Icon source={appointmentsCollapsed ? 'chevron-down' : 'chevron-up'} size={20} color={theme.colors.onSurfaceVariant} />
               </View>
             </TouchableRipple>
             {!appointmentsCollapsed && (
               <AppointmentsCarousel
                 slots={appointments}
-                contact={contact}
                 onRefresh={loadData}
                 onBookNew={() => setShowBookingModal(true)}
               />
@@ -1106,9 +1109,10 @@ export const ProfileScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={theme.dark ? 'light-content' : 'dark-content'} />
-      <LoadingOverlay visible={isLoading && !isRefreshing} message="Updating..." />
+      <LoadingOverlay visible={isLoading && !isRefreshing} message={t('updating')} />
 
       <ScrollView
+        testID="profile-screen"
         ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -1119,7 +1123,7 @@ export const ProfileScreen: React.FC = () => {
           contact={contact}
           initials={initials}
           onShowQR={handleShowQR}
-          onScanDojoQR={() => setShowScannerModal(true)}
+          onScanTeamQR={() => setShowScannerModal(true)}
           onEditProfile={() => setCurrentTab(currentTab === 'SELF' ? 'DASH' : 'SELF')}
         />
 
@@ -1139,6 +1143,12 @@ export const ProfileScreen: React.FC = () => {
             : tab === 'FEED' ? 'newspaper'
             : tab === 'TRAIN' ? 'chart-timeline-variant'
             : 'account-group';
+          // TabType values ('DASH'/'FEED'/…) are internal state, never
+          // rendered raw — the label shown is always the translated one.
+          const label = tab === 'DASH' ? t('tabDashboard')
+            : tab === 'FEED' ? t('tabFeed')
+            : tab === 'TRAIN' ? t('tabTrain')
+            : t('tabTeam');
           const active = currentTab === tab;
           return (
             <TouchableRipple key={tab} onPress={() => setCurrentTab(tab)} style={styles.navItem}>
@@ -1153,7 +1163,7 @@ export const ProfileScreen: React.FC = () => {
                   variant="labelSmall"
                   style={{ color: active ? theme.colors.primary : theme.colors.onSurfaceVariant, fontWeight: active ? '700' : '500' }}
                 >
-                  {tab}
+                  {label.toUpperCase()}
                 </Text>
               </View>
             </TouchableRipple>
@@ -1218,7 +1228,7 @@ export const ProfileScreen: React.FC = () => {
         duration={4000}
         style={{ marginBottom: 20 }}
       >
-        Update request submitted successfully!
+        {t('updateRequestSubmitted')}
       </Snackbar>
 
     </View>

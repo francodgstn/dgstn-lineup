@@ -4,15 +4,16 @@
 // SDK — Firestore rules block direct client writes to submissions.
 //
 // Mirrors the validation/contact-resolution shape of booking/bookSession and
-// the team-alert + email pattern of bio-link/getInTouchForm.
+// the notification + email pattern of bio-link/getInTouchForm. The staff
+// notification is a `TeamNotification` (see ../utils/teamNotifications) —
+// NOT the retired `team_alerts` collection.
 import * as admin from 'firebase-admin'
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import {
   FORMS_COLLECTION,
   FORM_SUBMISSIONS_SUBCOLLECTION,
   TEAMS_COLLECTION,
-  TEAM_ALERTS_SUBCOLLECTION,
   CONTACTS_COLLECTION,
   CHOICE_FIELD_TYPES,
 } from '@linyup/shared'
@@ -20,6 +21,8 @@ import type { Form, FormField } from '@linyup/shared'
 import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { escapeHtml } from '../utils/html'
 import { APP_CHECK_ENFORCE, monitorAppCheck } from '../utils/appCheck'
+import { createTeamNotification } from '../utils/teamNotifications'
+import { systemEmailEnabledFor } from '../utils/systemEmails'
 
 const SUBMIT_RATE_LIMIT_MAX = 10 // per form, per IP, per hour
 const RATE_WINDOW_MS = 60 * 60 * 1000
@@ -253,38 +256,48 @@ export const submitForm = onCall({ enforceAppCheck: APP_CHECK_ENFORCE }, async (
   })
   await formRef.update({ submissionCount: FieldValue.increment(1) })
 
-  // ── Notifications (per-form toggles; non-fatal) ─────────────────────────────
+  // ── Notifications (per-form toggle; both non-fatal) ─────────────────────────
+  // The in-app notification and the staff email are two INDEPENDENT try/catch
+  // blocks, deliberately. They used to share one: resolveStaffEmail() ran FIRST,
+  // so a lookup failure threw before the team_alerts write ever ran and the
+  // in-app notification was lost as collateral of an unrelated email problem.
+  // The in-app notification below is ALWAYS written when notifyStaff is on; the
+  // email is additionally gated on the team's `form_submission_notification`
+  // system-email toggle (absent ⇒ enabled).
   const notifyStaff = form.notifications?.notifyStaff !== false // default on
   if (notifyStaff) {
     try {
-      const staffEmail = await resolveStaffEmail(data.teamId)
-      await db
-        .collection(TEAMS_COLLECTION)
-        .doc(data.teamId)
-        .collection(TEAM_ALERTS_SUBCOLLECTION)
-        .doc()
-        .set({
-          teamId: data.teamId,
-          message: `New response to “${form.title}”`,
-          schedule: { type: 'datetime', value: Timestamp.now() },
-          alert_type: 'form_submission',
-          form_id: data.formId,
-          submission_id: submissionRef.id,
-          contact_id: contactId,
-          created_at: FieldValue.serverTimestamp(),
-          archived_at: null,
-        })
-      if (staffEmail) {
-        const { html } = buildEmailTemplate({
-          title: `New response: ${form.title}`,
-          body: `<p>A new response to <strong>${escapeHtml(form.title)}</strong> has been submitted.</p>${renderAnswersHtml(fields, answers)}`,
-        })
-        await sendEmail({
-          to: staffEmail,
-          teamId: data.teamId,
-          subject: `New response: ${form.title}`,
-          html,
-        })
+      await createTeamNotification(data.teamId, {
+        type: 'form_submission',
+        title: 'New form response',
+        body: `New response to “${form.title}”.`,
+        // The submissions list lives under the form's "responses" tab
+        // (apps/web/src/app/[locale]/(auth)/plugins/custom-forms/[formId]/page.tsx,
+        // FORM_TABS + useTabParam) — ?tab= is that page's existing URL convention.
+        link: `/plugins/custom-forms/${data.formId}?tab=responses`,
+        form_id: data.formId,
+        submission_id: submissionRef.id,
+        contact_id: contactId,
+      })
+    } catch (err) {
+      console.error('Failed to create team notification for form submission', err)
+    }
+
+    try {
+      if (await systemEmailEnabledFor(data.teamId, 'form_submission_notification')) {
+        const staffEmail = await resolveStaffEmail(data.teamId)
+        if (staffEmail) {
+          const { html } = buildEmailTemplate({
+            title: `New response: ${form.title}`,
+            body: `<p>A new response to <strong>${escapeHtml(form.title)}</strong> has been submitted.</p>${renderAnswersHtml(fields, answers)}`,
+          })
+          await sendEmail({
+            to: staffEmail,
+            teamId: data.teamId,
+            subject: `New response: ${form.title}`,
+            html,
+          })
+        }
       }
     } catch (err) {
       console.error('Failed to notify staff of form submission', err)

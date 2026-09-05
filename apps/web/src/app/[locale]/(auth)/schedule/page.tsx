@@ -103,6 +103,7 @@ import { QUICK_ACTION_PARAM } from '@/lib/quickActions'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { QuickLinks } from '@/components/layout/QuickLinks'
 import { PublicSurfaceLink } from '@/components/layout/PublicSurfaceLink'
+import { Tip } from '@/components/ui/tip'
 
 const SessionsCalendar = dynamic(() => import('../sessions/SessionsCalendar'), { ssr: false })
 
@@ -756,14 +757,15 @@ function ListItemRow({
               </p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Link
-                href={`/sessions/${s.id}`}
-                aria-label={tC('openDetail')}
-                title={tC('openDetail')}
-                className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
+              <Tip label={tC('openDetail')}>
+                <Link
+                  href={`/sessions/${s.id}`}
+                  aria-label={tC('openDetail')}
+                  className="p-1.5 rounded text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </Tip>
               <button
                 onClick={onEdit}
                 className="p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors"

@@ -8,8 +8,15 @@ import {
   ratedPlanIds,
   coursePlanEdge,
   coursePlanEdgeUpdate,
+  activityPlanFacets,
+  foldOfferingPlanEdgeUpdates,
   coursePlanFacets,
   courseGatedPlanIds,
+  anyRatedPlanIds,
+  benefitOpensDoorAt,
+  offeringRateEffects,
+  offeringRateLengths,
+  rateHasAPriceToApplyTo,
   plansSharingCourseRate,
   type ActivityEdgeFields,
   type CourseEdgeFields,
@@ -260,6 +267,109 @@ describe('the course ↔ plan edge', () => {
   const course = (accessRule: Record<string, unknown>, benefit?: unknown) =>
     ({ accessRule, benefit } as unknown as CourseEdgeFields)
 
+  describe('MANY EDGES ON ONE DOCUMENT fold into a single update', () => {
+    // Local fixture: the shared `activity` helper is scoped to another block.
+    const activity = (doc: Record<string, unknown>) => doc as never
+    // The `from-offering` direction puts every PLAN on one activity, so a save
+    // that touched several rows wrote several updates to the same ref — each
+    // computed from the same snapshot, each overwriting the last. Only the
+    // bottom row survived.
+    it('adds every ticked plan to the gate, not just the last', () => {
+      const fresh = activity({ type: 'class', accessRule: { type: 'members' } })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: true, rate: false } },
+        { subTypeId: 'elite', next: { access: true, rate: false } },
+        { subTypeId: 'starter', next: { access: true, rate: false } },
+      ])
+      assert.deepEqual(update, {
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium', 'elite', 'starter'] },
+        isFreeTrial: false,
+      })
+    })
+
+    it('collects every rated plan onto the ONE rate rule', () => {
+      const fresh = activity({ type: 'class', dropIn: { enabled: true, priceAmount: 25 } })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: false, rate: true },
+          choice: { effect: 'percent_off', percent: 20 } },
+        { subTypeId: 'elite', next: { access: false, rate: true },
+          choice: { effect: 'percent_off', percent: 20 } },
+      ])
+      assert.deepEqual(update, {
+        memberBenefit: {
+          subscriptionTypeIds: ['premium', 'elite'],
+          effect: 'percent_off',
+          percent: 20,
+        },
+      })
+    })
+
+    it('a removal after an addition leaves only the addition', () => {
+      const fresh = activity({
+        type: 'class',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['starter'] },
+      })
+      const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+        { subTypeId: 'premium', next: { access: true, rate: false } },
+        { subTypeId: 'starter', next: { access: false, rate: false } },
+      ])
+      assert.deepEqual(update, {
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
+        isFreeTrial: false,
+      })
+    })
+
+    it('returns null when no edit changes anything', () => {
+      const fresh = activity({
+        type: 'class',
+        accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
+      })
+      assert.equal(
+        foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh } as never, [
+          { subTypeId: 'premium', next: { access: true, rate: false } },
+        ]),
+        null
+      )
+    })
+  })
+
+  describe('an OPEN class carries neither facet', () => {
+    it('has no gate to write and no price to reduce', () => {
+      // Read off resolvePaymentOptions: its drop_in arm calls
+      // resolveClassCoverage FIRST, and an open class comes back covered — so
+      // it returns before applyModifiers and nobody ever pays.
+      assert.deepEqual(activityPlanFacets({ type: 'class', accessRule: { type: 'open' } }), {
+        access: false,
+        rate: false,
+      })
+    })
+
+    it('still carries both when someone has to qualify', () => {
+      for (const rule of [
+        { type: 'members' as const },
+        { type: 'subscription' as const, subscriptionTypeIds: ['premium'] },
+      ]) {
+        assert.deepEqual(activityPlanFacets({ type: 'class', accessRule: rule }), {
+          access: true,
+          rate: true,
+        })
+      }
+    })
+
+    it('a legacy class with no accessRule falls back through resolveActivityAccessRule', () => {
+      // `isFreeTrial !== false` means open, which is the pre-accessRule default.
+      assert.equal(activityPlanFacets({ type: 'class' }).access, false)
+      assert.equal(activityPlanFacets({ type: 'class', isFreeTrial: false }).access, true)
+    })
+
+    it('an appointment is unaffected — its price is its gate', () => {
+      assert.deepEqual(activityPlanFacets({ type: 'appointment' }), {
+        access: false,
+        rate: true,
+      })
+    })
+  })
+
   describe('which facets each tier honours', () => {
     it('free and registered honour neither', () => {
       assert.deepEqual(coursePlanFacets(course({ type: 'free' })), { access: false, rate: false })
@@ -269,35 +379,53 @@ describe('the course ↔ plan edge', () => {
       })
     })
 
-    it('subscription honours ACCESS only', () => {
-      // The resolver returns from the subscription branch before it ever reads
-      // `benefit`, so a rate stored here would be inert.
-      assert.deepEqual(coursePlanFacets(course({ type: 'subscription' })), {
-        access: true,
-        rate: false,
-      })
+    it('both plan-bearing tiers honour BOTH — the same pair a class carries', () => {
+      // Until 2026-09-01 these were exclusive per tier, which is what made
+      // "Premium free, Elite 20% off" inexpressible on a course while being
+      // ordinary on a class.
+      for (const doc of [
+        course({ type: 'subscription' }),
+        course({ type: 'purchase', priceAmount: 49 }),
+      ]) {
+        assert.deepEqual(coursePlanFacets(doc), { access: true, rate: true })
+      }
     })
 
-    it('purchase honours RATE only', () => {
-      // `benefit` wins over the legacy free-inclusion list, so that list is
-      // never written and "included free" is a benefit with effect 'included'.
-      assert.deepEqual(coursePlanFacets(course({ type: 'purchase', priceAmount: 49 })), {
-        access: false,
-        rate: true,
-      })
+    it('a subscription-tier rate is honoured but INERT until there is a price', () => {
+      // Offered, so a studio can set it up before pricing the course — and
+      // dimmed, because the resolver's subscription branch returns before it
+      // reads `benefit`. Exactly a class that sells no drop-in yet.
+      assert.equal(coursePlanFacets(course({ type: 'subscription' })).rate, true)
+      assert.equal(
+        rateHasAPriceToApplyTo({ kind: 'course', doc: course({ type: 'subscription' }) as never }),
+        false
+      )
     })
   })
 
   describe('writes', () => {
-    it('gates a subscription-tier course and never touches benefit', () => {
+    it('writes BOTH facets when both are asked for', () => {
+      const update = coursePlanEdgeUpdate(
+        course({ type: 'purchase', priceAmount: 49 }),
+        'premium',
+        { access: true, rate: true },
+        { effect: 'percent_off', percent: 30 }
+      )
+      assert.deepEqual(update, {
+        benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 30 },
+        accessRule: { type: 'purchase', priceAmount: 49, subscriptionTypeIds: ['premium'] },
+      })
+    })
+
+    it('gates without rating when only access is asked for', () => {
       const update = coursePlanEdgeUpdate(course({ type: 'subscription' }), 'premium', {
         access: true,
-        rate: true,
+        rate: false,
       })
       assert.deepEqual(update, {
         accessRule: { type: 'subscription', subscriptionTypeIds: ['premium'] },
       })
-      assert.ok(update && !('benefit' in update), 'the tier does not honour a rate')
+      assert.ok(update && !('benefit' in update), 'no rate was asked for')
     })
 
     it('keeps the tier when the last plan comes off the gate', () => {
@@ -309,17 +437,41 @@ describe('the course ↔ plan edge', () => {
       })
     })
 
-    it('rates a purchase-tier course and never touches accessRule', () => {
+    it('rates a purchase-tier course without gating it', () => {
       const update = coursePlanEdgeUpdate(
         course({ type: 'purchase', priceAmount: 49 }),
         'premium',
-        { access: true, rate: true },
+        { access: false, rate: true },
         { effect: 'percent_off', percent: 30 }
       )
       assert.deepEqual(update, {
         benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 30 },
       })
-      assert.ok(update && !('accessRule' in update), 'the tier does not honour a gate')
+      assert.ok(update && !('accessRule' in update), 'no gate was asked for')
+    })
+
+    it('ABSORBS a legacy `included` benefit into the gate on first touch', () => {
+      // The old spelling of "these plans get it free". Read as part of the gate,
+      // then moved there and cleared — the whole migration, done lazily, with no
+      // backfill to deploy.
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['premium', 'elite'],
+        effect: 'included',
+      })
+      const update = coursePlanEdgeUpdate(
+        fresh,
+        'sportpass',
+        { access: false, rate: true },
+        { effect: 'percent_off', percent: 20 }
+      )
+      assert.deepEqual(update, {
+        benefit: { subscriptionTypeIds: ['sportpass'], effect: 'percent_off', percent: 20 },
+        accessRule: {
+          type: 'purchase',
+          priceAmount: 49,
+          subscriptionTypeIds: ['premium', 'elite'],
+        },
+      })
     })
 
     it('writes nothing at all on a free or registered course', () => {
@@ -329,11 +481,23 @@ describe('the course ↔ plan edge', () => {
       assert.equal(coursePlanEdgeUpdate(course({ type: 'registered' }), 'premium', asked), null)
     })
 
-    it('clears a purchase course rule when its last plan comes off', () => {
+    it('clears a purchase course RATE when its last plan comes off', () => {
+      const fresh = course({ type: 'purchase', priceAmount: 49 }, {
+        subscriptionTypeIds: ['premium'],
+        effect: 'percent_off',
+        percent: 20,
+      })
+      assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), { benefit: null })
+    })
+
+    it('takes the last plan off a legacy `included` list as a GATE removal', () => {
       const fresh = course({ type: 'purchase', priceAmount: 49 }, {
         subscriptionTypeIds: ['premium'],
         effect: 'included',
       })
+      // Only the benefit is written: the plan leaves the gate the legacy list
+      // was standing in for, and the STORED gate — which was empty — ends up
+      // empty either way, so there is nothing to write there.
       assert.deepEqual(coursePlanEdgeUpdate(fresh, 'premium', OFF), { benefit: null })
     })
 
@@ -360,5 +524,325 @@ describe('the course ↔ plan edge', () => {
       })
       assert.deepEqual(plansSharingCourseRate(fresh, 'premium'), ['basic'])
     })
+  })
+})
+
+// ── Which rate effects an editor may OFFER ───────────────────────────────────
+// The editor kept its own list and offered `included` on every rate row. On a
+// CLASS the resolver ignores that effect — coverage there is the access rule's
+// job — so a studio could tick "members get it included", save it, and watch
+// members pay the full drop-in price anyway. Two controls that read as two ways
+// to say "free", one of them inert.
+//
+// These assertions are the guard: `offeringRateEffects` derives from the very
+// sets `resolvePaymentOptions` honours, so an effect can never again be offered
+// where it would be dropped.
+describe('offeringRateEffects — the editor offers only what the resolver honours', () => {
+  const activityTarget = (type: 'class' | 'appointment') =>
+    ({ kind: 'activity' as const, doc: { type } as never })
+  const courseTarget = (type: 'free' | 'purchase' | 'subscription') =>
+    ({ kind: 'course' as const, doc: { accessRule: { type } } as never })
+
+  it('a CLASS gets price effects only — never `included`', () => {
+    assert.deepEqual(offeringRateEffects(activityTarget('class')), [
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('an APPOINTMENT keeps `included` — it is the only way to say "books free"', () => {
+    // The mirror image of the class: an appointment has no access facet at all
+    // (the price is the gate), so removing `included` there would take away the
+    // only control that expresses a covered appointment.
+    assert.deepEqual(offeringRateEffects(activityTarget('appointment')), [
+      'included',
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('a PURCHASE course keeps `included` — its tier has no gate to say it with', () => {
+    assert.deepEqual(offeringRateEffects(courseTarget('purchase')), [
+      'included',
+      'percent_off',
+      'fixed_price',
+    ])
+  })
+
+  it('never offers `spend_credits` — the resolver honours it, no editor writes it', () => {
+    for (const t of [
+      activityTarget('class'),
+      activityTarget('appointment'),
+      courseTarget('purchase'),
+    ]) {
+      assert.ok(!offeringRateEffects(t).includes('spend_credits' as never))
+    }
+  })
+})
+
+// ── Whether a member RATE has a price to reduce ──────────────────────────────
+// A rate is a discount ON something, and that something can be absent: a
+// members-only class that sells no drop-in has no second price, so "20% off"
+// there reduces nothing. The editor mutes the price effects when this is false
+// rather than letting a studio configure a rule that silently never applies.
+describe('rateHasAPriceToApplyTo', () => {
+  const activity = (doc: Record<string, unknown>) =>
+    ({ kind: 'activity' as const, doc: doc as never })
+
+  it('a class needs an ENABLED drop-in carrying a real price', () => {
+    assert.equal(rateHasAPriceToApplyTo(activity({ type: 'class' })), false)
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: false, priceAmount: 25 } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true, priceAmount: 0 } })),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(activity({ type: 'class', dropIn: { enabled: true, priceAmount: 25 } })),
+      true
+    )
+  })
+
+  it('an appointment needs at least one PRICED duration', () => {
+    assert.equal(rateHasAPriceToApplyTo(activity({ type: 'appointment' })), false)
+    assert.equal(
+      rateHasAPriceToApplyTo(
+        activity({ type: 'appointment', durations: [{ minutes: 60, priceAmount: null }] })
+      ),
+      false
+    )
+    assert.equal(
+      rateHasAPriceToApplyTo(
+        activity({
+          type: 'appointment',
+          durations: [{ minutes: 30 }, { minutes: 60, priceAmount: 90 }],
+        })
+      ),
+      true
+    )
+  })
+
+  it("a course's price IS its sale, so an unsold one has nothing to reduce", () => {
+    const has = (accessRule: unknown) =>
+      rateHasAPriceToApplyTo({ kind: 'course', doc: { accessRule } as never })
+    assert.equal(has({ type: 'purchase', priceAmount: 49 }), true)
+    assert.equal(has({ type: 'purchase' }), false, 'on sale but unpriced')
+    assert.equal(has({ type: 'purchase', priceAmount: 0 }), false)
+    assert.equal(has({ type: 'subscription', subscriptionTypeIds: ['premium'] }), false)
+  })
+})
+
+// ─── ONE RULE PER SESSION LENGTH ─────────────────────────────────────────────
+//
+// An appointment's price is attached to its length, so a rule about that price
+// is too (see `ActivityDurationBenefit`). Every case below was a way this could
+// go wrong that a reviewer had to reason about rather than read.
+describe('appointment member rules, per session length', () => {
+  const twoLengths = {
+    durations: [
+      { minutes: 30, priceAmount: 60 },
+      { minutes: 90, priceAmount: 120 },
+    ],
+  }
+
+  it('reads the rule for the length asked about, not the activity', () => {
+    const a = appt({
+      ...twoLengths,
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        { minutes: 90, benefit: null },
+      ],
+    })
+    assert.deepEqual(ratedPlanIds(a, 30), ['premium'])
+    assert.deepEqual(ratedPlanIds(a, 90), [])
+    assert.equal(activityPlanEdge(a, 'premium', 30).rate, true)
+    assert.equal(activityPlanEdge(a, 'premium', 90).rate, false)
+  })
+
+  it('an activity nobody has re-edited behaves exactly as before', () => {
+    // The migration is invisible: no `durationBenefits` ⇒ the activity-wide
+    // rule still answers for every length, which is what stops this change
+    // needing a backfill.
+    const a = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    assert.deepEqual(ratedPlanIds(a, 30), ['basic'])
+    assert.deepEqual(ratedPlanIds(a, 90), ['basic'])
+    assert.deepEqual(ratedPlanIds(a), ['basic'], 'and the legacy whole-activity read still works')
+  })
+
+  it('the FIRST per-length write absorbs the legacy rule onto every length', () => {
+    // THE BUG THIS PINS: seeding only the edited length would leave 90 min
+    // reading a field the same update clears — a member who booked free
+    // yesterday silently starts paying, because the studio touched 30 min.
+    const fresh = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'percent_off', percent: 20 },
+      30
+    )
+    assert.deepEqual(update, {
+      durationBenefits: [
+        {
+          minutes: 30,
+          benefit: {
+            subscriptionTypeIds: ['basic', 'premium'],
+            effect: 'percent_off',
+            percent: 20,
+          },
+        },
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+      memberBenefit: null,
+    })
+  })
+
+  it('clearing a length says NO RULE, and does not fall back to the old one', () => {
+    const fresh = appt({
+      ...twoLengths,
+      memberBenefit: { subscriptionTypeIds: ['basic'], kind: 'included' },
+    })
+    const update = activityPlanEdgeUpdate(fresh, 'basic', OFF, undefined, 30)
+    const after = { ...fresh, ...update } as ActivityEdgeFields
+    assert.deepEqual(ratedPlanIds(after, 30), [], 'the length the studio cleared')
+    assert.deepEqual(ratedPlanIds(after, 90), ['basic'], 'the one they did not touch')
+  })
+
+  it('edits to DIFFERENT lengths of one document fold into one payload', () => {
+    // THE BUG THIS PINS: `durationBenefits` is written whole, so folding per
+    // target — one fold per length — would have each rewrite the array from the
+    // pre-save document and only the last would survive. Exactly the defect the
+    // fold was written for, one level down.
+    const fresh = appt(twoLengths)
+    const update = foldOfferingPlanEdgeUpdates({ kind: 'activity', doc: fresh }, [
+      {
+        subTypeId: 'premium',
+        next: { access: false, rate: true },
+        choice: { effect: 'included' },
+        minutes: 30,
+      },
+      {
+        subTypeId: 'basic',
+        next: { access: false, rate: true },
+        choice: { effect: 'percent_off', percent: 10 },
+        minutes: 90,
+      },
+    ])
+    assert.deepEqual(update, {
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['basic'], effect: 'percent_off', percent: 10 },
+        },
+      ],
+    })
+  })
+
+  it('a rate is dimmed against the length that has no price, not the activity', () => {
+    const doc = appt({ durations: [{ minutes: 30 }, { minutes: 90, priceAmount: 120 }] })
+    assert.equal(rateHasAPriceToApplyTo({ kind: 'activity', doc, minutes: 30 }), false)
+    assert.equal(rateHasAPriceToApplyTo({ kind: 'activity', doc, minutes: 90 }), true)
+    assert.equal(
+      rateHasAPriceToApplyTo({ kind: 'activity', doc }),
+      true,
+      'the whole-activity question is still "any of them"'
+    )
+  })
+
+  it('the whole-activity count is the UNION, so the summary survives the migration', () => {
+    // `ratedPlanIds(a)` alone reads the legacy field, which the first
+    // per-length write CLEARS — so a summary built on it would report "no
+    // member rate" as a reward for using the new editor.
+    const a = appt({
+      ...twoLengths,
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['basic'], effect: 'percent_off', percent: 10 },
+        },
+      ],
+    })
+    assert.deepEqual(ratedPlanIds(a), [], 'the legacy field is gone')
+    assert.deepEqual(anyRatedPlanIds(a).sort(), ['basic', 'premium'])
+  })
+
+  it('only an INCLUDED rule opens a benefit-only length, and it is asked per length', () => {
+    const a = appt({
+      durations: [
+        { minutes: 30, benefitOnly: true },
+        { minutes: 90, benefitOnly: true },
+      ],
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        {
+          minutes: 90,
+          benefit: { subscriptionTypeIds: ['premium'], effect: 'percent_off', percent: 50 },
+        },
+      ],
+    })
+    assert.equal(benefitOpensDoorAt(a, 30), true)
+    assert.equal(
+      benefitOpensDoorAt(a, 90),
+      false,
+      'a percentage off a price that does not exist opens nothing'
+    )
+  })
+
+  it('an orphaned rule is kept, so un-ticking a length by accident is undoable', () => {
+    const fresh = appt({
+      durations: [{ minutes: 30, priceAmount: 60 }],
+      durationBenefits: [
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+    })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'included' },
+      30
+    )
+    assert.deepEqual(update, {
+      durationBenefits: [
+        { minutes: 30, benefit: { subscriptionTypeIds: ['premium'], effect: 'included' } },
+        { minutes: 90, benefit: { subscriptionTypeIds: ['basic'], effect: 'included' } },
+      ],
+    })
+  })
+
+  it('a class is untouched by any of this — one rule, on the activity', () => {
+    const fresh = cls({ dropIn: { enabled: true, priceAmount: 30 } })
+    const update = activityPlanEdgeUpdate(
+      fresh,
+      'premium',
+      { access: false, rate: true },
+      { effect: 'percent_off', percent: 20 }
+    )
+    assert.deepEqual(update, {
+      memberBenefit: {
+        subscriptionTypeIds: ['premium'],
+        effect: 'percent_off',
+        percent: 20,
+      },
+    })
+    assert.deepEqual(offeringRateLengths({ kind: 'activity', doc: fresh }), [])
+  })
+
+  it('an appointment with no lengths set still asks about the fallback one', () => {
+    assert.deepEqual(offeringRateLengths({ kind: 'activity', doc: appt() }), [60])
   })
 })

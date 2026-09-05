@@ -133,7 +133,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { id: 'bioLink', icon: LinkIcon, href: '/team/bio-link' },
   { id: 'website', icon: Globe, href: '/plugins/website' },
   { id: 'booking', icon: CalendarCheck, href: '/settings/booking' },
-  { id: 'shop', icon: ShoppingBag, href: '/public-page/shop' },
+  { id: 'shop', icon: ShoppingBag, href: '/manage/offer' },
   { id: 'space', icon: DoorOpen, href: '/public-page/space' },
   { id: 'appointments', icon: UserRound, href: '/schedule' },
   { id: 'kiosk', icon: Monitor, href: '/plugins/kiosk' },

@@ -98,7 +98,9 @@ import {
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
 import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import type {
   LeadProfile,
   LeadContactDef,
@@ -1308,16 +1310,30 @@ async function seedLeadTenant(profile: LeadProfile) {
     const imageUrl = apt.imageAsset
       ? await uploadAsset(apt.imageAsset, `teams/${teamId}/activities/${aptActId}/cover`)
       : null
-    // The ONE member-benefit rule — the profile references subscriptions by key;
-    // resolve them to the seeded subscription-type ids here.
-    const memberBenefit = apt.memberBenefit
+    // ONE MEMBER RULE PER LENGTH (`Activity.durationBenefits`), written from the
+    // profile's single rule by applying it to every length the appointment
+    // offers.
+    //
+    // THE PROFILE SHAPE IS DELIBERATELY UNCHANGED. Lead profiles are gitignored
+    // and live only on the machine that wrote them, so a required edit there is
+    // one this repo cannot make, review or even see — every existing profile
+    // would start failing on a field nobody could find. A profile that wants
+    // different rules per length can be given a per-length key later; until one
+    // does, one rule applied to every length is exactly what it already meant.
+    //
+    // Effects are translated once, here: the profile speaks the legacy
+    // `kind: 'included' | 'discount'` vocabulary, the document stores the
+    // generalized `effect`.
+    const aptBenefit = apt.memberBenefit
       ? {
           subscriptionTypeIds: apt.memberBenefit.subKeys.map(subIdOf),
-          kind: apt.memberBenefit.kind,
           ...(apt.memberBenefit.kind === 'discount'
-            ? { discountPercent: apt.memberBenefit.discountPercent }
-            : {}),
+            ? { effect: 'percent_off' as const, percent: apt.memberBenefit.discountPercent }
+            : { effect: 'included' as const }),
         }
+      : null
+    const durationBenefits = aptBenefit
+      ? apt.durations.map((d) => ({ minutes: d.minutes, benefit: aptBenefit }))
       : null
     await db
       .collection('activities')
@@ -1337,7 +1353,7 @@ async function seedLeadTenant(profile: LeadProfile) {
           minutes: d.minutes,
           priceAmount: d.priceAmount ?? null,
         })),
-        ...(memberBenefit ? { memberBenefit } : {}),
+        ...(durationBenefits ? { durationBenefits } : {}),
         // A 1:1 slot has no roster-review step — the time is taken the moment
         // it's booked, so the booking is written 'confirmed' on the spot.
         autoConfirm: true,
@@ -1363,14 +1379,14 @@ async function seedLeadTenant(profile: LeadProfile) {
         // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
         // No accessRule — appointment mirrors dropped the access gate.
         isFreeTrial: false,
-        // Duration menu ("from CHF 45" on public cards) + the member-benefit
-        // rule, both mirrored verbatim, exactly as syncActivityPublicProfile
+        // Duration menu ("from CHF 45" on public cards) + the per-length member
+        // rules, both mirrored verbatim, exactly as syncActivityPublicProfile
         // does (public-safe: the type ids are already public in the shop).
         durations: apt.durations.map((d) => ({
           minutes: d.minutes,
           priceAmount: d.priceAmount ?? null,
         })),
-        ...(memberBenefit ? { memberBenefit } : {}),
+        ...(durationBenefits ? { durationBenefits } : {}),
       })
   }
 
@@ -1827,38 +1843,11 @@ async function seedLeadTenant(profile: LeadProfile) {
     }
 
     if (sub) {
+      // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+      // (AFTER `seedTeamMoney`, which is what its multi-plan source —
+      // `active_subscriptions` — is read back from). `startedAt` stays: the
+      // credit-grant fixture below still anchors its `created_at` to it.
       const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
-      if (i % 4 === 0) {
-        const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db
-          .collection('contacts')
-          .doc(id)
-          .collection('subscription_history')
-          .doc(`${id}-sub-prev`)
-          .set({
-            subscription_type_id: sub.id,
-            subscription_type_name: sub.name,
-            recurrence: sub.recurrence,
-            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-            start_date: ts(prevStartedAt),
-            end_date: ts(new Date(startedAt.getTime() - 1)),
-            created_at: ts(prevStartedAt),
-          })
-      }
-      await db
-        .collection('contacts')
-        .doc(id)
-        .collection('subscription_history')
-        .doc(`${id}-sub-current`)
-        .set({
-          subscription_type_id: sub.id,
-          subscription_type_name: sub.name,
-          recurrence: sub.recurrence,
-          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-          start_date: ts(startedAt),
-          end_date: null,
-          created_at: ts(startedAt),
-        })
 
       // Lesson-credit grant — when the held subscription type carries credit-pack
       // prices, seed one partially-consumed grant (first credit price) + the
@@ -1990,6 +1979,10 @@ async function seedLeadTenant(profile: LeadProfile) {
   }
 
   // ── goals & tasks (adult students only) ────────────────────────────────────
+  // `profile.goals[].categories` are GOAL CATEGORIES (technique / attitude /
+  // attendance / physical / mental — see DEFAULT_GOAL_CATEGORIES), never
+  // check-in axis keys. A goal created FROM a weak axis carries
+  // `from_dimension` instead; none is seeded, because no check-ins are seeded.
   let goalRound = 0
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]
@@ -2804,6 +2797,10 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     header: { showNav: true, ctaLabel: 'Book now', ctaAction: 'booking' },
     footer: { showSocial: true },
   }
+  // A stored menu, when the profile provides one — else the header derives its
+  // menu from the sections (see WebsiteRenderer). Written to both docs so the
+  // published site and the builder draft agree.
+  const menu = profile.siteMenu ? { menu: profile.siteMenu } : {}
   await db
     .collection('site_drafts')
     .doc(teamId)
@@ -2814,6 +2811,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       enabled: true,
       meta: siteMeta,
       sections,
+      ...menu,
       updated_at: ts(daysFromNow(-12)),
       updatedBy: uid,
     })
@@ -2826,6 +2824,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
       name: profile.teamName,
       meta: siteMeta,
       sections,
+      ...menu,
       socialLinks: profile.socialLinks,
       showBranding: false, // studio plan
       published_at: ts(daysFromNow(-12)),
@@ -2981,7 +2980,7 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
     .doc(teamId)
     .set({ products: productMirror }, { merge: true })
 
-  // One live promo code, so /offer/promo-codes and a discounted checkout are
+  // One live promo code, so /manage/promo-codes and a discounted checkout are
   // both demoable. See scripts/lib/storefront.ts for what is deliberately NOT
   // seeded alongside it.
   await seedStorePromoCode({ teamId, uid, currency: profile.currency, installedDaysAgo: 200 })
@@ -2990,6 +2989,11 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   // After contacts, whose subscription assignment it reads back. See
   // scripts/lib/fixtures/money.ts for why seeded ledger rows exist at all.
   await seedTeamMoney({ teamId, currency: profile.currency })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.
@@ -3010,6 +3014,8 @@ async function seedLeadPlugins(profile: LeadProfile, teamId: string, uid: string
   // simply missing from finance.
   await seedTeamSales({ teamId, currency: profile.currency })
   await seedTeamFinance({ teamId, uid })
+  // The asset register is its own Coach+ plugin — seeded beside finance, not by it.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents ──────────────────────────────────────────────────────────────
   // Documents + their frozen v1 snapshots + the public mirrors, through the ONE

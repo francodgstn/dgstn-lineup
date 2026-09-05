@@ -103,7 +103,7 @@ service cloud.firestore {
     // honest (a test that reads the manifests, that file and this one).
     function clientInstallableRank(pluginId) {
       return pluginId in ['gift-cards'] ? 0
-           : pluginId in ['contact-groups', 'custom-fields'] ? 1
+           : pluginId in ['asset-register', 'contact-groups', 'custom-fields'] ? 1
            : 2;
     }
 
@@ -325,10 +325,33 @@ service cloud.firestore {
              && request.auth.token.sessionExpires >= request.time.toMillis();
     }
 
-    // The calling contact's single active subscription type id (custom-token session).
-    // Costs one extra get() — only evaluated for the 'subscription' course tier.
+    // The calling contact's document (custom-token session). Costs one extra
+    // get(); repeated calls within one evaluation hit the access-call cache,
+    // which is what already lets the course tiers below ask for the id twice.
+    function callerContactData() {
+      return get(/databases/$(database)/documents/contacts/$(request.auth.token.contactId)).data;
+    }
+
+    // Is the contact's flat plan grant still in force? The rules twin of
+    // `planGrantIsCurrent` (@linyup/shared) — a one-time price with
+    // `included_months` stamps an end date, and access must stop at it HERE too,
+    // or a member whose two months ran out could still open the course the gate
+    // and the checkout both refuse her.
+    //
+    // The `== null` guard is not decoration: the field is written EXPLICITLY as
+    // null for every grant with no end of its own, so a `get(…, default)`
+    // fallback would return that stored null and compare it to a timestamp.
+    function planGrantCurrent(d) {
+      return d.get('subscription_expires_at', null) == null
+             || d.subscription_expires_at > request.time;
+    }
+
+    // The calling contact's active subscription type id, or '' once the grant
+    // that carried it has lapsed. Only evaluated for the gated course tiers.
     function callerContactSubscriptionTypeId() {
-      return get(/databases/$(database)/documents/contacts/$(request.auth.token.contactId)).data.get('subscription_type_id', '');
+      return planGrantCurrent(callerContactData())
+             ? callerContactData().get('subscription_type_id', '')
+             : '';
     }
 
     // Whether the calling contact session owns a lifetime purchase of a course.
@@ -395,6 +418,15 @@ service cloud.firestore {
     // UX. Only this ONE doc is public — global_settings (operator config) stays
     // default-deny. Writes happen only via the operator console (Admin SDK).
     match /app_settings/public {
+      allow read: if true;
+      allow write: if false;
+    }
+    // app_settings/mobile: the member app's world-readable policy (minimum
+    // supported version + store links, MobileAppSettings in @linyup/shared).
+    // Read BEFORE sign-in, so it must be open; operator-written only (console,
+    // Admin SDK). Every other app_settings doc — review_access above all, which
+    // holds a sign-in code — stays default-deny by having no match here.
+    match /app_settings/mobile {
       allow read: if true;
       allow write: if false;
     }
@@ -943,6 +975,22 @@ service cloud.firestore {
           && request.resource.data.system == resource.data.system;
         allow delete: if hasTeamRole(teamId, 'owner') && resource.data.system != true;
       }
+      // Asset register (finance plugin) — the equipment list behind the
+      // statement of assets. REGISTER-ONLY while the ledger is cash-basis:
+      // no posting reads these docs, so owner client-writes (incl. delete for
+      // typo rows — dispose is the normal end state) are safe. The accrual
+      // phase routes writes through callables before postings depend on them
+      // (docs/finance-accrual.md §4).
+      match /asset_register/{assetId} {
+        allow read: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+        // MANAGER-WRITABLE while the ledger is cash-basis: the person who knows
+        // what kit exists is the one who maintains the list, and no posting
+        // reads these docs yet (the rule above this one says why that is safe).
+        // Read stays manager+owner — equipment cost is not coach-visible.
+        // The accrual phase routes writes through callables before postings
+        // depend on these fields, which is where this widens back.
+        allow write: if hasTeamRole(teamId, 'manager') || hasTeamRole(teamId, 'owner');
+      }
 
       // THE booking gate's authorization source: which waivers a booking here
       // requires, and at what version floor. Server-written by
@@ -1084,17 +1132,27 @@ service cloud.firestore {
       allow update: if (canWriteContact(resource)
                        || hasRole('admin')
                        || (isSelfContact(contactId)
-                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at'])))
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weight', 'last_seen_at', 'mobile_app'])))
                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coaching_open_count', 'coaching_overdue_count', 'last_checkin_at', 'alerts_count', 'notes_count']);
       allow delete: if (canAccessContact(resource)
                           && hasTeamCapability(resource.data.teamId, 'contacts.delete'))
                        || hasRole('admin');
 
-      // Subscription history subcollection — full CRUD for team members
+      // Subscription history subcollection — the ONLY store of a contact's plan
+      // PERIODS. `onContactSubscriptionChange` (packages/functions/src/sync/) is
+      // the SINGLE writer of periods: it reconciles what a contact currently
+      // HOLDS against this subcollection by set difference, and a client write
+      // racing that reconciliation could open/close a row the trigger doesn't
+      // know about, silently forking the two plans' periods apart. `delete` stays
+      // open — a row is EVIDENCE that a plan was held, not a scarce resource, and
+      // the contact detail page's per-row trash button
+      // (`contacts/[id]/page.tsx`) genuinely uses it to remove a bad record; that
+      // is not a period-integrity risk the way create/update would be.
       match /subscription_history/{historyId} {
         allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
                       || hasRole('admin');
-        allow create, update, delete:
+        allow create, update: if false;
+        allow delete:
           if canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId)))
           || hasRole('admin');
       }
@@ -1220,10 +1278,39 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Completed purchases of a subscription price — the ledger behind
+      // "this intro can be bought once per person". Cloud Functions only, for
+      // the same reason as the two above: a client-writable row would let a
+      // member delete her own purchase and take a once-per-person offer twice.
+      // Readable by the contact so the shop can mark an offer already taken.
+      match /plan_purchases/{purchaseId} {
+        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                      || hasRole('admin')
+                      || isSelfContact(contactId)
+                      || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)));
+        allow write: if false;
+      }
+
+      // Push notification tokens — device registrations for the (not yet
+      // built) mobile push feature. See `PushToken`
+      // (packages/shared/src/types/push.ts) for why the doc id IS the token.
+      //
+      // UNLIKE every other subcollection here, staff get NO arm at all — not
+      // `canAccessContact`, not `hasRole('admin')`, nothing. A studio has no
+      // legitimate reason to enumerate which devices a member's account is
+      // signed into, and the Cloud Function that will eventually SEND
+      // (`sendPush`, packages/functions/src/push/) runs on the Admin SDK,
+      // which bypasses these rules entirely — so no staff/admin arm is needed
+      // to make sending work either. Only the contact's own session
+      // (`isSelfContact`) may create, update, delete or read its own tokens.
+      match /push_tokens/{tokenId} {
+        allow read, write: if isSelfContact(contactId);
+      }
+
       // Rules apply to all other child collections. Single-segment on purpose:
       // the only deeper paths (goals/{id}/evaluations) are matched explicitly
       // above, and a recursive wildcard here could not exclude credit_grants /
-      // usage_windows from its write grant.
+      // usage_windows / plan_purchases from its write grant.
       match /{subcollection}/{docId} {
         // `contact_notes` is the studio's PRIVATE staff commentary about a contact
         // (behavioural / health / financial), authored in the staff-only Notes tab
@@ -1235,11 +1322,18 @@ service cloud.firestore {
         // bookings, goals, credit balance, …). Rules are additive, so this
         // exclusion has to live on the catch-all itself — a separate staff-only
         // match would be OR'd with this grant and change nothing.
-        allow read: if canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
-                      || hasRole('admin')
-                      || (subcollection != 'contact_notes'
-                          && (isSelfContact(contactId)
-                              || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId)))));
+        //
+        // `push_tokens` is excluded from the WHOLE grant, not just the
+        // self-read branch — this catch-all's `canAccessContact` / `hasRole('admin')`
+        // arm must not hand staff a blanket read either, same additive-rules trap,
+        // and the explicit `/push_tokens/{tokenId}` match above is the ONLY grant
+        // for it (isSelfContact, and nothing else).
+        allow read: if subcollection != 'push_tokens'
+                      && (canAccessContact(get(/databases/$(database)/documents/contacts/$(contactId)))
+                          || hasRole('admin')
+                          || (subcollection != 'contact_notes'
+                              && (isSelfContact(contactId)
+                                  || sharesContactEmail(get(/databases/$(database)/documents/contacts/$(contactId))))));
         // `goals` is ALSO excluded — not because it is function-only like the two
         // below, but because rules are additive: this catch-all's blanket grant
         // (no field restriction at all) would otherwise override the field-lock
@@ -1249,9 +1343,26 @@ service cloud.firestore {
         // the exclusion has to live here, same reasoning as `contact_notes` above.
         // Every other permission goals grants (full staff CRUD, admin) is already
         // duplicated on that explicit match; nothing is lost by removing it here.
+        //
+        // `subscription_history` is excluded for the SAME reason: rules are
+        // additive, so without this exclusion the catch-all's blanket
+        // `canWriteContact` grant would override the explicit
+        // `/subscription_history/{historyId}` match's `allow create, update: if
+        // false` — a staff member could create/update a period row directly and
+        // race `onContactSubscriptionChange`'s reconciliation. `delete` is
+        // unaffected either way (both matches allow it for staff).
+        //
+        // `push_tokens` joins this list for the reason stated on the explicit
+        // match above and on the read grant just above: staff (even with
+        // `contacts.manage`) get no write here either — this is the trap this
+        // comment block warns about on every other entry, so a token
+        // subcollection is called out by name rather than assumed covered.
         allow write: if subcollection != 'credit_grants'
                       && subcollection != 'usage_windows'
+                      && subcollection != 'plan_purchases'
                       && subcollection != 'goals'
+                      && subcollection != 'subscription_history'
+                      && subcollection != 'push_tokens'
                       && (canWriteContact(get(/databases/$(database)/documents/contacts/$(contactId))) || hasRole('admin'));
       }
 

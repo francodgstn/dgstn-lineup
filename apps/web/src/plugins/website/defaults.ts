@@ -28,6 +28,15 @@ export const SECTION_LIBRARY: {
   },
   { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'MapPin' },
   { type: 'places', labelKey: 'sectionPlaces', descKey: 'sectionPlacesDesc', icon: 'Map' },
+  { type: 'features', labelKey: 'sectionFeatures', descKey: 'sectionFeaturesDesc', icon: 'Sparkles' },
+  { type: 'cta_banner', labelKey: 'sectionCta', descKey: 'sectionCtaDesc', icon: 'Megaphone' },
+  { type: 'faq', labelKey: 'sectionFaq', descKey: 'sectionFaqDesc', icon: 'HelpCircle' },
+  {
+    type: 'testimonials',
+    labelKey: 'sectionTestimonials',
+    descKey: 'sectionTestimonialsDesc',
+    icon: 'Quote',
+  },
 ]
 
 /** Client-only unique id for a new section (React key + image path segment + anchor). */
@@ -55,6 +64,31 @@ export function newSection(type: WebsiteSectionType): WebsiteSection {
       return { id, type, showSocial: true }
     case 'places':
       return { id, type, columns: 3 }
+    case 'features':
+      return {
+        id,
+        type,
+        columns: 3,
+        items: [
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+        ],
+      }
+    case 'cta_banner':
+      return { id, type, heading: 'Ready to start?', text: 'Join us this week.' }
+    case 'faq':
+      return {
+        id,
+        type,
+        items: [{ question: 'A question?', answer: 'The answer.' }],
+      }
+    case 'testimonials':
+      return {
+        id,
+        type,
+        items: [{ name: 'Alex', activity: 'Member', feedback: 'Best decision I made.' }],
+      }
   }
 }
 

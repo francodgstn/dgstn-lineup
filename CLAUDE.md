@@ -81,7 +81,8 @@ Root tooling: **pnpm workspaces** + **Turborepo**. Node 22 required.
 - **SaaS operator console** — no admin panel for managing tenants
 - **Full function port** — only ~15 of ~81 functions are implemented; the rest are stubbed with a `TODO: port from hmd-lineup/functions/src/{name}/index.js` comment
 - **Outreach/automation engine** — not started
-- **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, priced durations + one `memberBenefit` rule (no access gate — the price is the gate), .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile app integration (browse/book is gated pending a rebuild on `listAvailability`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
+- **Accrual finance** — planned, not started: `docs/finance-accrual.md` is the recorded design (recognition policies, basis setting, assets-in-finance, the inventory-extension re-scope). Shipped from it so far: `MemberSubscription.current_period_start` persistence, the opening-balances wizard (`/plugins/finance/opening`), and the **asset register / statement of assets** register-only slice (`/plugins/finance/assets` — indicative values, no postings until accrual mode).
+- **Appointments (1:1)** — DONE: activity-bound, availability-only booking (`listAvailability` + `bookAppointment`, overlap-safe lazy session creation, priced durations + one `memberBenefit` rule (no access gate — the price is the gate), .ics emails, public picker at `/public/{slug}/appointments` — see `docs/appointments.md`). Still open: mobile paid appointments (browse/book on `listAvailability` exists; a priced duration is refused with `payment_required` — no mobile checkout surface, see `docs/mobile-roadmap-2026-09.md`), push reminders, session notes, waiting list (`docs/product-strategy.md`).
 
 ---
 
@@ -329,13 +330,21 @@ paths don't read it, appointment session docs/mirrors don't carry it).
 `cancelBooking` handles both kinds.
 
 **Paid appointments** put a base price per duration (`Activity.durations:
-[{minutes, priceAmount?}]`) and the member benefit in ONE rule per activity:
-`Activity.memberBenefit: {subscriptionTypeIds, kind: 'included'|'discount',
-discountPercent?}` — holders of a listed type book free (`included`; credit
-packs spend a credit) or pay `discountPercent` off every priced duration
-(`discount`, clamped to Stripe's 0.50 floor, never free-via-discount). Absent =
-no benefit, everyone pays base — the benefit is data, never implied, but it is
-one rule (the per-duration × per-type `subscriptionPricing` matrix is gone).
+[{minutes, priceAmount?}]`) **and one member rule per duration**
+(`Activity.durationBenefits: [{minutes, benefit}]`) — holders of a listed type
+book that length free (`included`; credit packs spend a credit), at
+`percent_off`, or at a `fixed_price` (all clamped to Stripe's 0.50 floor, never
+free-via-discount). **THE ONE READER is `resolveDurationBenefit(activity,
+minutes)`** — never touch the fields directly: `durationBenefits` present ⇒ it
+is the whole answer and a missing entry means no rule; absent ⇒ the LEGACY
+activity-wide `Activity.memberBenefit` still applies to every length, so an
+un-re-edited appointment behaves as before and **no backfill is owed** (the
+first per-length save absorbs the old rule onto every length and clears it).
+This is NOT the per-duration × per-type `subscriptionPricing` matrix cut in
+2026-07 — that was a grid of prices; this is the same one rule, asked once per
+length, because `fixed_price` on an activity charged the same for 30 and 90
+minutes. A public ONE-LINE summary (shop card, site chip, pricing table) states
+a benefit only when every length agrees, else the price range alone.
 Resolver: **`resolvePaymentOptions(snapshot, target, context?)`** — the ONE
 shared coverage/quote resolver (`packages/shared/src/utils/paymentOptions.ts`,
 pure, client-safe) that answers `covered | spend_credits | pay(amount,
@@ -861,12 +870,21 @@ Full docs: `scripts/leads/README.md`.
 
 The sandbox hosts **live prospect demos**, so nothing lands in it unattended:
 
-- **Code deploys are manual.** `deploy-sandbox.yml` (functions + rules) is
-  `workflow_dispatch` only — no push trigger. Sandbox can therefore drift behind
-  `main`; deploy by hand before a demo if backend code changed. The **web app**
-  is separate: it rolls out via App Hosting's own GitHub integration, configured
-  in the Firebase Console (Console → App Hosting → backend → Deployment
-  settings), not in this repo.
+- **Code deploys are deliberate, never automatic on merge.** `deploy-sandbox.yml`
+  runs on a **`sandbox-*` tag push** or `workflow_dispatch` — there is no
+  push-to-`main` trigger, so sandbox drifts behind `main` until somebody tags it,
+  and the run then waits on the `sandbox` environment's reviewer approval before
+  it does anything. Deploy before a demo if backend code changed:
+  `git tag -a sandbox-YYYY-MM-DD <sha> -m "why" && git push origin sandbox-YYYY-MM-DD`.
+  A second deploy the same day takes a letter suffix (`sandbox-2026-09-03b`, then
+  `…c`). **The tag list IS the deployment record** — `git tag -l 'sandbox-*'`, and
+  `git log <last-tag>..origin/main` is how far behind sandbox has drifted.
+- **What that deploy covers:** functions + Firestore rules/indexes + Storage
+  rules, and then the **web app**, rolled out on App Hosting (`linyup-web-eu`,
+  the one backend sandbox has) at the tagged commit rather than a branch tip. No
+  `hosting:landing` — sandbox has no landing site. **App Hosting auto-rollout
+  must stay OFF on that backend**: the workflow does the rollout itself, and the
+  Console's own trigger would race it.
 - **The `/try` demos reset on a schedule; nothing else does.**
   `.github/workflows/reseed-sandbox.yml` wipes + reseeds the `/try` playground
   **daily** (~04:00 Zurich / 03:00 UTC) so it stays clean and current (the seed
@@ -965,6 +983,13 @@ apps/web/
 
 ## Development commands
 
+**Before starting or stopping ANY local process, run `node scripts/local-env.mjs
+status`.** Several worktrees develop this repo at once and they all want the same
+ports; both ways that goes wrong are silent (the seeder wipes another checkout's
+data behind a clean success banner, and the functions emulator keeps serving the
+`dist` of whichever checkout started it). `.claude/skills/local-env/SKILL.md`
+owns the port slots, the fresh-worktree bootstrap, and the traps.
+
 **Local dev = one process per terminal.**
 
 In VS Code (the usual way): **Ctrl+Shift+P → "Tasks: Run Task"** → pick a service or a
@@ -976,6 +1001,9 @@ Or run the scripts directly (start the backend in one terminal, then each app in
 
 ```bash
 pnpm install            # root — installs all workspaces (once)
+pnpm bootstrap          # env files from their *.example templates (emulator-first), shared +
+                        # functions built when their dist is missing/stale, a port slot claimed.
+                        # Idempotent; also runs as the SessionStart hook (.claude/settings.json).
 
 # ── Terminal 1: backend (datasets may be combined — see "Emulator data modes") ──
 pnpm emulators:seed     # fresh seed: emulators (auth+firestore+functions+storage) + 3 demo accounts
@@ -986,7 +1014,8 @@ pnpm emulators:hmd      # HMD migration snapshot (auth+firestore+storage)
 pnpm dev:web            # Next.js admin dashboard (port 3000)
 pnpm dev:admin          # operator console (port 3002)
 pnpm dev:landing        # Astro marketing site (port 4321)
-pnpm dev:mobile         # Expo student app
+pnpm dev:mobile         # Expo member app against STAGING (default target)
+pnpm dev:mobile:emulators  # … against the local stack (ports from this checkout's slot)
 
 # ── Optional extra terminals ──
 pnpm stripe:listen      # forward Stripe test webhooks (platform + Connect) to the local
@@ -997,6 +1026,10 @@ pnpm stripe:listen      # forward Stripe test webhooks (platform + Connect) to t
                         # (and STRIPE_WEBHOOK_SECRET), then restart the emulator.
 pnpm functions:watch    # rebuild Cloud Functions on save (when editing functions)
 ```
+
+Test logins for every environment, web AND member app — including the review
+studio `linyup-demo` + fixed code that every seeder provisions — are in
+`docs/test-accounts.md`. Never re-derive one from a seeder's source.
 
 Quality / CI checks (run anytime): `pnpm build` · `pnpm lint` · `pnpm typecheck` ·
 `pnpm test` · `pnpm format`. Cloud/data ops live under `seed:*` / `reset:*` /

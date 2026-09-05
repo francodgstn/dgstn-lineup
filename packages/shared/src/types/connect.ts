@@ -51,9 +51,10 @@ export type ConnectOnboardingModel = 'byo' | 'managed'
 // go through computePlatformFee(). Stored in basis points (1% = 100 bps) so every
 // value is an integer and the fee math stays in integer Rappen.
 //
-// Final take-rates (signed off 2026-06-20): Free 1.7 / Coach 1.2 / Studio 0.7 /
-// Org 0.4 %. "Studio" is the tier the brief calls "Club" (renamed pre-launch;
-// the id `studio` is the stable machine identifier).
+// Take-rates (revised 2026-08-29, pre-launch commercial review): Free 2.5 /
+// Coach 1.5 / Studio 0.8 / Org 0.5 %. Supersedes the 2026-06-20 set
+// (1.7 / 1.2 / 0.7 / 0.4). "Studio" is the tier the brief calls "Club"
+// (renamed pre-launch; the id `studio` is the stable machine identifier).
 export interface ConnectTakeRate {
   /** Platform application fee in basis points (integer). 100 bps = 1%. */
   bps: number
@@ -65,10 +66,10 @@ export interface ConnectTakeRate {
 }
 
 export const CONNECT_TAKE_RATE: Record<SaasPlan, ConnectTakeRate> = {
-  free: { bps: 170, minFeeRappen: 0 }, // 1.7%
-  coach: { bps: 120, minFeeRappen: 0 }, // 1.2%
-  studio: { bps: 70, minFeeRappen: 0 }, // 0.7%
-  organization: { bps: 40, minFeeRappen: 0 }, // 0.4%
+  free: { bps: 250, minFeeRappen: 0 }, // 2.5%
+  coach: { bps: 150, minFeeRappen: 0 }, // 1.5%
+  studio: { bps: 80, minFeeRappen: 0 }, // 0.8%
+  organization: { bps: 50, minFeeRappen: 0 }, // 0.5%
 }
 
 export interface PlatformFeeInput {
@@ -161,7 +162,7 @@ export function takeRatePercent(tier: SaasPlan, waived?: boolean): number {
  *   "Attempting to refund_application_fee on ch_..., but it has no application fee"
  *
  * So the refund flag must be conditional on the charge actually having one.
- * This is not new with comping: at 70 bps any charge under CHF 1.43 already
+ * This is not new with comping: at 80 bps any charge under CHF 1.25 already
  * floors to a zero fee, so the same refusal has always been reachable — comping
  * only makes it every refund at the tenant rather than a rare small one.
  */
@@ -355,6 +356,17 @@ export interface MemberSubscription {
   /** Platform fee taken per invoice, as a percent (Stripe application_fee_percent). */
   application_fee_percent?: number
   status: MemberSubscriptionStatus
+  /**
+   * Start of the current billing period — WHICH SERVICE PERIOD the latest
+   * invoice bought. Stored for accrual readiness (spreading a quarterly/annual
+   * charge over its covered months needs the pair, and Stripe's period data is
+   * not re-fetchable for the BYO/manual rails — see docs/finance-accrual.md,
+   * Phase 0): nothing in web or admin reads it yet. Same source as the end
+   * (`readSubscriptionPeriod`, always the same item, so the pair is coherent).
+   * Absent on docs written before 2026-08-31; `backfill:subscription-lifecycle`
+   * repairs those from Stripe. Readers must tolerate absence.
+   */
+  current_period_start: Timestamp | null
   /**
    * End of the current billing period. Sourced from the subscription ITEM
    * (Stripe removed the subscription-level field in Basil) — see

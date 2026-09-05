@@ -79,7 +79,7 @@ point at it rather than restating it.
 | `CONTACT_WEEKLY_REPORTS_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1530` | PRESENT `seed-sandbox.ts:2262` | PRESENT `seed-staging.ts:1559` | PRESENT `seed-lead.ts:1831` | PASS-THRU `passes/05-contacts.ts:20` | `/contacts/[id]` trend chart |
 | `CONTACT_GOALS_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1590` | PRESENT `seed-sandbox.ts:2326` | PRESENT `seed-staging.ts:1657` | PRESENT `seed-lead.ts:1897` | PASS-THRU `passes/05-contacts.ts:101` | `/contacts/[id]` goals |
 | `CONTACT_NOTES_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | MISSING | `/contacts/[id]` NotesTab — empty everywhere |
-| `CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | PASS-THRU `passes/05-contacts.ts:21` (renamed from `training_checkins`) | `/contacts/[id]` performance radar |
+| `CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION` | MISSING | PRESENT `lib/fixtures/coaching.ts:227` via `seed-sandbox.ts:2321` | MISSING | MISSING | PASS-THRU `passes/05-contacts.ts:21` (renamed from `training_checkins`) | `/contacts/[id]` performance radar |
 | `CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1411` | PRESENT `seed-sandbox.ts:2197` | PRESENT `seed-staging.ts:1494` | PRESENT `seed-lead.ts:1718` | PASS-THRU `passes/05-contacts.ts:16` | `/contacts/[id]` subscriptions |
 | `CONTACT_CREDIT_GRANTS_SUBCOLLECTION` | MISSING | MISSING | MISSING | PRESENT `seed-lead.ts:1761` | MISSING | `/contacts/[id]` credits; credit-pack booking |
 | `SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | PASS-THRU `passes/11-team-subcollections.ts:13` | `/subscriptions` transition history |
@@ -145,7 +145,7 @@ have been the most expensive false `PRESENT` in this audit.
 | `MEMBER_SUBSCRIPTIONS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | N-A | `/contacts/[id]` PaymentsTab; the `subscription_status` rollup |
 | `GIFT_CARDS_SUBCOLLECTION` | PRESENT `seed-emulator.ts:1873` | MISSING | MISSING | CONDITIONAL `seed-lead.ts:1001` | N-A | `/public/{slug}/shop` gift-card redemption |
 | `GIFT_CARD_ISSUES_SUBCOLLECTION` | N-A | N-A | N-A | N-A | N-A | serialisation marker; callable-written only |
-| `PROMO_CODES_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | N-A | `/offer/promo-codes` — empty in every demo |
+| `PROMO_CODES_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | N-A | `/manage/promo-codes` — empty in every demo |
 | `PROMO_REDEMPTIONS_SUBCOLLECTION` | N-A | N-A | N-A | N-A | N-A | ledger; written only by `commitPromoRedemption` |
 | `PAYMENT_EVENTS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | N-A | `/payments` BYO-gateway rows |
 | `PARTNER_VISITS_SUBCOLLECTION` | MISSING | MISSING | MISSING | MISSING | N-A | aggregator payout reporting |
@@ -183,7 +183,7 @@ overwritten. Seed the journal and the accounts; leave the rollups alone.
 | `USER_PUBLIC_PROFILE_SUBCOLLECTION` | PRESENT `seed-emulator.ts:599` | PRESENT `seed-sandbox.ts:1614` | PRESENT `seed-staging.ts:859` | PRESENT `seed-lead.ts:945` | PRESENT `passes/11-team-subcollections.ts:159` | every `/public/{slug}` route |
 | `ROLE_CONFIG_SUBCOLLECTION` | PRESENT `seed-emulator.ts:2842` | PRESENT `seed-sandbox.ts:1710` | PRESENT `seed-staging.ts:2051` | PRESENT `seed-lead.ts:1050` | MISSING | `/settings/roles` |
 | `SUBSCRIPTION_TYPES_SUBCOLLECTION` | PRESENT `seed-emulator.ts:969` | PRESENT `seed-sandbox.ts:1952` | PRESENT `seed-staging.ts:1227` | PRESENT `seed-lead.ts:1421` | PRESENT `passes/11-team-subcollections.ts:132` | `/offer/subscriptions` |
-| `PRODUCTS_SUBCOLLECTION` | PRESENT `lib/storefront.ts:222` | PRESENT `lib/storefront.ts:222` | PRESENT `lib/storefront.ts:222` | PRESENT `seed-lead.ts:2603` | MISSING (the plugin is installed at `passes/11-team-subcollections.ts:148`, but no product documents are written — a migrated tenant's public shop is live and empty) | `/offer/products`; shop Products tab |
+| `PRODUCTS_SUBCOLLECTION` | PRESENT `lib/storefront.ts:222` | PRESENT `lib/storefront.ts:222` | PRESENT `lib/storefront.ts:222` | PRESENT `seed-lead.ts:2603` | MISSING (the plugin is installed at `passes/11-team-subcollections.ts:148`, but no product documents are written — a migrated tenant's public shop is live and empty) | `/manage/products`; shop Products tab |
 | `INSTALLED_PLUGINS_SUBCOLLECTION` | PARTIAL `seed-emulator.ts:1858` | PARTIAL `seed-sandbox.ts:2873` | PARTIAL `lib/storefront.ts:138` | PARTIAL `seed-lead.ts:2420` | PARTIAL `passes/00-setup.ts:102` | `/settings/plugins` |
 | `ORG_INSTALLED_PLUGINS_SUBCOLLECTION` | PARTIAL `seed-emulator.ts:1858` | MISSING | MISSING | MISSING | PRESENT `passes/00-setup.ts:102` | `/org/[orgId]/plugins` |
 | `TEAM_INTEGRATIONS_SUBCOLLECTION` | MISSING | MISSING | MISSING | PRESENT `seed-lead.ts:854` | MISSING | `/settings/emails` |
@@ -484,7 +484,7 @@ The most complete surface, and the one shown to actual prospects.
    `org_program_templates`.
 3. **Finance and accounting — zero coverage**, and the plugin is never installed.
 4. **Promo codes — zero coverage**, and the plugin is never installed;
-   `/offer/promo-codes` is empty everywhere.
+   `/manage/promo-codes` is empty everywhere.
 5. **`member_payments` / `member_subscriptions` — zero coverage**, which also leaves
    `Contact.subscription_status` and `active_subscriptions` unwritten. Decide
    deliberately (see "paid bookings are unseeded") before touching this.

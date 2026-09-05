@@ -32,9 +32,10 @@ import {
  *    progress bar at 1/5 before anybody had done anything.
  *
  *    That is why the mirror is read for its FIELDS and never for its existence
- *    (see `publicPageHasContent`), and why "pin a shortcut" is an
- *    acknowledgement rather than a derived check: `NavPinsContext` seeds a
- *    default shortcut list, so a derived check there could never be false.
+ *    (see `publicPageHasContent`), and why "star a favourite" (label text since
+ *    2026-08-29, UX-84 — it was "pin a shortcut") is an acknowledgement rather
+ *    than a derived check: `NavPinsContext` seeds a default shortcut list, so a
+ *    derived check there could never be false.
  *
  * 2. **A STEP'S CHECK MUST MEAN WHAT ITS LABEL SAYS.** "Schedule a session"
  *    ticked on the existence of any session — and `allowBooking` used to default
@@ -498,7 +499,7 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       done: false,
     },
     {
-      // THE LAST LOOK BEFORE ANYBODY PAYS. /offer/pricing renders every price
+      // THE LAST LOOK BEFORE ANYBODY PAYS. /manage/pricing renders every price
       // as a member actually meets it — the plan, the per-class price, the
       // member rate on top of it — which is the one thing no individual editor
       // can show, because each of them only knows its own half.
@@ -508,7 +509,7 @@ export function useSetupChecklist(teamId: string | null, team?: Team | null, pla
       // would be the third lying step (Franco, 2026-08-23).
       key: 'pricingReview',
       section: 'doors',
-      href: '/offer/pricing',
+      href: '/manage/pricing',
       ack: 'review',
       done: false,
     },

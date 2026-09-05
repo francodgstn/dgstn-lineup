@@ -3,22 +3,25 @@
 // The settings rail — a searchable, grouped vertical tab list shared by the whole
 // /settings/* area via the settings layout. Highlights the active destination
 // (matching path + ?tab= for the team sub-sections) and carries the "always show"
-// toggle that adds/removes an item from the sidebar's Shortcuts group (vocabulary:
+// toggle that adds/removes an item from the sidebar's Favourites group (vocabulary:
 // THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). On desktop it sits beside
 // the detail pane; on mobile it IS the /settings index list.
 
-import { useMessages, useTranslations } from 'next-intl'
+import { useLocale, useMessages, useTranslations } from 'next-intl'
 import { usePathname } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
-import { Pin } from 'lucide-react'
+import { Star } from 'lucide-react'
 import { SETTINGS_ITEMS, SETTINGS_GROUPS } from '@/lib/settings-nav'
+import { sortNavRows } from '@/lib/navSort'
 import { useNavPins } from '@/contexts/NavPinsContext'
 import { useCapabilities } from '@/hooks/useCapabilities'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
 import { NavRail, type NavRailGroup } from './NavRail'
+import { Tip } from '@/components/ui/tip'
 
 export function SettingsRail() {
   const t = useTranslations('Nav')
+  const locale = useLocale()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const currentTab = searchParams.get('tab')
@@ -70,31 +73,54 @@ export function SettingsRail() {
   const railGroups: NavRailGroup[] = SETTINGS_GROUPS.map((group) => ({
     key: group.key,
     label: labelOf(group.labelKey),
-    rows: SETTINGS_ITEMS.filter((i) => i.group === group.key && gateOk(i)).map((item) => {
+    // ALPHABETICAL WITHIN THE GROUP, leads first — the same rule the sidebar's
+    // sections follow, written down once in `lib/navSort.ts`. Sorted on the
+    // RESOLVED label, so it is alphabetical in the language actually on screen.
+    rows: sortNavRows(
+      SETTINGS_ITEMS.filter((i) => i.group === group.key && gateOk(i)).map((item) => ({
+        item,
+        label: labelOf(item.labelKey),
+        lead: item.lead,
+      })),
+      locale
+    ).map(({ item, label }) => {
       const shown = isAlwaysShown(item.id)
       return {
         id: item.id,
         href: item.href,
-        label: labelOf(item.labelKey),
+        label,
         icon: item.icon,
         active: isActive(item.href),
         keywords: keywordsOf(item.id),
         trailing: (
-          <button
-            type="button"
-            onClick={() => toggleAlwaysShown(item.id)}
-            title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
-            aria-pressed={shown}
-            className={`absolute right-1 rounded-md p-1 transition-all ${
-              shown
-                ? 'text-primary opacity-100'
-                : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
-            }`}
-          >
-            {/* A pin, not a star — the star means "recommended by Linyup" in the
-                plugin catalogue, and one glyph cannot carry both meanings. */}
-            <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
-          </button>
+          <Tip label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}>
+            <button
+              type="button"
+              onClick={() => toggleAlwaysShown(item.id)}
+              aria-label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+              aria-pressed={shown}
+              className={`absolute right-1 rounded-md p-1 transition-all ${
+                shown
+                  ? 'text-primary opacity-100'
+                  : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
+              }`}
+            >
+              {/* A star, matching the "always show in Favourites" toggle in the
+                  main sidebar (ShortcutButton, app/[locale]/(auth)/layout.tsx) —
+                  the two must never drift, since both read/write the same
+                  `useNavPins` state. NOTE: on /settings/plugins this row (for the
+                  "Plugins" settings destination itself) sits on the same screen as
+                  the marketplace GRID's own amber "recommended" star badge on each
+                  plugin card — that one is a different object (a manifest flag,
+                  not a personal choice) and was out of scope for the 2026-08-29
+                  rename (UX-84), which only moved the SIDEBAR's collision (nav
+                  favourite vs. nav plugin-suggestion, both then a star) onto a
+                  puzzle piece. If the two stars on /settings/plugins read as
+                  confusing in practice, the marketplace grid is the one left to
+                  move. */}
+              <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+            </button>
+          </Tip>
         ),
       }
     }),

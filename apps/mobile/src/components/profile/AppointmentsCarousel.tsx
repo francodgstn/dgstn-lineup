@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
-import { AppointmentWithStatus, Contact } from '../../types';
+import { Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { AppointmentWithStatus } from '../../types';
 import { FirestoreService } from '../../services/firestore';
+import { useTranslations } from '../../i18n';
 
 interface Props {
   slots: AppointmentWithStatus[];
-  contact?: Contact | null;
   onRefresh?: () => void;
   open?: boolean;
   /** Opens the coach → activity → duration → day → time booking funnel
@@ -17,8 +17,9 @@ interface Props {
 
 const CARD_WIDTH = 108;
 
-export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefresh, open, onBookNew }) => {
+export const AppointmentsCarousel: React.FC<Props> = ({ slots, onRefresh, open, onBookNew }) => {
   const theme = useTheme();
+  const t = useTranslations('Appointments');
   const [expanded, setExpanded] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AppointmentWithStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,15 +53,15 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
   const closeModal = () => setSelectedSlot(null);
 
   const confirmCancel = async () => {
-    if (!selectedSlot || !contact?.id) return;
+    if (!selectedSlot?.cancelToken) return;
     setLoading(true);
     try {
-      await FirestoreService.cancelAppointment({ slotId: selectedSlot.id, contactId: contact.id });
+      await FirestoreService.cancelAppointment({ cancelToken: selectedSlot.cancelToken });
       closeModal();
-      Alert.alert('Cancelled', 'Your booking has been cancelled.');
+      Alert.alert(t('cancelledTitle'), t('cancelledBody'));
       onRefresh?.();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to cancel. Please try again.');
+      Alert.alert(t('errorTitle'), e?.message || t('cancelFailed'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,6 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
 
   const renderCard = ({ item: slot }: { item: AppointmentWithStatus }) => {
     const slotIsBooked = slot.bookingStatus === 'booked';
-    const isFull = slot.bookingStatus === 'full';
     const isCancelled = slot.bookingStatus === 'cancelled';
 
     const day = slot.start.getDate();
@@ -85,12 +85,12 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
 
     const headerBg = slotIsBooked
       ? (theme.dark ? 'rgba(34,197,94,0.25)' : '#DCFCE7')
-      : isFull || isCancelled
+      : isCancelled
         ? theme.colors.surfaceVariant
         : theme.colors.primaryContainer;
     const headerColor = slotIsBooked
       ? '#16A34A'
-      : isFull || isCancelled
+      : isCancelled
         ? theme.colors.onSurfaceVariant
         : theme.colors.primary;
 
@@ -118,12 +118,10 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
           {slotIsBooked ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <Icon source="check-circle" size={12} color="#16A34A" />
-              <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 10 }}>Booked</Text>
+              <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 10 }}>{t('bookedTag')}</Text>
             </View>
-          ) : isFull ? (
-            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Full</Text>
           ) : isCancelled ? (
-            <Text style={{ color: theme.colors.error, fontSize: 10 }}>Cancelled</Text>
+            <Text style={{ color: theme.colors.error, fontSize: 10 }}>{t('cancelledTag')}</Text>
           ) : null}
         </View>
       </Pressable>
@@ -141,7 +139,7 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
     >
       <Icon source="calendar-plus" size={24} color={theme.colors.primary} />
       <Text style={{ color: theme.colors.primary, fontWeight: '800', fontSize: 12, marginTop: 6, textAlign: 'center' }}>
-        Book new
+        {t('bookNew')}
       </Text>
     </Pressable>
   );
@@ -151,10 +149,10 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
   const formatTime = (d: Date) =>
     d.toLocaleTimeString('default', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-  const title = bookedCount > 0 ? 'Your appointments' : 'Book an appointment';
+  const title = bookedCount > 0 ? t('yourAppointmentsTitle') : t('bookTitle');
   const subtitle = bookedCount > 0
-    ? `You have ${bookedCount} booked appointment${bookedCount > 1 ? 's' : ''}.`
-    : 'Find a time with your coach.';
+    ? (bookedCount === 1 ? t('bookedCountOne') : t('bookedCountOther', { count: bookedCount }))
+    : t('findTimeSubtitle');
 
   return (
     <>
@@ -212,7 +210,7 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
               <View style={styles.coachRow}>
                 <Icon source="account-circle" size={16} color={theme.colors.onSurfaceVariant} />
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 6 }}>
-                  with <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>{selectedSlot.providerName}</Text>
+                  {t('withLabel')} <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>{selectedSlot.providerName}</Text>
                 </Text>
               </View>
             ) : null}
@@ -244,18 +242,20 @@ export const AppointmentsCarousel: React.FC<Props> = ({ slots, contact, onRefres
               <>
                 <View style={[styles.bookedBanner, { backgroundColor: theme.dark ? 'rgba(34,197,94,0.15)' : '#F0FDF4' }]}>
                   <Icon source="check-circle" size={16} color="#16A34A" />
-                  <Text variant="labelMedium" style={{ color: '#16A34A', marginLeft: 6, fontWeight: '700' }}>You're booked!</Text>
+                  <Text variant="labelMedium" style={{ color: '#16A34A', marginLeft: 6, fontWeight: '700' }}>{t('youAreBooked')}</Text>
                 </View>
                 <View style={styles.actions}>
-                  <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>Close</Button>
-                  <Button mode="outlined" textColor={theme.colors.error} style={{ flex: 1, borderColor: theme.colors.error }} onPress={confirmCancel} loading={loading} disabled={loading}>
-                    Cancel booking
-                  </Button>
+                  <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>{t('close')}</Button>
+                  {selectedSlot?.cancellable && (
+                    <Button mode="outlined" textColor={theme.colors.error} style={{ flex: 1, borderColor: theme.colors.error }} onPress={confirmCancel} loading={loading} disabled={loading}>
+                      {t('cancelBooking')}
+                    </Button>
+                  )}
                 </View>
               </>
             ) : (
               <View style={styles.actions}>
-                <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>Close</Button>
+                <Button mode="text" onPress={closeModal} style={{ flex: 1 }}>{t('close')}</Button>
               </View>
             )}
           </Pressable>

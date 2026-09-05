@@ -1,8 +1,8 @@
 ---
 layout: ../layouts/LegalLayout.astro
 title: Privacy Policy
-description: How Linyup processes personal data for website visitors and customers.
-lastUpdated: 25 June 2026
+description: How Linyup processes personal data for website visitors, customers, and members using the Linyup app.
+lastUpdated: 4 September 2026
 ---
 
 # 2. Privacy Policy (Datenschutzerklärung / Politique de confidentialité)
@@ -12,6 +12,10 @@ lastUpdated: 25 June 2026
 > Where a studio uploads its own contacts into the product, Linyup acts as a
 > **processor** on the studio's behalf; that relationship is governed by a
 > separate [Data Processing Agreement](/dpa), not by this policy.
+>
+> If you are a **member** signing into the Linyup app because your studio
+> invited you, start at [Section 2.10](#210-the-linyup-member-app) — it is
+> written for you.
 
 ## 2.1 Who is responsible
 
@@ -124,6 +128,67 @@ When you use Linyup to manage your own people (your "contacts," such as your mem
 - we process that data only on your documented instructions, as set out in our [Data Processing Agreement](/dpa);
 - where you store data about minors, you are responsible for any required guardian consent.
 
-## 2.10 Changes
+## 2.10 The Linyup member app
+
+This section is for **members**: the students, clients and athletes who sign
+into the Linyup app because a studio, coach or club invited them.
+
+**Who is responsible for your data.** Your studio is. You appear in Linyup
+because your studio put you there — it decides what to record about you and
+why, which makes it the **controller**. Linyup runs the software on the
+studio's behalf as its **processor**, under our [Data Processing
+Agreement](/dpa). So a question about *why* your studio holds something, or a
+request to correct it, goes to your studio first. Section 2.6 sets out your
+rights and Section 2.4 who else may see the data.
+
+**Signing in.** The app has no password. You enter your email address, we
+email you a six-digit code, and entering it opens a session on your device
+that expires. The app does not create a new record about you — it signs you
+into the one your studio already holds.
+
+**What the app shows you** is that record: your name and contact details,
+your bookings and attendance, your membership or subscription, and whatever
+else your studio chose to keep. It is the same data your studio sees.
+
+**What the app writes back** is deliberately close to nothing. When you open
+it, it records that you were last seen, the app version you are running, and
+which over-the-air update your device has. That exists so support can tell
+which version a problem happened on.
+
+**What the app does not do.** No advertising and no advertising identifier.
+No third-party analytics or tracking SDK. No tracking of you across other
+apps or websites. No location collection.
+
+**Notifications.** The app can be reached by notifications about your
+bookings — but only if you have turned them on yourself. It never asks: on a
+new install notifications are off, and the app registers your device only when
+you have already enabled them in your phone's settings. When you have, we store
+a **device token** — an identifier your phone issues so a message can reach it —
+with the app version it registered under. It addresses a device, not you.
+Turning notifications off in your phone's settings stops them, and a token that
+has stopped working is deleted.
+
+**The camera** is used for exactly one thing: scanning your studio's check-in
+QR code. The permission is requested the first time you scan, the image is
+read on your device to find the code, and no photo or video is stored or
+transmitted.
+
+**Deleting your account.** In the app: **Profile → Delete account**. Without
+the app: [linyup.com/delete-account](/delete-account).
+
+Either route schedules the deletion **30 days** ahead. Your account keeps
+working for that whole window, and signing in and cancelling stops it — so an
+accidental tap costs you nothing. At the deadline your record is
+**anonymised** rather than deleted outright: the details that identify you are
+removed, while your studio's financial and consent records of things that
+actually happened survive with no person attached to them. Your studio is
+required by law to keep those, which is why they cannot simply vanish. If you
+want your studio to erase something beyond this, ask the studio directly — as
+controller, that is its decision to make.
+
+**Children.** Where a studio records data about minors, the studio is
+responsible for any guardian consent (Sections 2.8 and 2.9).
+
+## 2.11 Changes
 
 We may update this policy as the service evolves. The current version is always available at linyup.com, with the date of the last update shown below.

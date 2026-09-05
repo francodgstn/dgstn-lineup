@@ -7,9 +7,9 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { ctaButton } from '../utils/emailLayout'
 import { getTeam } from '../utils/teams'
 import { getPlatformStripeAdapter } from '../saas-billing/actions'
+import { createTeamNotification } from '../utils/teamNotifications'
 import type { OrgRole, TenantFlags } from '@linyup/shared'
 import {
-  NOTIFICATIONS_SUBCOLLECTION,
   ORGANIZATIONS_COLLECTION,
   ORG_TRIAL_DAYS,
   TRIAL_DAYS,
@@ -585,20 +585,17 @@ export const requestTeamAccess = onCall(async (request) => {
     // "allow read: if hasTeamRole(teamId, 'manager')" rule added to firestore.rules.
     const notificationTitle = `Access request from ${orgName}`
     const notificationBody = `${requesterName} (${orgName}) has requested ${accessLabel} access to your studio.`
-    await db.collection('teams').doc(data.teamId)
-      .collection(NOTIFICATIONS_SUBCOLLECTION).add({
-        type: 'org_access_request',
-        orgId: data.orgId,
-        orgName,
-        title: notificationTitle,
-        body: notificationBody,
-        status: 'unread',
-        // requestId: the org-side doc (organizations/{orgId}/team_access_requests/{teamId})
-        // and the team-side doc (teams/{teamId}/org_access_requests/{orgId}) both use
-        // teamId / orgId as their doc id, so no separate requestId field is needed.
-        link: '/settings?tab=org',
-        created_at: FieldValue.serverTimestamp(),
-      })
+    await createTeamNotification(data.teamId, {
+      type: 'org_access_request',
+      orgId: data.orgId,
+      orgName,
+      title: notificationTitle,
+      body: notificationBody,
+      // requestId: the org-side doc (organizations/{orgId}/team_access_requests/{teamId})
+      // and the team-side doc (teams/{teamId}/org_access_requests/{orgId}) both use
+      // teamId / orgId as their doc id, so no separate requestId field is needed.
+      link: '/settings?tab=org',
+    })
 
     // ── Email notification ────────────────────────────────────────────────────
     if (!ownerSnap.empty) {

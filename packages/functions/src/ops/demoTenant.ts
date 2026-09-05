@@ -49,9 +49,14 @@
  */
 import * as admin from 'firebase-admin'
 import { Timestamp, FieldValue } from 'firebase-admin/firestore'
+import { format } from 'date-fns'
+import { updateTeamLeaderboard } from '../utils/leaderboard'
+import { detectPerformanceProfile } from '@linyup/shared'
 import {
   TEAMS_COLLECTION,
   CONTACTS_COLLECTION,
+  PARTICIPANTS_SUBCOLLECTION,
+  CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION,
   ACTIVITIES_COLLECTION,
   SESSIONS_COLLECTION,
   SUBSCRIPTION_TYPES_SUBCOLLECTION,
@@ -122,12 +127,50 @@ const CONTACTS: Array<{ id: string; firstname: string; lastname: string }> = [
 
 const SUBSCRIPTION_TYPE_ID = `${DEMO_TEAM_ID}-sub-unlimited`
 
+// ── The closed-test testers ─────────────────────────────────────────────────
+// Play's closed test needs a dozen people signed in for fourteen days. They
+// used to have to SHARE the reviewer's login, which meant any curious tester
+// could rename or delete the one account the store reviewer depends on. So each
+// gets their own contact, and `app_settings/review_access` lists them all — the
+// demo tenant never sends email (its messaging policy is `silent`), so a fixed
+// code is the only way any of them can sign in at all.
+//
+// They get a history and a score but deliberately NO upcoming bookings: booking
+// a class is then something a tester actually does, which is the engagement
+// Google's check looks for, and it keeps this provisioner clear of session
+// capacity and the one-seat-writer rule.
+const TESTER_FIRSTNAMES = [
+  'Anna', 'Ben', 'Clara', 'David', 'Elena', 'Felix', 'Greta', 'Hugo', 'Ida', 'Jan',
+  'Kira', 'Luca', 'Maya', 'Nino', 'Olga', 'Pavel', 'Rosa', 'Samir', 'Tessa', 'Uwe',
+]
+
+export const DEMO_TESTERS = TESTER_FIRSTNAMES.map((firstname, i) => {
+  const n = String(i + 1).padStart(2, '0')
+  return {
+    id: `${DEMO_TEAM_ID}-tester-${n}`,
+    firstname,
+    lastname: 'Tester',
+    email: `tester${n}@example.com`,
+    // Spread so the leaderboard reads like a group of people rather than a
+    // generated sequence, and so the reviewer is never bottom.
+    score: 12 + ((i * 7) % 44),
+    streak: 1 + (i % 5),
+  }
+})
+
 export interface ProvisionResult {
   teamId: string
   slug: string
   reviewContactId: string
   reviewEmail: string
-  counts: { activities: number; sessions: number; contacts: number; bookings: number }
+  counts: {
+    activities: number
+    sessions: number
+    contacts: number
+    testers: number
+    bookings: number
+    attended: number
+  }
 }
 
 /**
@@ -261,6 +304,37 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
         deleted_at: null,
         created_at: FieldValue.serverTimestamp(),
         subscription_type_id: SUBSCRIPTION_TYPE_ID,
+        // See DEMO_TESTERS: a reseed is the repair for a curious 'Delete
+        // account' tap, including on the reviewer's own login.
+        deletion_requested_at: null,
+        deletion_scheduled_for: null,
+      },
+      { merge: true }
+    )
+  }
+
+  for (const t of DEMO_TESTERS) {
+    await db.collection(CONTACTS_COLLECTION).doc(t.id).set(
+      {
+        teamId: DEMO_TEAM_ID,
+        firstname: t.firstname,
+        lastname: t.lastname,
+        email: t.email,
+        phone: null,
+        acquisition_stage: 'member',
+        entry: 'manual',
+        provisional: false,
+        archived_at: null,
+        deleted_at: null,
+        subscription_type_id: SUBSCRIPTION_TYPE_ID,
+        current_month_score: t.score,
+        current_streak: t.streak,
+        max_streak: t.streak,
+        // A tester who tapped 'Delete account' out of curiosity must not stay
+        // scheduled for deletion across a reseed — this provisioner is the
+        // repair, so it clears the countdown rather than merging around it.
+        deletion_requested_at: null,
+        deletion_scheduled_for: null,
       },
       { merge: true }
     )
@@ -278,6 +352,7 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
 
   let sessionCount = 0
   let bookingCount = 0
+  let attendedCount = 0
   const start = new Date(nowMs)
   start.setHours(0, 0, 0, 0)
 
@@ -304,8 +379,54 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
         location: 'Main studio',
         archived_at: null,
         created_at: FieldValue.serverTimestamp(),
+        // REQUIRED, and the reason this tenant used to open on an empty app:
+        // `syncSessionPublicProfile` publishes a class session ONLY when
+        // `allowBooking === true`, and the member app reads upcoming sessions
+        // from those public_profile mirrors and nowhere else. Without this the
+        // sessions exist, the bookings exist, and the app shows "No upcoming
+        // sessions scheduled" — which is what a store reviewer would have seen.
+        allowBooking: true,
       })
       sessionCount++
+
+      // PAST sessions get attendance, so the app opens on a history rather than
+      // on empty states: the training calendar counts sessions, the streak and
+      // month score have something to compute from, and the team leaderboard has
+      // rows. Scoring reads the `participants` subcollection — `bookings` alone
+      // leaves all of it at zero.
+      if (offset < 0) {
+        // Four regulars plus a rotating pair of testers: every tester picks up
+        // some history without any one session exceeding its twelve seats.
+        const rotate = Math.abs(offset) * 2
+        const attendees = [
+          ...CONTACTS.slice(0, 4),
+          DEMO_TESTERS[rotate % DEMO_TESTERS.length],
+          DEMO_TESTERS[(rotate + 1) % DEMO_TESTERS.length],
+        ]
+        for (const c of attendees) {
+          await db
+            .collection(SESSIONS_COLLECTION)
+            .doc(sessionId)
+            .collection(PARTICIPANTS_SUBCOLLECTION)
+            .doc(c.id)
+            .set({
+              contactId: c.id,
+              session: sessionId,
+              firstname: c.firstname,
+              lastname: c.lastname,
+              fullname: `${c.lastname} ${c.firstname}`,
+              joinedAt: Timestamp.fromDate(startsAt),
+              checkedInAt: Timestamp.fromDate(startsAt),
+              checkedInBy: 'demo-tenant',
+            })
+        }
+        attendedCount += attendees.length
+        // ABSOLUTE, like bookings_count below — written once, known not accumulated.
+        await db
+          .collection(SESSIONS_COLLECTION)
+          .doc(sessionId)
+          .set({ participants_count: attendees.length }, { merge: true })
+      }
 
       // Give the reviewer a booking on the next few upcoming sessions, so their
       // own screens are not empty the moment they sign in.
@@ -331,6 +452,66 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
     }
   }
 
+  // ── 6. Gamification state ─────────────────────────────────────────────────
+  // Derived fields written directly, the way the environment seeders already do
+  // (scripts/seed-staging.ts). The scoring triggers fire on session edits and on
+  // the recalculateScores callable, neither of which runs during provisioning —
+  // so without this the app shows NO RANK and an empty leaderboard even though
+  // the attendance above is real. The numbers are shaped so the reviewer sits
+  // mid-table rather than first: a leaderboard with one name is not a leaderboard.
+  const SCORES: Record<string, { score: number; streak: number }> = {
+    [DEMO_REVIEW_CONTACT_ID]: { score: 48, streak: 3 },
+    [`${DEMO_TEAM_ID}-c2`]: { score: 72, streak: 6 },
+    [`${DEMO_TEAM_ID}-c3`]: { score: 55, streak: 4 },
+    [`${DEMO_TEAM_ID}-c4`]: { score: 31, streak: 2 },
+  }
+  for (const [contactId, v] of Object.entries(SCORES)) {
+    await db.collection(CONTACTS_COLLECTION).doc(contactId).set(
+      { current_month_score: v.score, current_streak: v.streak, max_streak: v.streak },
+      { merge: true }
+    )
+  }
+
+  // The team leaderboard is a DENORMALISED doc (teams/{id}/leaderboard/current)
+  // and the app reads only that — writing per-contact scores fills the member's
+  // own cards but leaves the leaderboard empty. Rebuild it through its existing
+  // writer rather than hand-assembling the document here: it reads exactly the
+  // `current_month_score > 0` contacts just written.
+  await updateTeamLeaderboard(DEMO_TEAM_ID, format(new Date(nowMs), 'yyyy-MM'))
+
+  // ── 7. Performance check-ins ──────────────────────────────────────────────
+  // The radar on the TRAIN tab plots the latest check-in and the history chart
+  // needs more than one, so the reviewer gets three a fortnight apart. Scores
+  // improve over time and are deliberately UNEVEN — five equal axes draw a
+  // regular pentagon, which looks like a placeholder rather than a person.
+  // `detectPerformanceProfile` derives profile_key/primary_lever/anchor exactly
+  // as the app would; hardcoding them here would let this drift from the real
+  // heuristic silently.
+  const CHECKINS: Array<{ daysAgo: number; scores: Record<string, number> }> = [
+    { daysAgo: 28, scores: { consistency: 2, effort: 4, focus: 2, recharge: 3, sense_of_progress: 2 } },
+    { daysAgo: 14, scores: { consistency: 3, effort: 4, focus: 3, recharge: 3, sense_of_progress: 3 } },
+    { daysAgo: 2, scores: { consistency: 4, effort: 5, focus: 3, recharge: 4, sense_of_progress: 4 } },
+  ]
+  for (const ci of CHECKINS) {
+    const takenAt = new Date(nowMs - ci.daysAgo * DAY_MS)
+    const { profile_key, primary_lever, anchor } = detectPerformanceProfile(ci.scores)
+    await db
+      .collection(CONTACTS_COLLECTION)
+      .doc(DEMO_REVIEW_CONTACT_ID)
+      .collection(CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION)
+      .doc(`demo-checkin-${ci.daysAgo}`)
+      .set({
+        taken_at: Timestamp.fromDate(takenAt),
+        filled_by: 'student',
+        scores: ci.scores,
+        notes: null,
+        context: 'self',
+        profile_key,
+        primary_lever,
+        anchor,
+      })
+  }
+
   return {
     teamId: DEMO_TEAM_ID,
     slug: DEMO_SLUG,
@@ -339,8 +520,10 @@ export async function provisionDemoTenant(nowMs: number = Date.now()): Promise<P
     counts: {
       activities: ACTIVITIES.length,
       sessions: sessionCount,
-      contacts: CONTACTS.length,
+      contacts: CONTACTS.length + DEMO_TESTERS.length,
+      testers: DEMO_TESTERS.length,
       bookings: bookingCount,
+      attended: attendedCount,
     },
   }
 }

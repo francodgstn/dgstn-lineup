@@ -208,6 +208,11 @@ async function main(): Promise<void> {
     targetEmulator,
     dryRun,
     orgAdminEmail: '', // unused by the promote flow
+    // NEVER for the promote flow. `overwrite` replaces migrated source documents
+    // — contacts, sessions, events, check-ins — with the source's version, which
+    // is exactly what a promotion must not do: it is copying a LIVE team, whose
+    // current state is the thing being promoted.
+    overwrite: false,
   }
   initApps(cfg)
 

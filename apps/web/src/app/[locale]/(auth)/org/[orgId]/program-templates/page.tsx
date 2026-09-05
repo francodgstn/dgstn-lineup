@@ -18,7 +18,12 @@ export default function OrgProgramTemplatesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={t('templatesTitle')} subtitle={t('templatesOrgSubtitle')} />
-      <ProgramTemplatesManager scope="org" ownerId={orgId} canEdit={isAdmin} />
+      <ProgramTemplatesManager
+        scope="org"
+        ownerId={orgId}
+        canEdit={isAdmin}
+        basePath={`/org/${orgId}/program-templates`}
+      />
     </div>
   )
 }

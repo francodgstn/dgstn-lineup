@@ -28,8 +28,10 @@ export type MediaSource = 'youtube' | 'vimeo' | 'url' | 'upload'
 // concurrent active subscriptions per contact.
 export interface CourseAccessRule {
   type: 'free' | 'registered' | 'subscription' | 'purchase'
-  // 'subscription': the subs that grant access.
-  // 'purchase': OPTIONAL subs whose members get it free (everyone else buys it once).
+  // THE GATE, on both plan-bearing tiers: the subs whose members get this course
+  // FREE. On 'subscription' that is the only way in; on 'purchase' everyone else
+  // buys it once. Additive with `benefit` (which prices it for the subs that get
+  // it merely CHEAPER) and free wins where a sub is on both.
   subscriptionTypeIds?: string[] // team subscription_types ids
   // 'purchase' only: one-off price in the team's default currency (major units, e.g. 29.9).
   priceAmount?: number
@@ -51,11 +53,16 @@ export interface Course {
   coverImageUrl?: string
   status: CourseStatus
   accessRule: CourseAccessRule // default { type: 'registered' }
-  // Subscriber benefit on the PURCHASE price ('purchase' tier only): holders of
-  // a listed type get the course included free or at a reduced price — the
-  // middle ground the free-or-full accessRule.subscriptionTypeIds inclusion
-  // can't express. When both are set, `benefit` wins; the legacy inclusion
-  // list keeps meaning "included free". Resolved by resolvePaymentOptions.
+  // THE RATE: ONE price rule over the purchase price, naming the subs whose
+  // holders get the course CHEAPER — the middle ground the free-or-full gate
+  // above cannot express. Same shape and same one-rule-per-offering limit as
+  // `Activity.memberBenefit`: every sub on it shares the one percentage.
+  //
+  // A benefit with effect 'included' is the LEGACY spelling of the gate, still
+  // honoured by both rule files and by resolvePaymentOptions; the plan editor
+  // reads it as part of the gate and absorbs it on first write. History: until
+  // 2026-09-01 a benefit SUPPRESSED the gate list, which contradicted
+  // firestore.rules — see the course arm of resolvePaymentOptions.
   benefit?: Benefit | null
   // When true, the course is omitted from the public shop catalogue
   // (/public/{slug}/shop). It stays openable via a direct link and still shows in a

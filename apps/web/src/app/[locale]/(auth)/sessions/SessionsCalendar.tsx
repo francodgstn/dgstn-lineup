@@ -26,6 +26,7 @@ import {
 import type { Session, Activity, Event, Availability } from '@linyup/shared'
 import { SessionPeekSheet } from '@/components/sessions/SessionPeekSheet'
 import { EventPeekSheet } from '@/components/events/EventPeekSheet'
+import { Tip } from '@/components/ui/tip'
 
 // ─── colour palette ───────────────────────────────────────────────────────────
 
@@ -924,16 +925,17 @@ export default function SessionsCalendar({
               {tCommon('today')}
             </Button>
             {/* Expand the week grid to full width (hide month + agenda) — desktop only */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden lg:inline-flex h-7 w-7"
-              onClick={() => setFullWeek((v) => !v)}
-              title={fullWeek ? t('collapseWeek') : t('expandWeek')}
-              aria-label={fullWeek ? t('collapseWeek') : t('expandWeek')}
-            >
-              {fullWeek ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
+            <Tip label={fullWeek ? t('collapseWeek') : t('expandWeek')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden lg:inline-flex h-7 w-7"
+                onClick={() => setFullWeek((v) => !v)}
+                aria-label={fullWeek ? t('collapseWeek') : t('expandWeek')}
+              >
+                {fullWeek ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </Tip>
           </div>
         </div>
 

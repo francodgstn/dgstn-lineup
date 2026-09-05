@@ -180,11 +180,25 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
  * control. It is here because a scrollbar under a form is never the right answer
  * for any dialog, so the default should not be able to produce one.
  */
+/**
+ * ── WHY IT BLEEDS TO THE RIGHT EDGE (`-mr-4 pr-4`) ──────────────────────────
+ * A scrollbar is painted at its container's border edge, and the container used
+ * to stop at the popup's `p-4` padding — which put the scrollbar 16px inside the
+ * popup, exactly the band the close button occupies. On the subscription form
+ * the two overlapped outright: the button spans 8–36px from the right edge, the
+ * scrollbar 16–21px.
+ *
+ * Padding cannot fix that (it is INSIDE the scroll container, so the scrollbar
+ * does not move). The container itself has to reach the popup's edge, which is
+ * what the negative margin does; `pr-4` then gives the CONTENT back the inset it
+ * just lost. This assumes the popup's default `p-4`, the same assumption
+ * `DialogFooter` already makes one function below.
+ */
 function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-body"
-      className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", className)}
+      className={cn("-mr-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-4", className)}
       {...props}
     />
   )

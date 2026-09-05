@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { toast } from 'sonner'
 import { Globe, Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, ExternalLink, Check, ListTree } from 'lucide-react'
+import { ThemePresetPicker } from '@/components/theme/ThemePresetPicker'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useAuth } from '@/contexts/AuthContext'
@@ -47,6 +48,7 @@ import { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { OrgSectionEditor } from './OrgSectionEditor'
 import { useOrgSiteDraft, saveOrgSiteDraft, publishOrgSite, unpublishOrgSite } from './hooks'
 import { ORG_SECTION_LIBRARY, newOrgSection, emptyOrgDraft } from './defaults'
+import { Tip } from '@/components/ui/tip'
 
 const MAX_SECTIONS = 12
 
@@ -103,33 +105,34 @@ function AppearancePanel({
         <Input value={meta.title} onChange={(e) => onChange({ title: e.target.value })} className="h-9" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apTheme')}</Label>
-          <Select value={meta.theme} onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="light">Light</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="auto">Auto</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apFont')}</Label>
-          <Select value={meta.font} onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sans">Sans</SelectItem>
-              <SelectItem value="serif">Serif</SelectItem>
-              <SelectItem value="rounded">Rounded</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Theme — ONE control carrying both colour schemes. It replaces a
+          light/dark/auto select that crossed with `meta.background`: "auto"
+          followed the viewer for the text and not for the page, and a light
+          theme over a dark background was patched by a luminance check that
+          silently overrode the choice. See
+          packages/shared/src/types/themePreset.ts for the full list, and for
+          the hooks a custom theme will use later. */}
+      <div className="space-y-2">
+        <Label className="text-xs">{t('apTheme')}</Label>
+        <ThemePresetPicker
+          value={meta.themePreset ?? ''}
+          onChange={(id) => onChange({ themePreset: id })}
+          accentColor={meta.accentColor}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">{t('apFont')}</Label>
+        <Select value={meta.font} onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}>
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sans">Sans</SelectItem>
+            <SelectItem value="serif">Serif</SelectItem>
+            <SelectItem value="rounded">Rounded</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">
@@ -517,18 +520,20 @@ export default function OrgWebsiteBuilderPage() {
                               <p className="truncate text-xs text-muted-foreground">{sectionSummary(s)}</p>
                             </button>
                             <div className="flex items-center gap-0.5">
-                              <button
-                                type="button"
-                                onClick={() => updateSection(s.id, { hidden: !s.hidden })}
-                                title={t('toggleVisible')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                {s.hidden ? (
-                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+                              <Tip label={t('toggleVisible')}>
+                                <button
+                                  type="button"
+                                  onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                                  aria-label={t('toggleVisible')}
+                                  className="rounded p-1 hover:bg-muted"
+                                >
+                                  {s.hidden ? (
+                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setOpenId(open ? null : s.id)}

@@ -16,6 +16,7 @@ import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 import { TeamDeletionBanner } from '@/components/layout/TeamDeletionBanner'
 import { UserMenu } from '@/components/layout/UserMenu'
 import { TeamQrButton } from '@/components/layout/TeamQrButton'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import {
   LayoutDashboard,
   Users,
@@ -42,7 +43,6 @@ import {
   DoorOpen,
   UserCog,
   Star,
-  Pin,
   Activity,
   Tag,
   TrendingUp,
@@ -54,6 +54,7 @@ import {
   Plus,
   Check,
   MoreHorizontal,
+  Library,
 } from 'lucide-react'
 import { Eraser } from 'lucide-react'
 import type { Route } from 'next'
@@ -70,6 +71,7 @@ import { RecentContactsProvider, useRecentContacts } from '@/contexts/RecentCont
 import { OpenTabsStrip } from '@/components/layout/OpenTabsStrip'
 import { SETTINGS_ITEMS, type SettingsNavItem } from '@/lib/settings-nav'
 import { ORG_RAIL_ITEMS, orgHref, orgNavItemsForRole } from '@/lib/org-nav'
+import { sortNavRows } from '@/lib/navSort'
 import { useOrgRole } from '@/hooks/useOrgRole'
 import { ScopeProvider, useScope } from '@/contexts/ScopeContext'
 import { ScopeFlipShortcut } from '@/components/layout/ScopeFlip'
@@ -93,6 +95,7 @@ import AssistantLauncher from '@/plugins/ai-assistant/AssistantPanel'
 import FeedbackLauncher from '@/components/feedback/FeedbackLauncher'
 import { FloatingDock } from '@/components/layout/FloatingDock'
 import { PLUGIN_ICON_MAP } from '@/plugins/icons'
+import { Tip } from '@/components/ui/tip'
 
 // Icons referenced by string name in plugin manifest navContributions resolve
 // through the ONE map in @/plugins/icons — this file used to keep its own, and
@@ -127,6 +130,10 @@ type NavItem = {
    *  disagreeing with itself. Resolved ONCE in SidebarContent and applied to
    *  both the row and the search catalogue, so the two cannot diverge. */
   dynamicLabel?: 'affiliationTerm'
+  /** Pin to the head of its section, ahead of the alphabetical run. Read
+   *  `lib/navSort.ts` before adding one — the marker is deliberately hard to
+   *  justify, and each existing one states its reason where it is declared. */
+  lead?: boolean
 }
 
 type NavSection = { labelKey: string; icon: React.ElementType; items: NavItem[] }
@@ -154,6 +161,8 @@ const DASHBOARD_ITEM: NavItem = {
   exact: true,
 }
 const SCHEDULE_ITEM: NavItem = {
+  // See the LEAD note where this is referenced from NAV_SECTIONS' Run section.
+  lead: true,
   id: 'calendar',
   href: '/schedule',
   labelKey: 'calendar',
@@ -225,24 +234,28 @@ const HOW_TO_ITEM: NavItem = {
 // configuration lives behind "All settings" (the /settings hub) + whatever the user
 // pins to the Pinned block — see src/lib/settings-nav.ts.
 //
-// ORDER WITHIN A SECTION IS FREQUENCY OF USE, MOST-USED FIRST, and it is the
-// order that renders — see the render in SidebarContent, which deliberately does
-// NOT sort. It was sorted alphabetically by translated label for one day
-// (6d94638f); the effect was that Schedule — the destination a studio opens every
-// single session — fell to the BOTTOM of Run, behind every row used less often,
-// and in German/French/Italian it landed somewhere else again, so nothing about
-// the list could be learned once (UX-29). Alphabetical is the right answer
-// only for a list nobody can rank; these are ranked, so declaration order wins.
-// Plugin-contributed rows still sort alphabetically: they arrive from a registry
-// in an order the studio did not author and cannot be ranked here.
+// ORDER WITHIN A SECTION IS ALPHABETICAL BY TRANSLATED LABEL, except for rows
+// marked `lead`. The rule, and the UX-29 defect that makes the exception
+// necessary, are written down ONCE in `lib/navSort.ts` — read it there rather
+// than restating it here.
+//
+// DECLARATION ORDER BELOW MEANS NOTHING except among leads. It used to be
+// "frequency of use, most-used first", which had to be re-decided on every
+// addition and had quietly become the order things were written in. Do not
+// spend time on it; put a new row wherever it reads best in this file.
 const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: 'sectionRun',
     icon: Activity,
     items: [
+      // LEAD of Run — and the one the rule exists for. Alphabetically Schedule
+      // sorts last here, behind Automations, Bookings, Coaches, Contacts, Day
+      // sheet, Payments and Places, and differently again per locale; it is the
+      // destination a studio opens every single session (UX-29).
+      //
       // Schedule KEEPS ITS HOME ROW even though it is also the default head
       // tile. A tile is a shortcut, and a shortcut has always been a duplicate
-      // of a row that exists elsewhere — pinning Contacts shows it in Shortcuts
+      // of a row that exists elsewhere — pinning Contacts shows it in Favourites
       // AND in Run. It briefly lived only as a tile, back when that tile was
       // fixed; now that a studio can swap it out, removing the tile would have
       // deleted the destination from the nav altogether and left it reachable
@@ -269,33 +282,63 @@ const NAV_SECTIONS: NavSection[] = [
       // because "who is paying me" and "who holds a plan" are the same question
       // asked twice and a studio should not have to guess which screen answers
       // it (Franco, 2026-08-23). `/subscriptions` redirects in.
+      //
+      // The ROW SAYS "Payments", not "Payments & Subscriptions" — the destination
+      // did not change, only the label. Naming both halves was explaining the
+      // merge in the nav; the gateways a studio already uses (Payrexx among them)
+      // file subscriptions under payments and nobody looks for them elsewhere. A
+      // shorter row also stops this one wrapping in the sidebar.
       {
         id: 'payments',
         href: '/payments',
-        labelKey: 'paymentsAndSubscriptions',
+        labelKey: 'payments',
         icon: Wallet,
       },
       // Automations is operational (workflows acting on contacts/bookings), so it
       // lives in Run rather than Grow.
       { id: 'automations', href: '/automations', labelKey: 'automations', icon: Workflow },
-      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
-      // preference: it is read by the session/event forms' place picker and by the
-      // website's places section, and it is edited when the schedule needs a room
-      // that doesn't exist yet. It sat in Settings → Scheduling, which meant
-      // leaving the calendar entirely to add one (UX-67). LAST in Run: everything
-      // above it is opened during a working day, this is opened while setting one
-      // up. The page is a sibling of the calendar at /schedule/places, beside
-      // /schedule/availability.
-      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
     ],
   },
   {
-    // What the studio sells — pulled out of Settings into its own section. Courses
-    // and products only appear once their plugin is installed (requiresPlugin).
-    labelKey: 'sectionOffer',
+    // THE BACK OFFICE. What the studio sells and the terms it sells on, plus the
+    // records behind both — the catalogue, prices, places, documents,
+    // affiliations, the books and the asset register.
+    //
+    // It was "Offer" until 2026-09-02 and that name is now the CATALOGUE PAGE's,
+    // which is the thing a studio actually calls its offer. The section names
+    // the scope instead: Run is the working day, Manage is what you do monthly
+    // or when something changes, Grow reaches more people. Courses and products
+    // only appear once their plugin is installed (requiresPlugin).
+    labelKey: 'sectionManage',
     icon: Tag,
     items: [
-      { id: 'activities', href: '/offer/activities', labelKey: 'activities', icon: Zap },
+      // THE MAP OF THE SECTION, first — the same shape as `publicPages` at the
+      // head of Grow. The catalogue shows plans against the activities and
+      // courses they open, which is the one question this section exists to
+      // answer and the one no single list page can: a coach asking "what does
+      // Premium get?" had to open a plan, then an activity, then a modal.
+      //
+      // It EXISTED before this row and was reachable only from links inside
+      // Activities, Plans and Pricing — findable if you already knew, which is
+      // the shape UX-99 keeps fixing. Ordering by frequency of use would put it
+      // lower; a section's map is the exception, because it is also how you find
+      // out what the section contains.
+      // LEAD of Offer: it is the section's MAP, and a map that sorts into the
+      // middle of the things it maps is just another row.
+      { id: 'catalogue', href: '/manage/offer', labelKey: 'catalogue', icon: Library, lead: true },
+      // Places — the studio's locations and rooms. A SCHEDULING reference, not a
+      // preference: it is read by the session/event forms' place picker and by
+      // the website's places section, and it is edited when the schedule needs a
+      // room that doesn't exist yet. It sat in Settings → Scheduling, which meant
+      // leaving the calendar entirely to add one (UX-67).
+      //
+      // It fits BOTH sections — a place is where the schedule happens and it is
+      // also part of what a studio offers — so the tie is broken on load: Run had
+      // grown long enough that its own leads were getting lost in it, and this is
+      // the row in it opened least often per working day (Franco, 2026-09-02).
+      // The page stays at /schedule/places, a sibling of the calendar beside
+      // /schedule/availability; only the nav home moved.
+      { id: 'places', href: '/schedule/places', labelKey: 'places', icon: MapPin },
       // Subscriptions only. This was an umbrella ("Plans & Affiliations") whose
       // second tab held the affiliation TYPES while the roster below had no nav
       // item at all; the roster now owns both, so the umbrella is gone and the
@@ -304,7 +347,6 @@ const NAV_SECTIONS: NavSection[] = [
       // "Subscriptions" named the wrong thing: it reads as the list of
       // subscriptions people HOLD, which is `/subscriptions` — a different page
       // entirely. This one is the catalogue of plans on sale.
-      { id: 'plans', href: '/offer/plans', labelKey: 'subscriptionPlans', icon: IdCard },
       // The affiliation ROSTER — who is affiliated, at what status, expiring when.
       // It had no nav item at all: reachable only from a link inside the types
       // manager and one dashboard figure, which is the same shape UX-99 fixed
@@ -326,7 +368,7 @@ const NAV_SECTIONS: NavSection[] = [
       // Unified read-only pricing surface — persona price preview + "what you
       // sell" summary + cross-entity health checks. No plugin gate: it reads
       // whatever's already configured (classes/appointments/plans/courses/products).
-      { id: 'pricing', href: '/offer/pricing', labelKey: 'pricing', icon: Calculator },
+      { id: 'pricing', href: '/manage/pricing', labelKey: 'pricing', icon: Calculator },
       // Promo codes — a plugin as of Wave 3.5, so the item appears only once
       // installed, exactly like Courses and Products above and below it. The
       // plan requirement lives in the manifest (`minPlan: 'studio'`) and the
@@ -337,21 +379,21 @@ const NAV_SECTIONS: NavSection[] = [
       // studio that uninstalls keeps its live codes redeemable and manageable.
       {
         id: 'promoCodes',
-        href: '/offer/promo-codes',
+        href: '/manage/promo-codes',
         labelKey: 'promoCodes',
         icon: Ticket,
         requiresPlugin: 'promo-codes',
       },
       {
         id: 'onlineCourses',
-        href: '/offer/online-courses',
+        href: '/manage/online-courses',
         labelKey: 'onlineCourses',
         icon: GraduationCap,
         requiresPlugin: 'online-courses',
       },
       {
         id: 'products',
-        href: '/offer/products',
+        href: '/manage/products',
         labelKey: 'products',
         icon: Package,
         requiresPlugin: 'products',
@@ -387,7 +429,9 @@ const NAV_SECTIONS: NavSection[] = [
       // row, deliberately: ONE destination, one shortcut star, one search result.
       // Listing it here is what makes it findable from where public surfaces are
       // actually worked on.
-      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true },
+      // LEAD of Grow, for the same reason Catalogue leads Offer: it is the map
+      // of everything public, and the rows under it are what it maps.
+      { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, exact: true, lead: true },
       { id: 'bioLink', href: '/team/bio-link', labelKey: 'bioLink', icon: Globe },
       // Space is the contacts' personal portal (membership, bookings, profile, their
       // courses) — a base surface, not tied to the online-courses plugin.
@@ -422,8 +466,8 @@ const NAV_HREFS: string[] = [
 
 // Small hover-reveal "always show" control on the right of a shortcut-able nav
 // row (needs a `group` ancestor). Clicking adds/removes the destination from the
-// always-shown half of Shortcuts without navigating. Turning it back OFF is
-// managed from the Shortcuts group only: menu rows and search results pass
+// always-shown half of Favourites without navigating. Turning it back OFF is
+// managed from the Favourites group only: menu rows and search results pass
 // `addOnly`, which hides the button once the destination is already always
 // shown instead of offering a remove toggle there.
 //
@@ -435,32 +479,39 @@ function ShortcutButton({ id, addOnly }: { id: string; addOnly?: boolean }) {
   const shown = isAlwaysShown(id)
   if (addOnly && shown) return null
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        toggleAlwaysShown(id)
-      }}
-      title={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
-      aria-pressed={shown}
-      className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
-        shown
-          ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
-          : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
-      }`}
-    >
-      {/* Filled while ON — an icon that only changes opacity reads as "hovered",
-          not as "this is switched on", which is the state that matters here.
-          A PIN, deliberately, and NOT the star used a few hundred lines below for
-          "recommended by Linyup": one glyph cannot carry an endorsement and a
-          personal choice. UX-23 moved away from "pin" when the word meant THREE
-          things — shortcuts, open tabs, and a saved filter "pinned to the filter
-          bar". That third is now "show in filter bar", so what remains is one
-          mental model (keep this within reach) over two different objects on two
-          different surfaces, which is what a pin means everywhere else. */}
-      <Pin className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
-    </button>
+    <Tip label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          toggleAlwaysShown(id)
+        }}
+        aria-label={shown ? t('shortcutStopAlwaysShowing') : t('shortcutAlwaysShow')}
+        aria-pressed={shown}
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition-all ${
+          shown
+            ? 'text-muted-foreground/50 opacity-100 hover:bg-muted hover:text-foreground'
+            : 'text-muted-foreground/40 opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100'
+        }`}
+      >
+        {/* Filled while ON — an icon that only changes opacity reads as "hovered",
+            not as "this is switched on", which is the state that matters here.
+            A STAR, since 2026-08-29 (UX-84) — it was a pin (UX-23) until then, but
+            a pin already carries one mental model everywhere else in this nav —
+            "keep this within reach" — worn by the open-tabs strip (see THE
+            NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx). Reusing it here for
+            "this is a personal favourite" doubled that meaning onto one glyph,
+            which is also what the star was doing at the other end: a few hundred
+            lines below, the same star meant "recommended by Linyup" on a plugin
+            suggestion row. Both collisions were solved in the same pass by giving
+            each meaning its own glyph — this one keeps the star ("favourite," a
+            personal choice), the plugin suggestion moved to a puzzle piece
+            ("plugin," an endorsement) — so no glyph on this screen carries two
+            meanings any more. */}
+        <Star className={`h-3.5 w-3.5 ${shown ? 'fill-current' : ''}`} />
+      </button>
+    </Tip>
   )
 }
 
@@ -475,7 +526,7 @@ function NavLink({
   collapsed: boolean
   onClick?: () => void
   // When set (and the sidebar is expanded), a hover "always show" toggle is
-  // shown that adds this destination to the Shortcuts group.
+  // shown that adds this destination to the Favourites group.
   shortcutId?: string
   /** Pre-resolved label, for items whose name the STUDIO chose (see
    *  NavItem.dynamicLabel). Absent ⇒ translated from `labelKey` as usual. */
@@ -494,42 +545,46 @@ function NavLink({
 
   if (isLocked) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          openUpgradeModal({ minPlan: item.minPlan })
-          onClick?.()
-        }}
-        title={collapsed ? label : undefined}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
-          collapsed ? 'justify-center px-2' : ''
-        }`}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        {!collapsed && (
-          <>
-            <span className="flex-1 text-left">{label}</span>
-            <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
-          </>
-        )}
-      </button>
+      <Tip label={collapsed ? label : undefined} side="right">
+        <button
+          type="button"
+          onClick={() => {
+            openUpgradeModal({ minPlan: item.minPlan })
+            onClick?.()
+          }}
+          aria-label={collapsed ? label : undefined}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground/50 hover:text-muted-foreground/70 hover:bg-accent/50 transition-all ${
+            collapsed ? 'justify-center px-2' : ''
+          }`}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left">{label}</span>
+              <Lock className="h-3 w-3 shrink-0 text-muted-foreground/30" />
+            </>
+          )}
+        </button>
+      </Tip>
     )
   }
 
   const link = (
-    <Link
-      href={item.href as Route}
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span>{label}</span>}
-    </Link>
+    <Tip label={collapsed ? label : undefined} side="right">
+      <Link
+        href={item.href as Route}
+        onClick={onClick}
+        aria-label={collapsed ? label : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : ''} ${shortcutId && !collapsed ? 'pr-8' : ''}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span>{label}</span>}
+      </Link>
+    </Tip>
   )
 
   if (shortcutId && !collapsed) {
@@ -704,6 +759,15 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   const [rowWidth, setRowWidth] = useState(0)
   const wrapRef = useRef<HTMLDivElement>(null)
 
+  // THE BELL IS A SECOND RESTING ICON, beside the QR/first tool — a persistent
+  // notifications indicator, not one more thing behind hover/pin (Franco,
+  // 2026-08-29). It self-gates on role (`useTeamNotifications`), and this flag
+  // mirrors that gate here too so the fit arithmetic below reserves space for
+  // exactly what will render — a coach or viewer, who never sees the bell,
+  // keeps the tray's original two-slot reservation.
+  const { teamRole } = useAuth()
+  const showBell = teamRole === 'owner' || teamRole === 'manager'
+
   // The ROW's width, not the tray's — the tray's own width is what we are
   // deciding, so measuring that would be circular.
   useEffect(() => {
@@ -752,8 +816,10 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
   // Two controls are always there besides the reveal — the resting icon and the
   // trailing one — and the trailing one costs the same whether it is the
   // chevron or the overflow menu, so it is reserved once and not counted again
-  // when there IS an overflow.
-  const room = rowWidth - TRAY_ICON_W * 2
+  // when there IS an overflow. THE BELL IS A THIRD, when it renders: reserved
+  // by `showBell` rather than assumed, so a coach/viewer's row (no bell) still
+  // measures against the original two.
+  const room = rowWidth - TRAY_ICON_W * (showBell ? 3 : 2)
   const slots = Math.max(0, Math.floor(room / TRAY_ICON_W))
   const overflows = revealable.length > slots
   const shown = overflows ? revealable.slice(0, slots) : revealable
@@ -769,6 +835,12 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       {!orgId ? <TeamQrButton /> : <UtilityIconLink item={tools[0]} onClick={onLinkClick} />}
       {/* A member studio's org tray is How-to alone, so there is nothing to
           reveal and the chevron would open onto empty space. */}
+      {/* THE SECOND RESTING ICON. Notifications are a studio-level fact — "does
+          my team have something waiting" — not a scope-level one, so it sits
+          here in BOTH the studio and the org tray rather than only beside the
+          QR. It renders nothing of its own accord for a coach or viewer; see
+          `showBell` above for why the room math already accounts for that. */}
+      {showBell && <NotificationsBell />}
 
       {/* The reveal. Animated by max-width rather than by mounting, so the icons
           slide out from behind the chevron instead of appearing beside it. */}
@@ -785,18 +857,19 @@ function UtilityTray({ onLinkClick }: { onLinkClick?: () => void }) {
       {expanded && overflows && hidden.length > 0 ? (
         <UtilityFlyout onLinkClick={onLinkClick} items={hidden} />
       ) : revealable.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setPinned((prev) => !prev)}
-          title={t('utilities')}
-          aria-label={t('utilities')}
-          aria-expanded={expanded}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronRight
-            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-          />
-        </button>
+        <Tip label={t('utilities')}>
+          <button
+            type="button"
+            onClick={() => setPinned((prev) => !prev)}
+            aria-label={t('utilities')}
+            aria-expanded={expanded}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+        </Tip>
       ) : null}
     </div>
   )
@@ -841,14 +914,15 @@ function UtilityFlyout({
     <NavFlyout
       label={label}
       trigger={
-        <button
-          type="button"
-          title={label}
-          aria-label={label}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4 shrink-0" />
-        </button>
+        <Tip label={label}>
+          <button
+            type="button"
+            aria-label={label}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <MoreHorizontal className="h-4 w-4 shrink-0" />
+          </button>
+        </Tip>
       }
     >
       {/* A labelled column, not the icon strip this used to be: once the menu is
@@ -988,20 +1062,21 @@ function OrgNavRows({
           const Icon = item.icon
           const label = t(item.labelKey as Parameters<typeof t>[0])
           return (
-            <Link
-              key={item.id}
-              href={href as Route}
-              onClick={onLinkClick}
-              title={collapsed ? label : undefined}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                isActive
-                  ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-                  : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-              } ${collapsed ? 'justify-center px-2' : ''}`}
-            >
-              <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              {!collapsed && <span className="truncate">{label}</span>}
-            </Link>
+            <Tip key={item.id} label={collapsed ? label : undefined} side="right">
+              <Link
+                href={href as Route}
+                onClick={onLinkClick}
+                aria-label={collapsed ? label : undefined}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                  isActive
+                    ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+                    : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+                } ${collapsed ? 'justify-center px-2' : ''}`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </Link>
+            </Tip>
           )
         })}
       </div>
@@ -1032,6 +1107,12 @@ type PluginNavEntry = {
 const PLUGIN_SECTION_TO_LABEL_KEY: Record<string, string> = {
   operations: 'sectionRun',
   engage: 'sectionGrow',
+  // Back office. Finance and the asset register are periodic rather than
+  // operational, and they are not engagement surfaces either — they briefly
+  // reached Grow through a 'grow' value that existed only to avoid saying
+  // 'engage' about a ledger. Manage is where they actually belong (Franco,
+  // 2026-09-02).
+  manage: 'sectionManage',
 }
 
 // Suggestion (muted nudge) dismissals, persisted in the browser only. Affects
@@ -1252,25 +1333,34 @@ function PluginNavItem({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        {/* Marks the row as a suggestion rather than a destination, in the same
-            vocabulary the marketplace uses for `recommended` (an amber star).
-            Swaps to the × on hover — one slot, two states. */}
+        {/* Marks the row as a suggestion rather than a destination — a small
+            puzzle-piece badge (`Puzzle`), the app's one established "plugin"
+            glyph: `PLUGIN_ICON_MAP`'s fallback (`plugins/icons.tsx`), and both
+            the sidebar's own Explore-plugins row (EXPLORE_PLUGINS_ITEM, this
+            file) and the settings-rail's Plugins row (`lib/settings-nav.ts`)
+            already use it as their icon. NOT a star, since 2026-08-29 (UX-84):
+            the marketplace still uses an amber star for `recommended`, but the
+            star in THIS nav now belongs to the "always show in Favourites"
+            toggle a few hundred lines above — one glyph cannot carry an
+            endorsement and a personal choice, and this is the row where they
+            used to collide. Swaps to the × on hover — one slot, two states. */}
         {!collapsed && (
-          <Star className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 fill-amber-500/30 text-amber-500/50 transition-opacity group-hover/suggestion:opacity-0" />
+          <Puzzle className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-amber-500/60 transition-opacity group-hover/suggestion:opacity-0" />
         )}
         {!collapsed && onDismiss && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDismiss(nav.pluginId)
-            }}
-            title={t('hideSuggestion')}
-            aria-label={t('hideSuggestion')}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/suggestion:opacity-100"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('hideSuggestion')}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDismiss(nav.pluginId)
+              }}
+              aria-label={t('hideSuggestion')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/suggestion:opacity-100"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         )}
       </div>
     )
@@ -1279,19 +1369,21 @@ function PluginNavItem({
   const isActive = pathname.startsWith(nav.href)
   const shortcutId = `plugin:${nav.pluginId}:${nav.href}`
   const link = (
-    <Link
-      href={nav.href as Route}
-      onClick={onLinkClick}
-      title={collapsed ? linkLabel : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : 'pr-8'}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span>{linkLabel}</span>}
-    </Link>
+    <Tip label={collapsed ? linkLabel : undefined} side="right">
+      <Link
+        href={nav.href as Route}
+        onClick={onLinkClick}
+        aria-label={collapsed ? linkLabel : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : 'pr-8'}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span>{linkLabel}</span>}
+      </Link>
+    </Tip>
   )
   if (collapsed) return link
   return (
@@ -1369,7 +1461,7 @@ function PluginNavLinks({
   )
 }
 
-// A destination resolved against what's currently visible — used by Shortcuts and
+// A destination resolved against what's currently visible — used by Favourites and
 // search (label pre-translated because entries come from more than one i18n
 // namespace: main nav + settings are in `Nav`, plugin items in `Plugins`).
 type ResolvedNavEntry = {
@@ -1394,7 +1486,7 @@ type ResolvedNavEntry = {
  *
  * A destination may be both the head tile and a shortcut. That duplicate is
  * asked for twice and is not deduplicated: silently hiding a row because it
- * happens to match the tile would make the Shortcuts group lie about its
+ * happens to match the tile would make the Favourites group lie about its
  * contents.
  *
  * ── WHY DASHBOARD IS NOT ADJUSTABLE ─────────────────────────────────────────
@@ -1603,46 +1695,49 @@ function ShortcutRow({
   const isActive = entry.exact ? pathname === path : pathname.startsWith(path)
   const Icon = entry.icon
   const link = (
-    <Link
-      href={entry.href as Route}
-      onClick={onClick}
-      draggable={false}
-      title={collapsed ? entry.label : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-        isActive
-          ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
-          : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
-      } ${collapsed ? 'justify-center px-2' : 'pr-14'}`}
-    >
-      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-      {!collapsed && <span className="truncate">{entry.label}</span>}
-    </Link>
+    <Tip label={collapsed ? entry.label : undefined} side="right">
+      <Link
+        href={entry.href as Route}
+        onClick={onClick}
+        draggable={false}
+        aria-label={collapsed ? entry.label : undefined}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-[inset_3px_0_0_var(--color-primary)]'
+            : 'font-medium text-muted-foreground hover:bg-accent hover:text-foreground'
+        } ${collapsed ? 'justify-center px-2' : 'pr-14'}`}
+      >
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+        {!collapsed && <span className="truncate">{entry.label}</span>}
+      </Link>
+    </Tip>
   )
   if (collapsed) return link
   return (
     <div className={`group relative ${dragging ? 'opacity-40' : ''}`} {...dragProps}>
       {link}
-      {/* Remove from Shortcuts entirely — the star only promotes/demotes
+      {/* Remove from Favourites entirely — the star only promotes/demotes
           (turning "always show" off keeps the row listed as a recent). */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          removeShortcut(entry.id)
-        }}
-        title={t('navRemoveShortcut')}
-        aria-label={t('navRemoveShortcut')}
-        className="absolute right-7 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <Tip label={t('navRemoveShortcut')}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            removeShortcut(entry.id)
+          }}
+          aria-label={t('navRemoveShortcut')}
+          className="absolute right-7 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/40 opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </Tip>
       <ShortcutButton id={entry.id} />
     </div>
   )
 }
 
-// A light macro-group heading (General / Shortcuts / Features) — Firebase-style:
+// A light macro-group heading (General / Favourites / Features) — Firebase-style:
 // small, sentence-case, low-contrast — deliberately quieter than the uppercase
 // section subheaders so it reads as a background label, not a heading. Hidden in
 // the icon-only sidebar, where a hairline divider separates the macro groups.
@@ -1650,7 +1745,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
   return <p className="px-2 pb-1 text-[11px] font-medium text-muted-foreground/50">{children}</p>
 }
 
-// Marks the whole Shortcuts area as a region: a thin, flat, brand-violet rule
+// Marks the whole Favourites area as a region: a thin, flat, brand-violet rule
 // down its left edge, spanning the group heading, both runs and the empty-state
 // hint.
 //
@@ -1690,7 +1785,7 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 const SHORTCUTS_RULE =
   'pointer-events-none absolute inset-y-0 -left-1 z-10 w-px rounded-full bg-primary'
 
-// How many recently-visited items the Shortcuts group keeps, in addition to the
+// How many recently-visited items the Favourites group keeps, in addition to the
 // pinned ones.
 const MAX_RECENT_SHORTCUTS = 5
 // Rows the group aims to show before "Show more". Pinned rows are never
@@ -1703,20 +1798,20 @@ const SHORTCUTS_VISIBLE_MIN = 5
 // more, a run that renders nothing is a run that is simply gone.
 const RECENT_VISIBLE_MIN = 2
 
-// The "Shortcuts" macro group — Firebase-style: the destinations a studio keeps
+// The "Favourites" macro group — Firebase-style: the destinations a studio keeps
 // within reach, held as TWO RUNS of ONE mechanism (item 1 of THE NAV-MEMORY
 // CENSUS in contexts/NavPinsContext.tsx):
 //   · pinned — hand-curated, drag-orderable, never truncated, never ages out.
 //   · recent — the rolling visit history, truncated behind "Show more".
-// The pin on a row PROMOTES a recent into the pinned run (and, turned off,
+// The star on a row PROMOTES a recent into the pinned run (and, turned off,
 // demotes it back); the X removes the row from the group entirely.
 //
 // NOTHING HARD SEPARATES THE TWO RUNS — no headings, no divider. Three signals
 // carry it instead, and every one of them was already there:
 //   1. ORDER. Pinned first, always. `entries` arrives pre-merged that way.
-//   2. THE PIN ITSELF. A pinned row's pin is filled and visible at rest; a recent
-//      row's only appears on hover. Two adjacent rows are tellable apart without
-//      reading anything.
+//   2. THE STAR ITSELF. A pinned row's star is filled and visible at rest; a
+//      recent row's only appears on hover. Two adjacent rows are tellable apart
+//      without reading anything.
 //   3. THE MOVE. Pinning re-renders the row at the end of the pinned run, so a
 //      promotion is seen happening. With no line to cross, that motion is now the
 //      whole story — which is why `pinned`/`recents` must stay derived from
@@ -1777,7 +1872,7 @@ function ShortcutsNav({
   //    it cannot be stored and would be undone by the next navigation — a drag
   //    that silently does nothing, which is worse than one that isn't offered.
   //  · Dragging ACROSS the boundary to promote is not offered either. Promotion
-  //    has one affordance — the pin: hoverable, labelled, keyboard-reachable and
+  //    has one affordance — the star: hoverable, labelled, keyboard-reachable and
   //    reversible. A second, invisible path that promotes on an accidental drop
   //    adds no discoverability and one more way to be surprised.
   const commitDrop = () => {
@@ -1840,15 +1935,16 @@ function ShortcutsNav({
           <p className="flex-1 px-2 text-[11px] font-medium text-muted-foreground/50">
             {t('navGroupShortcuts')}
           </p>
-          <button
-            type="button"
-            onClick={() => setClearOpen(true)}
-            title={t('navShortcutsClear')}
-            aria-label={t('navShortcutsClear')}
-            className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Eraser className="h-3.5 w-3.5" />
-          </button>
+          <Tip label={t('navShortcutsClear')}>
+            <button
+              type="button"
+              onClick={() => setClearOpen(true)}
+              aria-label={t('navShortcutsClear')}
+              className="mr-1 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Eraser className="h-3.5 w-3.5" />
+            </button>
+          </Tip>
         </div>
       )}
       {!collapsed && (
@@ -2129,13 +2225,26 @@ function NavSearch({
     ? subscriptionTypes
         .filter((st) => matches(st.name, st.description))
         .slice(0, 4)
-        .map((st) => entityRow(`subscription:${st.id}`, '/offer/plans', st.name, IdCard, 'subscription'))
+        // The CATALOGUE, and the row itself — `?sel=` selects it. This used to
+        // open the plans list and leave the studio to find the plan they had
+        // just searched for by name (Franco, 2026-09-02).
+        .map((st) =>
+          entityRow(
+            `subscription:${st.id}`,
+            `/manage/offer?sel=plan:${st.id}`,
+            st.name,
+            IdCard,
+            'subscription'
+          )
+        )
     : []
   const activityResults: SearchEntry[] = q
     ? activities
         .filter((a) => matches(a.name, a.description))
         .slice(0, 4)
-        .map((a) => entityRow(`activity:${a.id}`, '/offer/activities', a.name, Zap, 'activity'))
+        .map((a) =>
+          entityRow(`activity:${a.id}`, `/manage/offer?sel=activity:${a.id}`, a.name, Zap, 'activity')
+        )
     : []
 
   // Order = how a studio reads the panel: where-to-go first (few, precise
@@ -2470,7 +2579,7 @@ function NavSearch({
             </kbd>
           </div>
           {/* WHO WAS I JUST LOOKING AT — the panel's answer before a question is
-              asked. Contacts only: nav destinations are already the Shortcuts
+              asked. Contacts only: nav destinations are already the Favourites
               group in the sidebar, and this is the one thing neither that nor
               the tab strip can tell you (see the census in NavPinsContext).
               Rendered under the prompt, so the field → "type to search" reading
@@ -2609,9 +2718,6 @@ function SidebarContent({
   const connectOn =
     (!!team?.payments?.connectAccountId && team?.payments?.connectEnabled !== false) ||
     hasByoGateway
-  // A public shop makes sense once there's something to sell OR a way to charge:
-  // the products/online-courses plugin, or a payment channel (Connect/BYO).
-  const shopAvailable = isInstalled('products') || isInstalled('online-courses') || connectOn
 
   // Plugin nav entries: those targeting a built-in section render inside it;
   // the rest fall back to the default "Plugins" group below.
@@ -2638,7 +2744,6 @@ function SidebarContent({
   const settingsItemVisible = (item: SettingsNavItem) => {
     if (item.gate === 'ownerOnly') return canEditTeamSettings
     if (item.gate === 'customFields') return isInstalled('custom-fields')
-    if (item.gate === 'shop') return shopAvailable
     return true
   }
 
@@ -2679,12 +2784,12 @@ function SidebarContent({
     })
   }
   // The head tile is NOT taken from this list — it is census item 5, stored on
-  // its own (see NavPinsContext). Shortcuts are rendered whole; a destination
+  // its own (see NavPinsContext). Favourites are rendered whole; a destination
   // that is both a tile and a shortcut is a duplicate the studio asked for
   // twice.
   const headTileEntry = headTileId ? catalogue.get(headTileId) : undefined
 
-  // Shortcuts = always shown (permanent, stored order) + recently visited
+  // Favourites = always shown (permanent, stored order) + recently visited
   // (rolling history, newest first, minus anything already always shown).
   const alwaysShownEntries = alwaysShownIds
     .map((id) => catalogue.get(id))
@@ -2777,7 +2882,7 @@ function SidebarContent({
     })),
   ]
 
-  // Record the current page into the recents half of Shortcuts. Longest matching
+  // Record the current page into the recents half of Favourites. Longest matching
   // base path wins (so /contacts/123 records "contacts"); hrefs carrying a query
   // are deprioritised so /settings/team?tab=… variants don't shadow the base page.
   useEffect(() => {
@@ -2873,6 +2978,10 @@ function SidebarContent({
             Collapsed there is no tray: a w-14 rail has no room to expand into,
             and the search row's menu is where these tools live at that width. */}
         {!collapsed && <UtilityTray onLinkClick={onLinkClick} />}
+        {/* COLLAPSED, THE TRAY DOES NOT MOUNT — so this is the bell's only way
+            onto a w-14 rail, same as `ScopeSwitcher` above it. No props: the
+            icon-only shape is already this row's 32px form (Franco, 2026-08-29). */}
+        {collapsed && <NotificationsBell />}
       </div>
       )}
 
@@ -2937,7 +3046,7 @@ function SidebarContent({
 
           It is safe to pin only because everything here is fixed-height by
           construction: one search row plus one tile row (or two icon rows
-          collapsed). Shortcuts stayed in the scroll area precisely because they
+          collapsed). Favourites stayed in the scroll area precisely because they
           are NOT — a studio with a dozen pinned pages would push the working
           areas off-screen and have nothing give way.
 
@@ -2946,7 +3055,7 @@ function SidebarContent({
           keeps the ordinary icon-only rows it already knows how to draw.
 
           THE TOUR ANCHOR STAYS ON THE TILES. It used to wrap the tiles AND the
-          Shortcuts group, framing them as one "where do the things I use most
+          Favourites group, framing them as one "where do the things I use most
           live?" region. They are no longer in the same box — one is pinned, the
           other scrolls — and a highlight cannot span a scroll boundary, so the
           anchor keeps the half that is a fixed, always-visible target. */}
@@ -2958,7 +3067,7 @@ function SidebarContent({
           destinations above the org's own navigation, which is the hierarchy
           inversion the pinning exists to prevent, pointed the other way.
 
-          The same reasoning already removed Shortcuts and the plugin rows in org
+          The same reasoning already removed Favourites and the plugin rows in org
           scope (they are pinned PER STUDIO). This was missed because it sits
           above the scroll area rather than inside it (Franco, 2026-08-27). */}
       {!orgScopeId && (
@@ -2988,7 +3097,10 @@ function SidebarContent({
         ) : (
           <HeadTiles
             tile={headTileEntry}
-            choices={[...catalogue.values()]}
+            // ALPHABETICAL, and no leads: this is a flat searchable list of
+            // every destination the nav can reach, in no meaningful order —
+            // catalogue insertion order, which is a fact about the source file.
+            choices={sortNavRows([...catalogue.values()], locale)}
             onSet={(id) => setHeadTile(id)}
             onClear={() => setHeadTile(null)}
             onLinkClick={onLinkClick}
@@ -3028,13 +3140,13 @@ function SidebarContent({
         {/* ORG SCOPE REPLACES THE STUDIO'S ROWS ENTIRELY — it does not sit
             beside them. That is the whole point of a scope: one Events, one
             Places, one Settings on screen at a time, so the word never needs a
-            second look. Shortcuts and the plugin rows are studio-scoped too
+            second look. Favourites and the plugin rows are studio-scoped too
             (the pin store is keyed per studio), so they go with it. */}
         {orgScopeId ? (
           <OrgNavRows orgId={orgScopeId} collapsed={collapsed} onLinkClick={onLinkClick} />
         ) : (
         <>
-        {/* Shortcuts — pinned + recently visited (hidden when empty). THE FIRST
+        {/* Favourites — pinned + recently visited (hidden when empty). THE FIRST
             SCROLLING THING: unlike the head pair above the search, this list
             grows with use, so it is what gives way when the pane runs short. */}
         <ShortcutsNav entries={shortcutEntries} collapsed={collapsed} onLinkClick={onLinkClick} />
@@ -3046,26 +3158,42 @@ function SidebarContent({
           {!collapsed && <GroupLabel>{t('navGroupFeatures')}</GroupLabel>}
           <div className={collapsed ? 'space-y-1' : 'mt-2 space-y-3'}>
             {NAV_SECTIONS.map((section) => {
-              // DECLARATION ORDER — which is frequency of use, most-used first
-              // (see NAV_SECTIONS). Deliberately NOT sorted: alphabetical by
-              // translated label put Schedule last in Run, behind five items a
-              // studio opens far less often, and put it somewhere different again
-              // in each locale (UX-29).
-              const byLabel = (a: string, b: string) => a.localeCompare(b, locale)
+              // ONE SORTED RUN, built-in rows and plugin-contributed rows
+              // TOGETHER — see `lib/navSort.ts` for the rule.
+              //
+              // They used to be two runs: built-ins in declaration order, then
+              // plugin rows alphabetically after them. A section that is two
+              // ordered lists is, to a reader, one unordered one — and the split
+              // was invisible, because nothing on screen says which rows came
+              // from a plugin. Merging them is most of the point of having a
+              // rule at all.
               const items = section.items.filter(mainItemVisible)
-              // Plugin rows keep the alphabetical sort: they come from a registry
-              // in an order the studio did not author, so there is no ranking to
-              // preserve — only a stable, readable one to impose.
-              const secPlugins = sectionedEntries
-                .filter((e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey)
-                .slice()
-                .sort((a, b) =>
-                  byLabel(
-                    tp(a.labelKey as Parameters<typeof tp>[0]),
-                    tp(b.labelKey as Parameters<typeof tp>[0])
-                  )
-                )
+              const secPlugins = sectionedEntries.filter(
+                (e) => PLUGIN_SECTION_TO_LABEL_KEY[e.section!] === section.labelKey
+              )
               if (items.length === 0 && secPlugins.length === 0) return null
+              const rowEntries = sortNavRows(
+                [
+                  ...items.map((item) => ({
+                    kind: 'item' as const,
+                    key: item.id,
+                    label: navLabel(item),
+                    lead: item.lead,
+                    item,
+                  })),
+                  ...secPlugins.map((nav) => ({
+                    kind: 'plugin' as const,
+                    key: nav.pluginId + nav.href,
+                    label: tp(nav.labelKey as Parameters<typeof tp>[0]),
+                    // A plugin cannot claim a lead: it arrives from a registry
+                    // in an order the studio did not author, and the marker is
+                    // an assertion about THIS product's shape.
+                    lead: false,
+                    nav,
+                  })),
+                ],
+                locale
+              )
               const SectionIcon = section.icon
               const label = t(section.labelKey as Parameters<typeof t>[0])
 
@@ -3073,25 +3201,26 @@ function SidebarContent({
               // and inside the flyout panel when the section is collapsed.
               const rows = (
                 <>
-                  {items.map((item) => (
-                    <NavLink
-                      key={item.id}
-                      item={item}
-                      collapsed={false}
-                      onClick={onLinkClick}
-                      shortcutId={item.id}
-                      label={navLabel(item)}
-                    />
-                  ))}
-                  {secPlugins.map((nav) => (
-                    <PluginNavItem
-                      key={nav.pluginId + nav.href}
-                      nav={nav}
-                      collapsed={false}
-                      onLinkClick={onLinkClick}
-                      onDismiss={dismissSuggestion}
-                    />
-                  ))}
+                  {rowEntries.map((entry) =>
+                    entry.kind === 'item' ? (
+                      <NavLink
+                        key={entry.key}
+                        item={entry.item}
+                        collapsed={false}
+                        onClick={onLinkClick}
+                        shortcutId={entry.item.id}
+                        label={entry.label}
+                      />
+                    ) : (
+                      <PluginNavItem
+                        key={entry.key}
+                        nav={entry.nav}
+                        collapsed={false}
+                        onLinkClick={onLinkClick}
+                        onDismiss={dismissSuggestion}
+                      />
+                    )
+                  )}
                 </>
               )
 
@@ -3118,18 +3247,20 @@ function SidebarContent({
                     <NavFlyout
                       label={label}
                       trigger={
-                        <button
-                          type="button"
-                          title={label}
-                          aria-current={sectionHoldsActive ? 'true' : undefined}
-                          className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-accent ${
-                            sectionHoldsActive
-                              ? 'text-primary hover:text-primary'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          <SectionIcon className="h-4 w-4 shrink-0" />
-                        </button>
+                        <Tip label={label}>
+                          <button
+                            type="button"
+                            aria-label={label}
+                            aria-current={sectionHoldsActive ? 'true' : undefined}
+                            className={`flex w-full items-center justify-center rounded-lg px-2 py-2 transition-colors hover:bg-accent ${
+                              sectionHoldsActive
+                                ? 'text-primary hover:text-primary'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            <SectionIcon className="h-4 w-4 shrink-0" />
+                          </button>
+                        </Tip>
                       }
                     >
                       {rows}

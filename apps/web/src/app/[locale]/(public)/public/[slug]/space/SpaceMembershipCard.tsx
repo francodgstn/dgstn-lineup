@@ -30,6 +30,7 @@ import { formatCurrency } from '@/lib/format'
 import { QueryErrorState } from '@/components/ui/query-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { loadFailureDetail } from '@/lib/publicQueryError'
+import { planGrantIsCurrent } from '@linyup/shared'
 import { useSpaceTheme } from './useSpaceTheme'
 import { useSpaceContact } from './useSpaceContact'
 import { usePublicTeam } from '../PublicTeamProvider'
@@ -43,6 +44,9 @@ interface ShownSubscription {
   amount?: number
   cancels_at_ms?: number | null
   cancelling?: boolean
+  /** End of a one-off grant ("2 months included") — the member's own answer to
+   *  "until when", which otherwise only the studio could see. */
+  until?: { toDate(): Date } | null
 }
 
 interface Props {
@@ -64,14 +68,20 @@ export function SpaceMembershipCard({ variant, slug, hasSubscriptionsForSale }: 
   const cardStyle = { background: cardBg, border: `1px solid ${cardBorder}` }
 
   const subs = (contact?.active_subscriptions ?? []) as ShownSubscription[]
+  // The flat grant, shown only while it still COVERS her — the same
+  // `planGrantIsCurrent` comparison the booking gate makes. A member whose "2
+  // months included" has run out must not be told she is still a member by the
+  // very screen she opens to check.
   const legacy: ShownSubscription[] =
-    !subs.length && contact?.subscription_type_id
+    !subs.length && contact?.subscription_type_id && planGrantIsCurrent(contact)
       ? [
           {
             subscription_type_id: contact.subscription_type_id,
             subscription_type_name: contact.subscription_type_name ?? null,
             recurrence: contact.subscription_recurrence ?? null,
             cancelling: false,
+            // The date she has left, so "until when" needs no support ticket.
+            until: contact.subscription_expires_at ?? null,
           },
         ]
       : []
@@ -136,6 +146,13 @@ export function SpaceMembershipCard({ variant, slug, hasSubscriptionsForSale }: 
                   // alone showed that member nothing.
                   <span className="block text-xs font-normal" style={{ color: '#b45309' }}>
                     {t('membershipEndsAtPeriodEnd')}
+                  </span>
+                ) : s.until ? (
+                  // A one-off grant ("2 months included") runs out on its own
+                  // date. Not amber like a cancellation — nothing is going
+                  // wrong, this is simply what she bought.
+                  <span className="block text-xs font-normal" style={{ color: textMuted }}>
+                    {t('membershipUntil', { date: s.until.toDate().toLocaleDateString() })}
                   </span>
                 ) : null}
               </span>

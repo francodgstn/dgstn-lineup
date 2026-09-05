@@ -3,12 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { Avatar, Icon, IconButton, Menu, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { Contact } from '../../types';
 import { useWelcomeMessage } from '../../hooks/useWelcomeMessage';
+import { useTranslations } from '../../i18n';
 
 interface ProfileHeaderProps {
   contact: Contact;
   initials: string;
   onShowQR: () => void;
-  onScanDojoQR: () => void;
+  onScanTeamQR: () => void;
   onEditProfile: () => void;
 }
 
@@ -16,10 +17,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   contact,
   initials,
   onShowQR,
-  onScanDojoQR,
+  onScanTeamQR,
   onEditProfile,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Profile');
   const welcomeMessage = useWelcomeMessage();
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState({ x: 0, y: 0 });
@@ -56,7 +58,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           </TouchableRipple>
           <View style={[styles.editBadge, { backgroundColor: theme.colors.primary, borderColor: theme.colors.background }]}
                 pointerEvents="none">
-            <Icon source="pencil" size={10} color="#fff" />
+            <Icon source="pencil" size={10} color={theme.colors.onPrimary} />
           </View>
         </View>
         <View style={styles.nameSection}>
@@ -89,13 +91,13 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       >
         <Menu.Item
           leadingIcon="qrcode-scan"
-          onPress={() => { setMenuVisible(false); onScanDojoQR(); }}
-          title="Scan team QR"
+          onPress={() => { setMenuVisible(false); onScanTeamQR(); }}
+          title={t('scanTeamQr')}
         />
         <Menu.Item
           leadingIcon="qrcode"
           onPress={() => { setMenuVisible(false); onShowQR(); }}
-          title="Show my QR"
+          title={t('showMyQr')}
         />
       </Menu>
     </View>

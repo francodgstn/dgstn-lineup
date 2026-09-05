@@ -193,9 +193,10 @@ gross negligence. Declining an SLA and writing an unenforceable liability clause
 are separate choices; only the first was wanted.
 
 **DECIDED — 5. Platform fees confirmed** and now stated in §3.5 as a table:
-Free 1.7%, Coach 1.2%, Studio 0.7%, Organization 0.4%, no minimum and no fixed
+Free 2.5%, Coach 1.5%, Studio 0.8%, Organization 0.5%, no minimum and no fixed
 component (`CONNECT_TAKE_RATE`, `shared/src/types/connect.ts`). Stripe's own
-processing fees are separate and charged by Stripe.
+processing fees are separate and charged by Stripe. (Revised 2026-08-29 by a
+pre-launch commercial review; the first set was 1.7 / 1.2 / 0.7 / 0.4 %.)
 
 ### Resolved on 2026-08-25, after checking the comparators
 

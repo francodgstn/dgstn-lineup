@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onDocumentWritten } from 'firebase-functions/v2/firestore'
 import {
   TEAMS_COLLECTION,
+  ORGANIZATIONS_COLLECTION,
   INSTALLED_PLUGINS_SUBCOLLECTION,
   SITE_PUBLISHED_COLLECTION,
   FORMS_COLLECTION,
@@ -23,6 +24,8 @@ import {
   normalizeKioskConfig,
   resolveAppointmentDurations,
   resolveDurationSale,
+  effectiveRankingSystems,
+  pickPublicGamificationSettings,
   PUBLIC_LOCALES,
   type CustomFieldDefinition,
 } from '@linyup/shared'
@@ -35,6 +38,7 @@ import type {
   GiftCardSettings,
   PublicRequiredWaiver,
   RequiredWaiverEntry,
+  RankingSystem,
   SaasPlan,
   UiLanguage,
 } from '@linyup/shared'
@@ -80,15 +84,26 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // Batched with the team's `org_id`, which this trigger is standing on: two
   // round trips for three plugins rather than nine reads. See
   // `resolveActivePluginInstalls`.
-  const [pluginInstalls, sitePublishedSnap] = await Promise.all([
-    resolveActivePluginInstalls(teamId, (data.org_id as string | undefined) ?? null, [
+  const orgId = (data.org_id as string | undefined) ?? null
+
+  const [pluginInstalls, sitePublishedSnap, orgSnap] = await Promise.all([
+    resolveActivePluginInstalls(teamId, orgId, [
       'website',
       'kiosk',
       'custom-forms',
       'gift-cards',
+      'gamification',
     ]),
     db.doc(`${SITE_PUBLISHED_COLLECTION}/${teamId}`).get(),
+    // Read with the admin SDK: the org doc is members-only under
+    // firestore.rules, but this trigger runs server-side and only ever copies
+    // the two PUBLIC-safe fields below onto the mirror. NOTE: an org-only
+    // write (ranking_systems/affiliation_term edited with no team write) does
+    // NOT re-trigger this sync — see the comment on the mirrored fields below
+    // and TeamPublicProfile.ranking_systems' doc comment.
+    orgId ? db.doc(`${ORGANIZATIONS_COLLECTION}/${orgId}`).get() : Promise.resolve(null),
   ])
+  const orgData = orgSnap?.exists ? orgSnap.data() : undefined
 
   // site: website plugin active AND a published site exists
   // kiosk: entrance-tablet surface — live whenever the plugin install is active.
@@ -222,6 +237,12 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   const bookingActive = true
 
   const giftCardsPluginActive = pluginInstalls.get('gift-cards') !== null
+  // Gamification: the Space's Gamification tab is gated on the plugin install
+  // alone — the DATA it shows (the contact's own score/streak/badges, and
+  // teams/{id}/leaderboard/current) is already readable by a contact session
+  // under firestore.rules without any mirror. See
+  // TeamPublicProfile.gamificationEnabled.
+  const gamificationEnabled = pluginInstalls.get('gamification') !== null
   // CAN THIS STUDIO BE PAID? Both halves of the server-side answer, read from
   // the same two fields `loadEnabledTeam` + `requireChargeableAccount` enforce
   // (connect/access.ts): the operator kill-switch must not be down, and the
@@ -312,6 +333,10 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
     sport_type: data.sport_type || null,
     profileImage: data.profileImage || null,
     heroImage: data.heroImage || null,
+    // The preset WINS over the two legacy fields when present, but all three
+    // are mirrored: the renderer falls back to them for a bio-link authored
+    // before presets, so dropping them here would blank those pages.
+    bioLinkThemePreset: data.bioLinkThemePreset || null,
     bioLinkTheme: data.bioLinkTheme || 'light',
     bioLinkAccentColor: data.bioLinkAccentColor || null,
     bioLinkBackground: data.bioLinkBackground || null,
@@ -342,16 +367,36 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
         type: f.type,
         ...(f.options?.length ? { options: f.options } : {}),
       })),
-    // The team's coaching dimensions — the ONE list behind both goal categories
-    // and check-in axes. Mirrored because the Space runs on a contact session,
-    // which cannot read `teams/{id}` at all; without this a studio that
-    // customises its axes never reaches the member filling in the form, who
-    // silently gets the defaults instead. Absent when never configured, which
-    // `resolveCoachingDimensions` already reads as "use the defaults".
+    // The two coaching vocabularies — check-in axes and goal categories, which
+    // are separate lists answering separate questions (see the header of
+    // packages/shared/src/types/goal.ts). Both mirrored because the Space runs
+    // on a contact session, which cannot read `teams/{id}` at all; without this
+    // a studio that customises either one never reaches the member filling in
+    // the form, who silently gets the defaults instead. Null when never
+    // configured, which `resolveCoachingDimensions` / `resolveGoalCategories`
+    // already read as "use the defaults".
     performance_indicators: data.performance_indicators ?? null,
+    goal_categories: data.goal_categories ?? null,
     membershipRequiredFields: data.membershipRequiredFields || null,
     membershipOptionalFields: data.membershipOptionalFields || null,
     referralEnabled: !!data.settings?.referral?.enabled,
+    gamificationEnabled,
+    // The EFFECTIVE ranking systems — team's own, unless the org has
+    // configured any, in which case the org's list wins for every member team
+    // (`effectiveRankingSystems`, the ONE rule). See
+    // TeamPublicProfile.ranking_systems for the staleness limitation.
+    ranking_systems: effectiveRankingSystems(
+      data.ranking_systems as RankingSystem[] | undefined,
+      orgData?.ranking_systems as RankingSystem[] | undefined
+    ),
+    // The org's affiliation-concept label, or null when independent / unset —
+    // see TeamPublicProfile.affiliation_term.
+    affiliation_term:
+      (orgData?.affiliation_term as Partial<Record<'en' | 'de' | 'fr' | 'it', string>> | undefined) ?? null,
+    // The studio's own badge thresholds + coach badges — ONLY those two: the
+    // stored bag also holds the scoring configuration, which stays private.
+    // See pickPublicGamificationSettings and TeamPublicProfile.gamification_settings.
+    gamification_settings: pickPublicGamificationSettings(data.settings?.gamification),
     // Free-plan bio-links carry a "Powered by Linyup" badge. Denormalized here
     // because bio-link pages only ever read public_profile, never teams/.
     showBranding: (data.plan ?? 'free') === 'free',

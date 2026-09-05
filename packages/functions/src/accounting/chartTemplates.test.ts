@@ -3,9 +3,11 @@ import {
   CHART_TEMPLATES,
   FINANCE_CATEGORIES,
   FINANCE_SOURCES,
+  OPENING_BALANCE_ROLE_ACCOUNTS,
   resolveAccountName,
   templateForCountry,
 } from '@linyup/shared'
+import type { AccountType, ChartTemplateId, OpeningBalanceRoleAccounts } from '@linyup/shared'
 
 // Structural integrity tests for the chart-of-accounts templates: every
 // mapping target must exist in the seed, every journal dimension must be
@@ -55,6 +57,33 @@ describe('chart templates', () => {
         // Only a distinct account keeps the bucket separable in the ledger.
         const m = template.mapping.revenue_by_category
         assert.notEqual(m.gift_card, m.other, `${id} gift_card must not reuse the other account`)
+      })
+
+      it('seeds every opening-balances wizard role with an account of the right type', () => {
+        // The wizard's guided questions resolve to these codes as defaults; a
+        // template edit that drops or retypes one silently un-defaults a row.
+        const byCode = new Map(template.accounts.map((a) => [a.code, a]))
+        const roles = OPENING_BALANCE_ROLE_ACCOUNTS[id as ChartTemplateId]
+        const expectedType: Record<keyof OpeningBalanceRoleAccounts, AccountType> = {
+          cash: 'asset',
+          bank: 'asset',
+          receivables: 'asset',
+          payables: 'liability',
+          ownerLoan: 'liability',
+          deferredIncome: 'liability',
+          equity: 'equity',
+        }
+        for (const [role, code] of Object.entries(roles)) {
+          const account = byCode.get(code)
+          assert.ok(account, `${id} wizard role ${role} points at unseeded account ${code}`)
+          assert.equal(
+            account!.type,
+            expectedType[role as keyof OpeningBalanceRoleAccounts],
+            `${id} wizard role ${role} (${code})`
+          )
+        }
+        // The balancing line must be plain equity, not the close's account.
+        assert.notEqual(roles.equity, template.mapping.retained_earnings_account, id)
       })
 
       it('types the mapped accounts sensibly', () => {

@@ -119,14 +119,18 @@ function ProfileBadge({
 }
 
 // ─── create a task for the weakest axis ────────────────────────────────────
-// The ONE connection `primary_lever` was missing — see packages/shared/src/
-// types/goal.ts ("ONE VOCABULARY"): a check-in's weakest axis and a goal's
-// `categories` are the same vocabulary, but nothing turned naming one into
-// creating the other. Deliberately NOT the full GoalFormDialog: title is
-// pre-filled (and editable) and categories is fixed to the one axis, so there
-// is nothing left to fill in except, optionally, which open goal this serves.
-// Choosing none files it under the virtual "General" group — no placeholder
-// goal is ever created for it (see `Goal.parent_goal_id`).
+// The ONE connection `primary_lever` was missing: naming a weak axis and
+// creating work against it. The task it writes carries `from_dimension` — the
+// axis it came FROM — and NO categories: provenance is not classification, and
+// "work on your Focus" is not a statement about what the work is (see the
+// header of packages/shared/src/types/goal.ts). The coach can file it into a
+// real category later; guessing one here would be worse than leaving it blank.
+//
+// Deliberately NOT the full GoalFormDialog: the title is pre-filled (and
+// editable) and the axis is fixed, so there is nothing left to fill in except,
+// optionally, which open goal this serves. Choosing none files it under the
+// virtual "General" group — no placeholder goal is ever created for it (see
+// `Goal.parent_goal_id`).
 
 // Sentinel for the Select's "no parent" option — Radix Select rejects an
 // empty-string item value, and `undefined`/`null` aren't valid values either.
@@ -169,7 +173,8 @@ function CreateTaskFromLever({
         title: title.trim(),
         description: null,
         status: 'open',
-        categories: [dimensionKey],
+        categories: [],
+        from_dimension: dimensionKey,
         parent_goal_id: parentGoalId,
         created_by: 'coach',
         created_at: serverTimestamp(),

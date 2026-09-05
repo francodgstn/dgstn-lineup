@@ -34,7 +34,7 @@ import type { PluginId } from './plugin'
  */
 export const PLUGIN_BUNDLES: Record<PluginId, readonly PluginId[]> = {
   // HMD's org-level customization bundle. See apps/web/src/plugins/hmd/manifest.ts.
-  hmd: ['hmd-fighting-cup'],
+  hmd: ['hmd-fighting-cup', 'hmd-belts'],
 }
 
 /** Members of `id`, or `[]` when `id` is not a container. */

@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Dimensions } from 'react-native';
 import { Card, Icon, Text, useTheme, IconButton, TouchableRipple } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslations } from '../../i18n';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
   onPress
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Gamification');
 
   if (score <= 0 && streak <= 0) return null;
 
@@ -51,8 +53,8 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
 
   if (isHero) {
     const message = streak > 3
-      ? "You're on fire! Keep it up! 🔥"
-      : "Keep training to earn rewards! 🚀";
+      ? t('onFireMessage')
+      : t('keepTrainingMessage');
 
     return (
       <View style={styles.heroContainer}>
@@ -78,8 +80,8 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
               <Text style={styles.heroStatValue}>{score}</Text>
               <View style={styles.cardBottom}>
                 <View>
-                  <Text style={styles.heroStatLabel}>POINTS</Text>
-                  <Text style={styles.heroStatSublabel}>THIS MONTH</Text>
+                  <Text style={styles.heroStatLabel}>{t('pointsLabel').toUpperCase()}</Text>
+                  <Text style={styles.heroStatSublabel}>{t('thisMonthLabel').toUpperCase()}</Text>
                 </View>
                 <View style={[styles.iconBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <Icon source="star" size={26} color="#FFFFFF" />
@@ -99,14 +101,14 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
               {maxStreak > 0 && (
                 <View style={[styles.bestBadge, styles.bestBadgeCorner, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
                   <Icon source="fire" size={13} color="#FFFFFF" />
-                  <Text style={styles.bestBadgeText}>Best: {maxStreak}</Text>
+                  <Text style={styles.bestBadgeText}>{t('bestPrefix', { count: maxStreak })}</Text>
                 </View>
               )}
               <Text style={styles.heroStatValue}>{streak}</Text>
               <View style={styles.cardBottom}>
                 <View>
-                  <Text style={styles.heroStatLabel}>{streak === 1 ? 'WEEK' : 'WEEKS'}</Text>
-                  <Text style={styles.heroStatSublabel}>STREAK</Text>
+                  <Text style={styles.heroStatLabel}>{(streak === 1 ? t('weekLabel') : t('weeksLabel')).toUpperCase()}</Text>
+                  <Text style={styles.heroStatSublabel}>{t('streakLabel').toUpperCase()}</Text>
                 </View>
                 <View style={[styles.iconBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <Icon source="fire" size={26} color="#FFFFFF" />
@@ -139,9 +141,9 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
               </View>
               <View>
                 <Text variant="titleLarge" style={[styles.statValue, { color: theme.colors.onSurface }]}>
-                  {score} <Text variant="bodyMedium" style={[styles.unitText, { color: theme.colors.onSurfaceVariant }]}>pts</Text>
+                  {score} <Text variant="bodyMedium" style={[styles.unitText, { color: theme.colors.onSurfaceVariant }]}>{t('ptsUnit')}</Text>
                 </Text>
-                <Text variant="labelSmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>THIS MONTH</Text>
+                <Text variant="labelSmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>{t('thisMonthLabel').toUpperCase()}</Text>
               </View>
             </View>
           )}
@@ -158,11 +160,11 @@ export const GamificationCard: React.FC<GamificationCardProps> = ({
               </View>
               <View>
                 <Text variant="titleLarge" style={[styles.statValue, { color: theme.colors.onSurface }]}>
-                  {streak} <Text variant="bodyMedium" style={[styles.unitText, { color: theme.colors.onSurfaceVariant }]}>weeks</Text>
+                  {streak} <Text variant="bodyMedium" style={[styles.unitText, { color: theme.colors.onSurfaceVariant }]}>{t('weeksUnit')}</Text>
                 </Text>
-                <Text variant="labelSmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>STREAK</Text>
+                <Text variant="labelSmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>{t('streakLabel').toUpperCase()}</Text>
                 {maxStreak > 0 && (
-                  <Text variant="labelSmall" style={[styles.statSublabel, { color: theme.colors.onSurfaceVariant }]}>Best: {maxStreak}w</Text>
+                  <Text variant="labelSmall" style={[styles.statSublabel, { color: theme.colors.onSurfaceVariant }]}>{t('bestWeeksShort', { count: maxStreak })}</Text>
                 )}
               </View>
             </View>

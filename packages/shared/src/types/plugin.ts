@@ -58,8 +58,14 @@ export interface PluginAutomationAction {
   configFields?: PluginAutomationActionField[]
 }
 
-/** Built-in sidebar sections a plugin nav item can render into. */
-export type PluginNavSection = 'operations' | 'engage' | 'configure' | 'team'
+/**
+ * Built-in sidebar sections a plugin nav item can render into.
+ *
+ * 'operations' is the working day (Run), 'engage' is an outward surface (Grow),
+ * 'manage' is the back office — periodic rather than operational, and not an
+ * engagement surface either (finance, the asset register).
+ */
+export type PluginNavSection = 'operations' | 'engage' | 'manage' | 'configure' | 'team'
 
 export interface PluginNavContribution {
   href: string // relative to /(auth)/ — e.g. '/plugins/online-courses'

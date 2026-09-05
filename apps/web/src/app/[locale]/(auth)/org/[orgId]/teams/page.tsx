@@ -44,6 +44,7 @@ import {
 } from '@linyup/shared'
 import type { OrgTeam, TeamAccessRequest, TeamAccessType } from '@linyup/shared'
 import { useAuth } from '@/contexts/AuthContext'
+import { Tip } from '@/components/ui/tip'
 
 interface OrgTeamRow extends OrgTeam {
   id: string
@@ -477,15 +478,17 @@ export default function OrgTeamsPage() {
                           )
                         })()}
                         {row.status === 'active' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setRemoveTarget(row)}
-                            title={t('removeButton')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <Tip label={t('removeButton')}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setRemoveTarget(row)}
+                              aria-label={t('removeButton')}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </Tip>
                         )}
                       </div>
                     </td>

@@ -54,6 +54,7 @@ import { useWaiverPolicy, useWaiverRoster } from '@/hooks/useWaiverStates'
 import { SessionFormDialog } from '@/components/sessions/SessionFormDialog'
 import { SessionDeleteDialog } from '@/components/sessions/SessionDeleteDialog'
 import { toast } from 'sonner'
+import { Tip } from '@/components/ui/tip'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -301,6 +302,11 @@ function RosterName({
 // evaluation — there is no "just a number" primitive in the coaching model,
 // only goals and their evaluations — but the coach never sees the four-field
 // form to get there.
+//
+// The goal it writes carries `from_dimension` (the axis it was logged against)
+// and NO categories: the axis is where this goal CAME FROM, not what it is
+// about, and those are two different questions — see the header of
+// packages/shared/src/types/goal.ts.
 function QuickLogSheet({
   open,
   onOpenChange,
@@ -341,7 +347,8 @@ function QuickLogSheet({
           title: dim?.label ?? dimensionKey,
           description: null,
           status: 'in_progress',
-          categories: [dimensionKey],
+          categories: [],
+          from_dimension: dimensionKey,
           parent_goal_id: null,
           created_by: 'coach',
           created_at: serverTimestamp(),
@@ -1590,22 +1597,26 @@ export default function SessionDetailPage() {
           <ArrowLeft className="h-4 w-4" /> {t('backToSessions')}
         </button>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => prevQ.data && i18nRouter.push(`/sessions/${prevQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
-            disabled={!prevQ.data}
-            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            title={t('previousSession')}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => nextQ.data && i18nRouter.push(`/sessions/${nextQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
-            disabled={!nextQ.data}
-            className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
-            title={t('nextSession')}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <Tip label={t('previousSession')}>
+            <button
+              onClick={() => prevQ.data && i18nRouter.push(`/sessions/${prevQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
+              disabled={!prevQ.data}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+              aria-label={t('previousSession')}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </Tip>
+          <Tip label={t('nextSession')}>
+            <button
+              onClick={() => nextQ.data && i18nRouter.push(`/sessions/${nextQ.data.id}` as Parameters<typeof i18nRouter.push>[0])}
+              disabled={!nextQ.data}
+              className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 transition-colors"
+              aria-label={t('nextSession')}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </Tip>
         </div>
       </div>
 
@@ -1663,15 +1674,21 @@ export default function SessionDetailPage() {
                 of the action row below, which is what to do with the PEOPLE. */}
             <div className="flex flex-col items-end justify-between gap-2 self-stretch shrink-0">
               <div className="flex items-center gap-1">
-                <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={t('editTitle')}>
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button onClick={() => setDuplicateOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" title={tCommon('duplicate')}>
-                  <Copy className="h-4 w-4" />
-                </button>
-                <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" title={t('deleteTitle')}>
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <Tip label={t('editTitle')}>
+                  <button onClick={() => setEditOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" aria-label={t('editTitle')}>
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </Tip>
+                <Tip label={tCommon('duplicate')}>
+                  <button onClick={() => setDuplicateOpen(true)} className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground" aria-label={tCommon('duplicate')}>
+                    <Copy className="h-4 w-4" />
+                  </button>
+                </Tip>
+                <Tip label={t('deleteTitle')}>
+                  <button onClick={() => setDeleteOpen(true)} className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive" aria-label={t('deleteTitle')}>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </Tip>
               </div>
               {/* SHARE the link to THIS session, don't open it — the coach's actual
                   need is sending it to someone, and they can already see the session
@@ -1687,18 +1704,19 @@ export default function SessionDetailPage() {
                   only feedback there is, so it stays visible (a green check), not
                   just a title attribute. */}
               {session.allowBooking && teamSlug && (
-                <button
-                  onClick={shareBookingLink}
-                  className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                  title={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}
-                  aria-label={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}
-                >
-                  {linkCopied ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Share2 className="h-4 w-4" />
-                  )}
-                </button>
+                <Tip label={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}>
+                  <button
+                    onClick={shareBookingLink}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label={linkCopied ? t('bookingLinkCopied') : t('bookingLinkShare')}
+   >
+                    {linkCopied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Share2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </Tip>
               )}
             </div>
           </div>
@@ -1778,17 +1796,23 @@ export default function SessionDetailPage() {
               <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{t('pendingBadge')}</Badge>
               <div className="flex items-center gap-1">
-                <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('confirmAttendanceTitle')}>
-                  <Check className="h-4 w-4" />
-                </button>
+                <Tip label={t('confirmAttendanceTitle')}>
+                  <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" aria-label={t('confirmAttendanceTitle')}>
+                    <Check className="h-4 w-4" />
+                  </button>
+                </Tip>
                 {/* No confirm step from 'pending': nothing is being undone, and
                     the way back is the Confirm button beside it. */}
-                <button onClick={() => markNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
-                  <UserX className="h-4 w-4" />
-                </button>
-                <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <Tip label={t('markNoShowTitle')}>
+                  <button onClick={() => markNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" aria-label={t('markNoShowTitle')}>
+                    <UserX className="h-4 w-4" />
+                  </button>
+                </Tip>
+                <Tip label={t('removeBookingTitle')}>
+                  <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" aria-label={t('removeBookingTitle')}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Tip>
               </div>
             </div>
           ))}
@@ -1813,12 +1837,16 @@ export default function SessionDetailPage() {
                   <WaiverDoorCheckChip check={waiverCheckOf(b.contact)} />
                   <Badge variant="outline" className="text-xs text-green-600 border-green-300">{t('confirmedBadge')}</Badge>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setPendingNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowTitle')}>
-                      <UserX className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeBookingTitle')}>
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('markNoShowTitle')}>
+                      <button onClick={() => setPendingNoShow(b)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" aria-label={t('markNoShowTitle')}>
+                        <UserX className="h-4 w-4" />
+                      </button>
+                    </Tip>
+                    <Tip label={t('removeBookingTitle')}>
+                      <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" aria-label={t('removeBookingTitle')}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   </div>
                 </div>
               ))}
@@ -1843,12 +1871,16 @@ export default function SessionDetailPage() {
                   </div>
                   <Badge variant="outline" className="text-xs text-destructive border-destructive/30">{t('noShowBadge')}</Badge>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" title={t('overrideConfirmAttendanceTitle')}>
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeTitle')}>
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('overrideConfirmAttendanceTitle')}>
+                      <button onClick={() => confirmBooking(b)} className="p-1.5 rounded-lg hover:bg-green-50 text-muted-foreground hover:text-green-600 transition-colors" aria-label={t('overrideConfirmAttendanceTitle')}>
+                        <Check className="h-4 w-4" />
+                      </button>
+                    </Tip>
+                    <Tip label={t('removeTitle')}>
+                      <button onClick={() => setPendingRemoval({ kind: 'booking', id: b.id, name: `${b.firstname ?? ''} ${b.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" aria-label={t('removeTitle')}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   </div>
                 </div>
               ))}
@@ -1917,24 +1949,28 @@ export default function SessionDetailPage() {
                       a seat is genuinely free — the callable re-checks both, but
                       a button that always fails is not a button. */}
                   {e.status === 'waiting' && (
-                    <button
-                      onClick={() => callWaitlist('promoteWaitlistEntry', e)}
-                      disabled={waitlistBusy !== null || freeSeats <= 0}
-                      className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                      title={freeSeats <= 0 ? t('waitlistOfferNowDisabled') : t('waitlistOfferNow')}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={freeSeats <= 0 ? t('waitlistOfferNowDisabled') : t('waitlistOfferNow')}>
+                      <button
+                        onClick={() => callWaitlist('promoteWaitlistEntry', e)}
+                        disabled={waitlistBusy !== null || freeSeats <= 0}
+                        className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                        aria-label={freeSeats <= 0 ? t('waitlistOfferNowDisabled') : t('waitlistOfferNow')}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {!terminal && (
-                    <button
-                      onClick={() => setWaitlistRemoving(e)}
-                      disabled={waitlistBusy !== null}
-                      className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-30"
-                      title={t('waitlistRemove')}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('waitlistRemove')}>
+                      <button
+                        onClick={() => setWaitlistRemoving(e)}
+                        disabled={waitlistBusy !== null}
+                        className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-30"
+                        aria-label={t('waitlistRemove')}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                 </div>
               </div>
@@ -1988,25 +2024,31 @@ export default function SessionDetailPage() {
                 real contact (a kiosk/QR check-in with no linked contact has
                 nowhere to attach a goal). */}
             {p.contact && (
-              <button
-                onClick={() => setQuickLogTarget({ contactId: p.contact!, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })}
-                className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors"
-                title={t('quickLogButtonTitle')}
-              >
-                <Gauge className="h-4 w-4" />
-              </button>
+              <Tip label={t('quickLogButtonTitle')}>
+                <button
+                  onClick={() => setQuickLogTarget({ contactId: p.contact!, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })}
+                  className="p-1.5 rounded-lg hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors"
+                  aria-label={t('quickLogButtonTitle')}
+                >
+                  <Gauge className="h-4 w-4" />
+                </button>
+              </Tip>
             )}
             {/* THE WAY OUT OF 'confirmed'. Without it, a person recorded as
                 present could only be un-recorded by deleting the row, which
                 left their booking confirmed and unreachable. */}
             {seat && seat.status !== 'no_show' && (
-              <button onClick={() => setPendingNoShow(seat)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" title={t('markNoShowFromCheckInTitle')}>
-                <UserX className="h-4 w-4" />
-              </button>
+              <Tip label={t('markNoShowFromCheckInTitle')}>
+                <button onClick={() => setPendingNoShow(seat)} className="p-1.5 rounded-lg hover:bg-orange-50 text-muted-foreground hover:text-orange-600 transition-colors" aria-label={t('markNoShowFromCheckInTitle')}>
+                  <UserX className="h-4 w-4" />
+                </button>
+              </Tip>
             )}
-            <button onClick={() => setPendingRemoval({ kind: 'participant', id: p.id, contactId: p.contact ?? null, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t('removeCheckInTitle')}>
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <Tip label={t('removeCheckInTitle')}>
+              <button onClick={() => setPendingRemoval({ kind: 'participant', id: p.id, contactId: p.contact ?? null, name: `${p.firstname ?? ''} ${p.lastname ?? ''}`.trim() })} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" aria-label={t('removeCheckInTitle')}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </Tip>
           </div>
           )
         })}

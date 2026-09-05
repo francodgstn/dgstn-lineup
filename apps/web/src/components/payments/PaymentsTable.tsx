@@ -231,8 +231,12 @@ export function PaymentsTable({
                   <TableCell className="max-w-[180px]">
                     {row.assigned ? (
                       row.contactId ? (
+                        // Straight to the payments SEGMENT: the reader clicked a
+                        // payment row, so land on the list it belongs to rather
+                        // than on the tab's Overview. A plain `?tab=payments`
+                        // bookmark still works — it just opens the Overview.
                         <Link
-                          href={`/contacts/${row.contactId}?tab=payments` as Route}
+                          href={`/contacts/${row.contactId}?tab=payments&seg=payments` as Route}
                           className="block truncate text-primary hover:underline"
                         >
                           {contactName?.(row.contactId) ?? '—'}

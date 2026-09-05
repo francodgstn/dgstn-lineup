@@ -1,17 +1,14 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import {
-  collection, doc, getDoc, getDocs, query, where, orderBy, increment,
-  setDoc, updateDoc, serverTimestamp, writeBatch, getCountFromServer,
-} from 'firebase/firestore'
+import { collection, deleteField, doc, getCountFromServer, getDoc, getDocs, increment, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import {
   COURSES_COLLECTION,
   COURSE_MODULES_SUBCOLLECTION,
   COURSE_LESSONS_SUBCOLLECTION,
 } from '@linyup/shared'
-import type { Course, CourseModule, Lesson } from '@linyup/shared'
+import type { Course, CourseAccessRule, CourseModule, Lesson } from '@linyup/shared'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -115,6 +112,40 @@ export async function updateCourse(
   patch: Partial<Pick<Course, 'title' | 'summary' | 'coverImageUrl' | 'status' | 'accessRule' | 'archived_at' | 'hideFromShop' | 'benefit'>>,
 ): Promise<void> {
   await updateDoc(doc(coursesCol(), courseId), { ...patch, updated_at: serverTimestamp() })
+}
+
+/**
+ * The course settings form's write. THE GATE IS NOT THIS WRITER'S.
+ *
+ * `accessRule.subscriptionTypeIds` belongs to the plan matcher. The settings
+ * form is a different component holding its own, older copy of the document, so
+ * writing `accessRule` as a WHOLE MAP put that stale copy over whatever the
+ * matcher had just saved — silently un-linking plans the studio had just
+ * linked. It was reliably reproducible rather than a race, because the matcher
+ * invalidates `['courses']` and this page reads `['course', id]`: two different
+ * keys, so the form never refetched at all (Franco, 2026-09-01).
+ *
+ * Dot paths touch the tier and the price and NOTHING ELSE. The gate is removed
+ * only when the tier can bear no plans, where leaving it would be data no
+ * reader consults.
+ */
+export async function updateCourseAccess(
+  courseId: string,
+  access: { type: CourseAccessRule['type']; priceAmount?: number },
+  rest: Partial<Pick<Course, 'title' | 'summary' | 'hideFromShop'>> = {},
+): Promise<void> {
+  const bearsPlans = access.type === 'subscription' || access.type === 'purchase'
+  const patch: Record<string, unknown> = {
+    ...rest,
+    'accessRule.type': access.type,
+    'accessRule.priceAmount':
+      access.type === 'purchase' && typeof access.priceAmount === 'number'
+        ? access.priceAmount
+        : deleteField(),
+    updated_at: serverTimestamp(),
+  }
+  if (!bearsPlans) patch['accessRule.subscriptionTypeIds'] = deleteField()
+  await updateDoc(doc(coursesCol(), courseId), patch)
 }
 
 export async function deleteCourse(courseId: string): Promise<void> {

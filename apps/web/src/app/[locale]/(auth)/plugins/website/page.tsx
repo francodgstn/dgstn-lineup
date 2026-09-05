@@ -21,6 +21,8 @@ import {
   ExternalLink,
   Check,
 } from 'lucide-react'
+import { ThemePresetPicker } from '@/components/theme/ThemePresetPicker'
+import { ThemePreview } from '@/components/theme/ThemePreview'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
 import { arrayMove } from '@dnd-kit/sortable'
 import { useAuth } from '@/contexts/AuthContext'
@@ -64,7 +66,10 @@ import type {
   WebsiteSection,
   WebsiteSectionType,
 } from '@linyup/shared'
-import { deriveSiteMenu } from '@linyup/shared'
+import {
+  deriveSiteMenu,
+  resolveThemePreset,
+} from '@linyup/shared'
 import { usePublicSurfaces } from '@/hooks/usePublicSurfaces'
 import { type RenderableSite } from '@/components/site/WebsiteRenderer'
 import { PreviewOverlay } from '@/plugins/website/PreviewOverlay'
@@ -75,6 +80,7 @@ import { useSiteDraft, saveSiteDraft, publishSite, unpublishSite } from '@/plugi
 import { EmbedWidgets } from '@/plugins/website/EmbedWidgets'
 import { SECTION_LIBRARY, newSection, newSectionId, emptyDraft } from '@/plugins/website/defaults'
 import { getWebsiteLimits } from '@/plugins/website/limits'
+import { Tip } from '@/components/ui/tip'
 
 const limits = getWebsiteLimits()
 
@@ -88,6 +94,20 @@ function AppearancePanel({
   onChange: (patch: Partial<SiteMeta>) => void
 }) {
   const t = useTranslations('Website')
+
+  // Resolved through the SAME function the renderer uses, so the preview and the
+  // "does this theme have two halves" check are the one truth. Null for a legacy
+  // surface — its page follows the old `theme: 'auto'` field, and its preview
+  // says "save a theme to see it".
+  const resolvedTheme = resolveThemePreset({
+    presetId: meta.themePreset,
+    light: meta.themeLight,
+    dark: meta.themeDark,
+    single: meta.themeSingle,
+    lighting: meta.themeLighting,
+  })
+  const themeIsAdaptive = resolvedTheme ? resolvedTheme.adaptive : meta.theme === 'auto'
+  const previewAccent = meta.accentColor || resolvedTheme?.defaultAccent || '#6366f1'
 
   const setHeader = (p: Partial<SiteMeta['header']>) =>
     onChange({ header: { ...meta.header, ...p } })
@@ -105,39 +125,88 @@ function AppearancePanel({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apTheme')}</Label>
-          <Select
-            value={meta.theme}
-            onValueChange={(v) => onChange({ theme: v as SiteMeta['theme'] })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="light">Light</SelectItem>
-              <SelectItem value="dark">Dark</SelectItem>
-              <SelectItem value="auto">Auto</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Theme — TWO COLUMNS: the controls on the left (2/3), a live preview on
+          the right (1/3). A studio changing colours wants to watch them decide
+          something; a preview beside the controls is that, and it is why the
+          strength dials the first cut had are gone — the preview does the job
+          they were pretending to (Franco, 2026-09-03). */}
+      <div className="space-y-2">
+        <Label className="text-xs">{t('apTheme')}</Label>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <ThemePresetPicker
+              value={meta.themePreset ?? ''}
+              onChange={(id) => onChange({ themePreset: id })}
+              accentColor={meta.accentColor}
+              light={meta.themeLight}
+              dark={meta.themeDark}
+              single={meta.themeSingle}
+              lighting={meta.themeLighting}
+              // ONE WRITE for the custom fields — they are one choice.
+              onCustomChange={(next) =>
+                onChange({
+                  themeLight: next.light,
+                  themeDark: next.dark,
+                  themeSingle: next.single,
+                  themeLighting: next.lighting,
+                })
+              }
+            />
+
+            {/* THE VISITOR'S SWITCH — off by default, and only meaningful on a
+                theme with two halves. On a single-look theme there is nothing to
+                switch to, so the row disables itself and says why. */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('apThemeToggle')}</Label>
+              <div className="flex items-start gap-2.5 rounded-md border p-2.5">
+                <Switch
+                  checked={!!meta.themeToggle}
+                  disabled={!themeIsAdaptive}
+                  onCheckedChange={(v) => onChange({ themeToggle: v })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {themeIsAdaptive ? t('apThemeToggleHint') : t('apThemeToggleFixed')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* THE PREVIEW — light over dark, each with a page, a heading, text and
+              a button. Not a copy of any real component; just every role a
+              palette fills. */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('apThemePreview')}</Label>
+            {resolvedTheme ? (
+              <ThemePreview
+                light={resolvedTheme.light}
+                dark={resolvedTheme.dark}
+                accent={previewAccent}
+                adaptive={resolvedTheme.adaptive}
+              />
+            ) : (
+              <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                {t('apThemePreviewNone')}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">{t('apFont')}</Label>
-          <Select
-            value={meta.font}
-            onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sans">Sans</SelectItem>
-              <SelectItem value="serif">Serif</SelectItem>
-              <SelectItem value="rounded">Rounded</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs">{t('apFont')}</Label>
+        <Select
+          value={meta.font}
+          onValueChange={(v) => onChange({ font: v as SiteMeta['font'] })}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sans">Sans</SelectItem>
+            <SelectItem value="serif">Serif</SelectItem>
+            <SelectItem value="rounded">Rounded</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">
@@ -654,28 +723,31 @@ export default function WebsiteBuilderPage() {
                                   Never for the hero: it is the top of the page
                                   and is not a menu destination. */}
                               {s.type !== 'hero' && (
+                                <Tip label={t('addToMenu')}>
+                                  <button
+                                    type="button"
+                                    onClick={() => addSectionToMenu(s)}
+                                    aria-label={t('addToMenu')}
+                                    className="rounded p-1 hover:bg-muted"
+                                  >
+                                    <ListPlus className="h-3.5 w-3.5" />
+                                  </button>
+                                </Tip>
+                              )}
+                              <Tip label={t('toggleVisible')}>
                                 <button
                                   type="button"
-                                  onClick={() => addSectionToMenu(s)}
-                                  title={t('addToMenu')}
-                                  aria-label={t('addToMenu')}
+                                  onClick={() => updateSection(s.id, { hidden: !s.hidden })}
+                                  aria-label={t('toggleVisible')}
                                   className="rounded p-1 hover:bg-muted"
                                 >
-                                  <ListPlus className="h-3.5 w-3.5" />
+                                  {s.hidden ? (
+                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => updateSection(s.id, { hidden: !s.hidden })}
-                                title={t('toggleVisible')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                {s.hidden ? (
-                                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setOpenId(open ? null : s.id)}
@@ -683,14 +755,16 @@ export default function WebsiteBuilderPage() {
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => duplicateSection(s.id)}
-                                title={tCommon('duplicate')}
-                                className="rounded p-1 hover:bg-muted"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
+                              <Tip label={tCommon('duplicate')}>
+                                <button
+                                  type="button"
+                                  onClick={() => duplicateSection(s.id)}
+                                  aria-label={tCommon('duplicate')}
+                                  className="rounded p-1 hover:bg-muted"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              </Tip>
                               <button
                                 type="button"
                                 onClick={() => setDeleteId(s.id)}

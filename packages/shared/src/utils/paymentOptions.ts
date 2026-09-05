@@ -158,7 +158,7 @@ export type PaymentOption =
       amount: number
       source: 'base' | 'drop_in' | 'trial' | 'course_price' | 'product'
       /** WHICH MEMBERSHIP priced this. Read downstream — createAppointmentCheckout
-       *  stamps `subscription_type_id` from it and /offer/pricing renders the
+       *  stamps `subscription_type_id` from it and /manage/pricing renders the
        *  member badge from it — which is why a benefit set exactly AT base still
        *  stamps this (it did price the booking). Never present together with
        *  `appliedPromo`: at most one modifier ever prices the option. */
@@ -565,7 +565,7 @@ function applyModifiers(
   }
 }
 
-const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+export const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
   'included',
   'spend_credits',
   'percent_off',
@@ -573,9 +573,16 @@ const APPOINTMENT_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
 ])
 // Classes: coverage (free/credits) is the accessRule's job — the drop-in
 // benefit is a MEMBER RATE, price-modifying effects only.
-const DROP_IN_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
+//
+// EXPORTED BECAUSE THE EDITOR MUST ASK. These sets decide which effects the
+// resolver will HONOUR, and an editor keeping its own list offered `included`
+// on a class: the studio ticked "members get it included", the resolver ignored
+// it (coverage is the access rule's job), and the member paid the full drop-in
+// price. Two controls that looked like two ways to say "free", one of them
+// inert. An editor that reads these cannot reproduce that.
+export const DROP_IN_EFFECTS: ReadonlySet<BenefitEffect> = new Set(['percent_off', 'fixed_price'])
 // Courses: no grant+spend story in the webhook → no spend_credits.
-const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
+export const COURSE_EFFECTS: ReadonlySet<BenefitEffect> = new Set([
   'included',
   'percent_off',
   'fixed_price',
@@ -767,10 +774,18 @@ function resolveTarget(
       if (snapshot.ownsCourse) {
         return { options: [{ type: 'covered', via: { reason: 'owned' } }], denial: null }
       }
-      const benefit = normalizeBenefit(target.benefit)
-      if (!benefit && included) {
-        // Legacy free-inclusion list (accessRule.subscriptionTypeIds) — only
-        // consulted when no explicit benefit is configured; benefit wins.
+      // THE GATE AND THE BENEFIT ARE ADDITIVE, and FREE WINS.
+      //
+      // `accessRule.subscriptionTypeIds` names the plans that get this course
+      // free; `benefit` prices it for the plans that merely get it cheaper. A
+      // course is the same two-facet shape as a class, and reading only one of
+      // them was a bug rather than a design: `firestore.rules` has always ORed
+      // these two (`canReadPublishedCourse`), so the guard that used to stand
+      // here — `if (!benefit && included)`, i.e. a benefit HIDES the gate list —
+      // could let a holder READ a course this function then quoted them full
+      // price for. Nothing wrote both lists at once only because the editor
+      // refused to offer both controls (Franco, 2026-09-01).
+      if (included) {
         return {
           options: [
             { type: 'covered', via: { reason: 'subscription', subscriptionTypeId: included } },
@@ -778,6 +793,11 @@ function resolveTarget(
           denial: null,
         }
       }
+      // A `benefit` whose effect is `included` is the LEGACY spelling of that
+      // same list. It still resolves to covered, one line further down, through
+      // `applyModifiers` + COURSE_EFFECTS — which is why nothing needs a
+      // backfill; the editor absorbs it into the gate on first touch.
+      const benefit = normalizeBenefit(target.benefit)
       if (typeof rule.priceAmount === 'number') {
         return applyModifiers(
           snapshot,

@@ -34,6 +34,7 @@ import {
 import { DEFAULT_KIOSK_CONFIG } from '@linyup/shared'
 import type { KioskConfig, KioskScheduleView, KioskTheme } from '@linyup/shared'
 import { useKioskConfig, saveKioskConfig, uploadKioskMedia } from '@/plugins/kiosk/hooks'
+import { Tip } from '@/components/ui/tip'
 
 const MAX_IMAGE_MB = 10
 const MAX_VIDEO_MB = 60
@@ -360,14 +361,16 @@ export default function KioskSettingsPage() {
                   ) : (
                     <video src={m.url} className="h-full w-full object-cover" muted />
                   )}
-                  <button
-                    type="button"
-                    onClick={() => removeMedia(i)}
-                    title={t('standbyRemoveMedia')}
-                    className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5 hover:bg-background"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  <Tip label={t('standbyRemoveMedia')}>
+                    <button
+                      type="button"
+                      onClick={() => removeMedia(i)}
+                      aria-label={t('standbyRemoveMedia')}
+                      className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5 hover:bg-background"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Tip>
                 </div>
               ))}
               <button
@@ -402,9 +405,11 @@ export default function KioskSettingsPage() {
               <code className="rounded bg-background px-2.5 py-1 font-mono text-lg tracking-[0.3em]">
                 {config.lock.pin}
               </code>
-              <Button variant="outline" size="icon-sm" onClick={copyPin} title={t('pinCopy')}>
-                {copiedPin ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              </Button>
+              <Tip label={t('pinCopy')}>
+                <Button variant="outline" size="icon-sm" onClick={copyPin} aria-label={t('pinCopy')}>
+                  {copiedPin ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
+              </Tip>
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
               <Button variant="outline" size="sm" onClick={() => setConfirmRotate(true)}>

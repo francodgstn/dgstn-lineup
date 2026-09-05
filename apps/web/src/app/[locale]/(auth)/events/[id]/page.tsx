@@ -47,6 +47,7 @@ import { EventPublishCard } from '@/components/events/EventPublishCard'
 import { useOrg } from '@/contexts/OrgContext'
 import { pluginSlot } from '@/plugins/slots'
 import type { Route } from 'next'
+import { Tip } from '@/components/ui/tip'
 
 // ─── subcollection types ──────────────────────────────────────────────────────
 
@@ -657,14 +658,16 @@ export default function EventDetailPage() {
             <Pencil className="h-4 w-4 mr-1.5" />
             {t('editEvent')}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDuplicateOpen(true)}
-            title={tp('duplicateEvent')}
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
+          <Tip label={tp('duplicateEvent')}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDuplicateOpen(true)}
+              aria-label={tp('duplicateEvent')}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </Tip>
           <Button
             size="sm"
             variant="outline"
@@ -795,11 +798,11 @@ export default function EventDetailPage() {
            the empty state says so rather than saying "no attendees".
 
            Presence is the separate `checkins` collection, shown by the
-           Check-ins tab and counted by `participants_count`. The two were both
-           called "attendees" and the stat tile above already said RSVPs, so a
-           single page named one thing two ways (Franco, 2026-08-28). The URL
-           key stays `attendees` — it matches the subcollection, which is a
-           data migration rather than a label. */}
+           Check-ins tab and counted by `participants_count`. Both were called
+           "attendees" while the stat tile above already said RSVPs, so a single
+           page named one thing two ways. The URL key stays `attendees` — it
+           matches the subcollection, which is a data migration rather than a
+           label. */}
       {tab === 'attendees' && canSeeAttendees && (
         <div className="rounded-xl border overflow-hidden bg-card">
           {attendeesQ.isLoading && (

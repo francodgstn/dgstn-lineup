@@ -61,6 +61,27 @@ export interface UnifiedPaymentRow {
   createdAt: { toDate?: () => Date } | null
   /** Platform application fee taken (Connect only; minor units). */
   feeAmount: number
+  /** WHICH PLAN TYPE this payment bought, when the row itself records it — and
+   *  `null` when it does not. Read for the contact ledger's "what did they pay
+   *  for" column.
+   *
+   *  THIS IS A PLAN **TYPE**, NEVER A SUBSCRIPTION INSTANCE. Nothing in the
+   *  system writes a subscription id onto a payment row, so "this was the March
+   *  invoice of sub_1ABC" is not answerable here and must not be implied.
+   *
+   *  A null is a FACT, not a gap to fill: it must never be resolved by inferring
+   *  from an overlapping plan span, from the contact's current plan, or from
+   *  proximity in time. Two reasons it is legitimately absent — legacy rows
+   *  predate the line item entirely, and a renewal that reaches us before its
+   *  subscription webhook carries no plan id at all (see the ordering note in
+   *  connect/webhook.ts). Guessing would put a confident wrong plan on a real
+   *  payment. */
+  planTypeId: string | null
+  /** Where `planTypeId` came from, so the UI can be honest about how firm it is:
+   *  'line_item'    — the structured line item on either rail (firmest)
+   *  'legacy_field' — a BYO row's top-level `subscription_type_id` (pre-line-item)
+   *  'none'         — the row does not record a plan */
+  planAttribution: 'line_item' | 'legacy_field' | 'none'
   // Connect-only management affordances:
   refundable: boolean
   disputed: boolean
@@ -140,6 +161,28 @@ function connectLineItem(p: MemberPayment): PaymentLineItem | null {
   return null
 }
 
+/** The plan TYPE a row records, and how firmly — see `UnifiedPaymentRow.planTypeId`
+ *  for why a `'none'` must never be resolved by inference.
+ *
+ *  `stored` is the row's OWN line item, never `connectLineItem`'s synthesised
+ *  fallback: that fallback is built from `kind`/names to keep the assign dialog's
+ *  label non-empty, and it carries no plan id. Reading it here would report
+ *  `'line_item'` confidence for a row that records no plan at all.
+ *
+ *  `legacyTypeId` is the BYO rail's pre-line-item carrier
+ *  (`ExternalPayment.subscription_type_id`), which the adapter used to drop —
+ *  costing those rows the only plan link they have. */
+function resolvePlanAttribution(
+  stored: PaymentLineItem | null | undefined,
+  legacyTypeId?: string | null
+): { planTypeId: string | null; planAttribution: UnifiedPaymentRow['planAttribution'] } {
+  if (stored?.kind === 'subscription' && stored.subscriptionTypeId) {
+    return { planTypeId: stored.subscriptionTypeId, planAttribution: 'line_item' }
+  }
+  if (legacyTypeId) return { planTypeId: legacyTypeId, planAttribution: 'legacy_field' }
+  return { planTypeId: null, planAttribution: 'none' }
+}
+
 export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[] {
   return payments.map((p) => ({
     key: `connect:${p.paymentIntentId}`,
@@ -171,6 +214,9 @@ export function connectToUnified(payments: MemberPayment[]): UnifiedPaymentRow[]
     defaultLabel: connectDefaultLabel(p),
     createdAt: (p.created_at as unknown as { toDate?: () => Date }) ?? null,
     feeAmount: p.application_fee_amount ?? 0,
+    // The Connect rail has no legacy top-level carrier — the plan id has always
+    // lived in the line item here.
+    ...resolvePlanAttribution(p.line_item),
     refundable: p.status === 'succeeded' || p.status === 'partially_refunded',
     disputed: !!p.dispute_status,
     amountRefunded: p.amount_refunded ?? 0,
@@ -214,6 +260,7 @@ export function byoToUnified(events: Array<ExternalPayment & { id: string }>): U
             : 'Stripe payment',
       createdAt: (e.processed_at as unknown as { toDate?: () => Date }) ?? null,
       feeAmount: 0, // BYO has no platform fee — money never touches Linyup
+      ...resolvePlanAttribution(e.line_item, e.subscription_type_id),
       refundable: false, // BYO is record-only — refunds happen in the studio's own gateway
       disputed: false,
       amountRefunded: 0,

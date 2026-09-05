@@ -12,6 +12,13 @@ on:
     branches: [main]
   workflow_call: {}
 
+# A newer push to the same PR supersedes the older run. Not applied to
+# workflow_call runs (a deploy's gate must never be cancelled by another deploy
+# — deploy.yml serialises those itself).
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   typecheck:
     name: Typecheck
@@ -94,6 +101,9 @@ jobs:
       # mocha exits 1 on "No test files found"; run it only once tests exist so
       # the job stays green until function tests are added (and fails on real
       # test failures thereafter).
+      # No FIRESTORE_EMULATOR_HOST here: the mocha suite is emulator-free by
+      # construction (every Firestore-touching path is behind a DI seam). The
+      # rules suite below is the one that needs an emulator.
       - name: Run function tests
         run: |
           if find packages/functions/src -name '*.test.ts' | grep -q .; then
@@ -101,8 +111,48 @@ jobs:
           else
             echo "No function tests yet — skipping."
           fi
-        env:
-          FIRESTORE_EMULATOR_HOST: localhost:8080
+
+  # Firestore + Storage rules, run against the real emulator. Until 2026-09 this
+  # suite ran on nobody's machine but the author's, and it was red at HEAD for a
+  # week (a contacts catch-all overriding an `if false`) with CI green the whole
+  # time. Java 21 is the emulator's floor; the jars (~190 MB) are cached across
+  # runs, keyed on the firebase-tools version so an upgrade refetches them.
+  test-rules:
+    name: Firestore & Storage Rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Firebase-tools version (cache key)
+        id: fbt
+        run: echo "version=$(node -p "require('firebase-tools/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache emulator jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ steps.fbt.outputs.version }}
+
+      - name: Build shared package
+        run: pnpm --filter @linyup/shared run build
+
+      - name: Rules tests
+        run: pnpm --filter @linyup/functions run test:rules
 
   build-admin:
     name: Build Admin Console

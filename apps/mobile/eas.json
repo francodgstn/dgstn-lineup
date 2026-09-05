@@ -4,78 +4,68 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "22.22.3",
+      "android": {
+        "credentialsSource": "remote"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
+      "environment": "development",
       "android": {
         "buildType": "apk"
       },
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "FIREBASE_PROJECT_ID": "linyup-staging",
+        "FIREBASE_API_KEY": "AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg"
       }
     },
     "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "channel": "staging",
       "environment": "preview",
-      "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
+        "buildType": "apk"
       },
       "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineupt",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
-      }
-    },
-    "production": {
-      "environment": "production",
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
-      },
-      "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineup",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+        "FIREBASE_PROJECT_ID": "linyup-staging",
+        "FIREBASE_API_KEY": "AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg"
       }
     },
     "store": {
-      "environment": "production",
+      "extends": "base",
       "distribution": "store",
+      "channel": "production",
+      "environment": "production",
       "autoIncrement": true,
       "android": {
-        "buildType": "app-bundle",
-        "credentialsSource": "remote"
-      },
-      "ios": {
-        "credentialsSource": "remote"
+        "buildType": "app-bundle"
       },
       "env": {
-        "FIREBASE_PROJECT_ID": "hmdlineup",
-        "FIREBASE_API_KEY": "${FIREBASE_API_KEY}"
+        "FIREBASE_PROJECT_ID": "linyup-staging",
+        "FIREBASE_API_KEY": "AIzaSyAuMHWbGKmyL78xVfrStkIctShzqrd4zcg"
       }
     }
   },
   "submit": {
-    "production": {
-      "android": {
-        "track": "production"
-      },
-      "ios": {
-        "ascAppId": "6758545583"
-      }
-    },
     "store": {
       "android": {
-        "track": "alpha"
+        "track": "internal"
       },
       "ios": {
-        "ascAppId": "6758545583"
+        "ascAppId": "6808572774",
+        "appleTeamId": "ZZVK94AKDV"
       }
     }
   }

@@ -201,8 +201,12 @@ describe('EVERY SURFACE THAT SHOWS A SUBSCRIPTION ASKS THE PREDICATE', () => {
     'apps/web/src/app/[locale]/(auth)/settings/billing/page.tsx',
     // An org owner's.
     'apps/web/src/app/[locale]/(auth)/org/[orgId]/billing/page.tsx',
-    // A studio reading a MEMBER's membership.
-    'apps/web/src/app/[locale]/(auth)/contacts/[id]/PaymentsTab.tsx',
+    // A studio reading a MEMBER's membership. It lived in the contact's
+    // PaymentsTab until 2026-08, when the section stopped being rendered twice
+    // (once there, once on the Plans side of the same contact) and moved to the
+    // one component both had been calling. The surface is the same surface — only
+    // its address changed — so the entry follows it rather than being dropped.
+    'apps/web/src/components/contacts/MemberSubscriptionsSection.tsx',
     // The operator console's account detail.
     'apps/admin/src/lib/queries/account.ts',
     // The member-facing mirror: Space reads `Contact.active_subscriptions`, so
@@ -353,16 +357,19 @@ describe('THE BACKFILL WRITES WHAT THE WEBHOOK WRITES', () => {
     return payloadBody.slice(start, end)
   }
 
-  it('current_period_start is a SAAS field — the Connect rail has no such thing', () => {
-    // The backfill wrote it on BOTH rails while `handleSubscription` writes only
-    // the end and `MemberSubscription` declares only the end. That is a repair
-    // inventing a field: it reports a delta on every member subscription on its
-    // first run, and the value it writes is one no live event would ever produce.
+  it('the Connect rail stores the period as a PAIR — handler, type and backfill together', () => {
+    // Until 2026-08-31 the start was a SaaS-only field and this test pinned its
+    // ABSENCE on the Connect rail (the backfill writing it was a repair
+    // inventing a field). Accrual readiness added it deliberately — the start
+    // says which SERVICE PERIOD an invoice bought (docs/finance-accrual.md,
+    // Phase 0) — so the contract enforced here is the one the old failure
+    // message stated: MemberSubscription declares it, handleSubscription writes
+    // it, and the backfill writes it too. All three move together or none do.
     const handler = code(functionBody(webhook, 'handleSubscription'))
     assert.ok(
-      !/current_period_start\s*:/.test(handler),
-      'handleSubscription now writes current_period_start. If that is deliberate, MemberSubscription ' +
-        'must declare it and the backfill must write it too — all three move together or none do.'
+      /current_period_start:\s*periodStart/.test(handler),
+      'handleSubscription must write the period START — same whole-record rail rule as the end, ' +
+        'nulls included'
     )
     assert.ok(
       /current_period_end:\s*periodEnd/.test(handler),
@@ -379,15 +386,15 @@ describe('THE BACKFILL WRITES WHAT THE WEBHOOK WRITES', () => {
     assert.notEqual(ifaceStart, -1, 'MemberSubscription moved — this guard has drifted')
     const iface = memberType.slice(ifaceStart, memberType.indexOf('\n}\n', ifaceStart))
     assert.ok(
-      !/current_period_start/.test(iface),
-      'MemberSubscription declares current_period_start but no writer produces one'
+      /current_period_start/.test(iface),
+      'MemberSubscription must declare the period start its writer produces'
     )
     const connect = payloadBranch("rail === 'connect'", "rail === 'saas'")
     assert.ok(
-      !/current_period_start/.test(connect),
-      "the backfill's connect payload writes current_period_start — the field the Connect rail " +
-        'does not have. Half a parity claim is worse than none: the script advertises byte-identity ' +
-        'with the webhook in its own header.'
+      /current_period_start:\s*target\.current_period_start/.test(connect),
+      "the backfill's connect payload must write the start the webhook writes — the script " +
+        'advertises byte-identity with the handler in its own header, and a run of it is also ' +
+        'the repair that fills the starts on docs written before the field existed.'
     )
     assert.ok(/current_period_end:\s*target\.current_period_end/.test(connect))
   })

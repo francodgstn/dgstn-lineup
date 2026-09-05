@@ -40,7 +40,13 @@ import {
   Tag,
   User,
   X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Minus,
+  Quote,
 } from 'lucide-react'
+import { DynamicIcon } from '@/components/ui/icon-picker'
 import type {
   WebsiteSection,
   OrgSiteSection,
@@ -52,6 +58,10 @@ import type {
   ScheduleSection,
   ContactSection,
   PlacesSection,
+  FeaturesSection,
+  CtaBannerSection,
+  FaqSection,
+  TestimonialsSection,
   SocialLink,
   OrgSiteTeamRef,
 } from '@linyup/shared'
@@ -60,9 +70,13 @@ import {
   compareActivities,
   mergeAvailabilitySlots,
   resolveActivityAccessRule,
+  normalizeBenefit,
+  resolveDurationBenefit,
   resolveDurationSale,
   type ActivityAccessRule,
+  type ActivityDurationBenefit,
   type ActivityMemberBenefit,
+  type Benefit,
 } from '@linyup/shared'
 import {
   resolveActivityTerms,
@@ -259,11 +273,83 @@ export function bookProps(href: string | undefined, ctx: RenderCtx, intent: Book
 
 // ─── Hero ───────────────────────────────────────────────────────────────────
 
+/** Perceived brightness of a hex colour — enough to pick readable text over a
+ *  solid hero background. Self-contained so this file needs no colour dep. */
+function hexIsLight(hex: string): boolean {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return true
+  let h = m[1]
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.6
+}
+
 function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
   const { palette, slug, locale, preview } = ctx
   const href = ctaHref(section.cta, slug, locale)
   const center = section.align !== 'left'
   const overlay = (section.overlay ?? 40) / 100
+
+  const hasImage = !!section.bgImageUrl
+  // A solid background colour, only when there is no image — an image is its own
+  // background. Absent ⇒ the bold accent gradient, today's look.
+  const solid = !hasImage && section.bgColor ? section.bgColor : null
+  const inCard = section.layout === 'card'
+
+  // TEXT COLOUR is the one thing a solid background forces us to decide. Over an
+  // image or the accent gradient the text is white (with a shadow). Over a solid
+  // colour it follows the colour's own perceived brightness, so a pale hero gets
+  // dark text.
+  const solidDarkText = solid ? hexIsLight(solid) : false
+  const fullText = solid ? (solidDarkText ? '#0f172a' : '#ffffff') : '#ffffff'
+  const fullMuted = solid
+    ? solidDarkText
+      ? 'rgba(15,23,42,0.72)'
+      : 'rgba(255,255,255,0.9)'
+    : 'rgba(255,255,255,0.92)'
+  const shadow = solid ? 'none' : '0 2px 18px rgba(0,0,0,0.35)'
+
+  // In CARD layout the content sits on the theme's neutral surface, so it reads
+  // the same way cards do everywhere — which is what makes a hero legible over a
+  // busy image or a strong colour without a per-hero text decision.
+  const cardText = inCard ? palette.text : fullText
+  const cardMuted = inCard ? palette.muted : fullMuted
+  const cardShadow = inCard ? 'none' : shadow
+
+  const content = (
+    <>
+      <h1
+        className="text-4xl @2xl:text-5xl font-bold tracking-tight"
+        style={{ color: cardText, textShadow: cardShadow }}
+      >
+        {section.headline}
+      </h1>
+      {section.subheadline && (
+        <p
+          className={`mt-4 text-lg @2xl:text-xl ${center ? 'mx-auto max-w-2xl' : 'max-w-2xl'}`}
+          style={{ color: cardMuted, textShadow: cardShadow }}
+        >
+          {section.subheadline}
+        </p>
+      )}
+      {section.cta?.label && (
+        <div className={`mt-8 flex ${center ? 'justify-center' : 'justify-start'}`}>
+          <a
+            {...(section.cta.action === 'booking'
+              ? bookProps(href, ctx, { kind: 'root' })
+              : linkProps(href, preview, section.cta.action === 'url'))}
+            className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-base font-semibold shadow-lg transition-transform hover:scale-[1.03]"
+            style={{ background: palette.accent, color: palette.onAccent }}
+          >
+            {section.cta.label}
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+      )}
+    </>
+  )
 
   return (
     <section
@@ -271,12 +357,14 @@ function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
       className="relative flex items-center"
       style={{
         minHeight: '72vh',
-        background: section.bgImageUrl
+        background: hasImage
           ? undefined
-          : `linear-gradient(135deg, ${palette.accent}, ${palette.accent}99)`,
+          : solid
+            ? solid
+            : `linear-gradient(135deg, ${palette.accent}, ${palette.accent}99)`,
       }}
     >
-      {section.bgImageUrl && (
+      {hasImage && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -290,34 +378,15 @@ function HeroBlock({ section, ctx }: { section: HeroSection; ctx: RenderCtx }) {
       <div
         className={`relative mx-auto w-full max-w-5xl px-6 py-20 ${center ? 'text-center' : 'text-left'}`}
       >
-        <h1
-          className="text-4xl @2xl:text-5xl font-bold tracking-tight"
-          style={{ color: '#ffffff', textShadow: '0 2px 18px rgba(0,0,0,0.35)' }}
-        >
-          {section.headline}
-        </h1>
-        {section.subheadline && (
-          <p
-            className={`mt-4 text-lg @2xl:text-xl ${center ? 'mx-auto max-w-2xl' : 'max-w-2xl'}`}
-            style={{ color: 'rgba(255,255,255,0.92)', textShadow: '0 1px 12px rgba(0,0,0,0.35)' }}
+        {inCard ? (
+          <div
+            className={`rounded-2xl border p-8 shadow-xl @2xl:p-12 ${center ? 'mx-auto max-w-3xl' : 'max-w-3xl'}`}
+            style={{ background: palette.surface, borderColor: palette.border }}
           >
-            {section.subheadline}
-          </p>
-        )}
-        {section.cta?.label && (
-          <div className={`mt-8 flex ${center ? 'justify-center' : 'justify-start'}`}>
-            <a
-              // A 'booking' CTA opens the overlay; signup/external stay navigations.
-              {...(section.cta.action === 'booking'
-                ? bookProps(href, ctx, { kind: 'root' })
-                : linkProps(href, preview, section.cta.action === 'url'))}
-              className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-base font-semibold shadow-lg transition-transform hover:scale-[1.03]"
-              style={{ background: palette.accent, color: palette.onAccent }}
-            >
-              {section.cta.label}
-              <ArrowRight className="h-4 w-4" />
-            </a>
+            {content}
           </div>
+        ) : (
+          content
         )}
       </div>
     </section>
@@ -465,7 +534,10 @@ interface ActivityEntry {
   /** APPOINTMENT-ONLY: priced duration menu (member pricing stripped). */
   durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   /** APPOINTMENT-ONLY: the one member-benefit rule, mirrored verbatim. */
-  memberBenefit?: ActivityMemberBenefit
+  memberBenefit?: ActivityMemberBenefit | Benefit
+  /** APPOINTMENT-ONLY. Read WITH `memberBenefit`, through
+   *  `resolveDurationBenefit` — never on its own. */
+  durationBenefits?: ActivityDurationBenefit[]
 }
 
 // Benefit chips stay GENERIC (no plan names — the website has no
@@ -513,6 +585,7 @@ function payPerVisitLine(a: ActivityEntry, currency: string, t: SiteT): string {
     dropIn: a.dropIn,
     durations: a.durations,
     memberBenefit: a.memberBenefit,
+    durationBenefits: a.durationBenefits,
     accessRule: a.accessRule,
   })
     .filter(
@@ -673,6 +746,9 @@ function ActivitiesBlock({ section, ctx }: { section: ActivitiesSection; ctx: Re
               trialPriceAmount: typeof data.trialPriceAmount === 'number' ? (data.trialPriceAmount as number) : null,
               durations: Array.isArray(data.durations) ? (data.durations as ActivityEntry['durations']) : undefined,
               memberBenefit: (data.memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+              durationBenefits: Array.isArray(data.durationBenefits)
+                ? (data.durationBenefits as ActivityDurationBenefit[])
+                : undefined,
             }
           })
           .filter((a) => a.name)
@@ -1017,12 +1093,33 @@ function pricingCell(
 ): Cell {
   if (a.activityType === 'appointment') {
     // An appointment has NO access gate — the price is the gate — so a plan
-    // never unlocks one; it can only make it cheaper (Activity.memberBenefit).
-    const benefit = a.memberBenefit
-    const covered = benefit?.subscriptionTypeIds?.includes(planId) === true
-    if (covered && benefit?.kind === 'included') return { kind: 'yes' }
-    if (covered && benefit?.kind === 'discount')
-      return { kind: 'text', text: t('tableDiscount', { percent: benefit.discountPercent ?? 0 }) }
+    // never unlocks one; it can only make it cheaper.
+    //
+    // ONE CELL, SEVERAL LENGTHS. The rule is per length, and this table has one
+    // cell per (plan, activity) on a page a stranger reads. So the cell states
+    // a benefit only when EVERY length agrees; where they differ it falls
+    // through to the "from CHF …" figure, which is true whatever the plan does,
+    // and the picker quotes the real per-length price.
+    //
+    // Through `normalizeBenefit`, not `benefit.kind`: a per-length rule is
+    // always stored in the generalized shape, and the legacy read below used to
+    // see `effect` and report NOT COVERED for a plan that books free.
+    const lengths = a.durations?.length ? a.durations : [{ minutes: 60 }]
+    const rules = lengths.map((d) => normalizeBenefit(resolveDurationBenefit(a, d.minutes)))
+    const first = rules[0] ?? null
+    const unanimous = rules.every((b) => JSON.stringify(b) === JSON.stringify(first))
+    const benefit = unanimous ? first : null
+    if (benefit?.subscriptionTypeIds.includes(planId)) {
+      if (benefit.effect === 'included' || benefit.effect === 'spend_credits') {
+        return { kind: 'yes' }
+      }
+      if (benefit.effect === 'percent_off' && typeof benefit.percent === 'number') {
+        return { kind: 'text', text: t('tableDiscount', { percent: benefit.percent }) }
+      }
+      if (benefit.effect === 'fixed_price' && typeof benefit.amount === 'number') {
+        return { kind: 'text', text: formatCurrency(benefit.amount, currency) }
+      }
+    }
     // `resolveDurationSale` rather than a raw price test: a benefit_only length
     // (UX-70) has no individual price, so it must not produce a "from" figure.
     const priced = (a.durations ?? [])
@@ -1217,6 +1314,9 @@ function PricingBlock({ section, ctx }: { section: PricingSection; ctx: RenderCt
                   ? (d.data().durations as ActivityEntry['durations'])
                   : undefined,
                 memberBenefit: (d.data().memberBenefit as ActivityMemberBenefit | undefined) ?? undefined,
+                durationBenefits: Array.isArray(d.data().durationBenefits)
+                  ? (d.data().durationBenefits as ActivityDurationBenefit[])
+                  : undefined,
               }) as ActivityEntry
           )
           .filter((a) => a.name)
@@ -2158,6 +2258,230 @@ function PlacesBlock({ section, ctx }: { section: PlacesSection; ctx: RenderCtx 
   )
 }
 
+// ─── Features (highlight cards) ──────────────────────────────────────────────
+
+function FeaturesBlock({ section, ctx }: { section: FeaturesSection; ctx: RenderCtx }) {
+  const { palette } = ctx
+  const items = section.items ?? []
+  if (items.length === 0) return null
+  const cols = section.columns ?? 3
+  const gridCols =
+    cols === 2 ? 'sm:grid-cols-2' : cols === 4 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'
+  return (
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-5xl px-6">
+        <Heading text={section.heading} palette={palette} />
+        {section.subheading && (
+          <p className="mt-3 text-center text-lg" style={{ color: palette.muted }}>
+            {section.subheading}
+          </p>
+        )}
+        <div className={`mt-10 grid grid-cols-1 gap-4 ${gridCols}`}>
+          {items.map((item, i) => (
+            <div
+              key={i}
+              className="rounded-xl border p-5 shadow-sm"
+              style={{ background: palette.surface, borderColor: palette.border }}
+            >
+              {item.icon && (
+                <span
+                  className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg"
+                  style={{ background: `${palette.accent}1a`, color: palette.accent }}
+                >
+                  <DynamicIcon name={item.icon} className="h-5 w-5" />
+                </span>
+              )}
+              <h3 className="text-base font-semibold" style={{ color: palette.text }}>
+                {item.title}
+              </h3>
+              {item.text && (
+                <p className="mt-1.5 text-sm" style={{ color: palette.muted }}>
+                  {item.text}
+                </p>
+              )}
+              {item.linkLabel && item.linkUrl && (
+                <a
+                  {...linkProps(item.linkUrl, ctx.preview, true)}
+                  className="mt-3 inline-flex items-center gap-1 text-sm font-medium"
+                  style={{ color: palette.accent }}
+                >
+                  {item.linkLabel}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── CTA banner (one centred card) ───────────────────────────────────────────
+
+function CtaBannerBlock({ section, ctx }: { section: CtaBannerSection; ctx: RenderCtx }) {
+  const { palette, slug, locale, preview } = ctx
+  const href = ctaHref(section.cta, slug, locale)
+  return (
+    <section id={section.id} className="py-16" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-3xl px-6">
+        <div
+          className="rounded-2xl border px-6 py-10 text-center shadow-sm @2xl:px-12"
+          style={{ background: palette.surface, borderColor: palette.border }}
+        >
+          <h2 className="text-2xl font-bold tracking-tight @2xl:text-3xl" style={{ color: palette.text }}>
+            {section.heading}
+          </h2>
+          {section.text && (
+            <p className="mx-auto mt-3 max-w-xl text-base" style={{ color: palette.muted }}>
+              {section.text}
+            </p>
+          )}
+          {section.cta?.label && (
+            <div className="mt-7">
+              <a
+                {...(section.cta.action === 'booking'
+                  ? bookProps(href, ctx, { kind: 'root' })
+                  : linkProps(href, preview, section.cta.action === 'url'))}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full px-8 py-3.5 text-base font-semibold shadow-lg transition-transform hover:scale-[1.02] sm:w-auto sm:min-w-[16rem]"
+                style={{ background: palette.accent, color: palette.onAccent }}
+              >
+                {section.cta.label}
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── FAQ (accordion) ─────────────────────────────────────────────────────────
+
+function FaqBlock({ section, ctx }: { section: FaqSection; ctx: RenderCtx }) {
+  const { palette } = ctx
+  const items = section.items ?? []
+  // The first row opens by default, so the section is never a wall of closed
+  // bars a visitor has to probe to know it has content.
+  const [open, setOpen] = useState(0)
+  if (items.length === 0) return null
+  return (
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-3xl px-6">
+        <Heading text={section.heading} palette={palette} />
+        <div className="mt-8 space-y-2">
+          {items.map((item, i) => {
+            const isOpen = open === i
+            return (
+              <div
+                key={i}
+                className="overflow-hidden rounded-xl border shadow-sm"
+                style={{ background: palette.surface, borderColor: palette.border }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpen(isOpen ? -1 : i)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left"
+                >
+                  <span className="text-sm font-semibold" style={{ color: palette.text }}>
+                    {item.question}
+                  </span>
+                  {isOpen ? (
+                    <Minus className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
+                  ) : (
+                    <Plus className="h-4 w-4 shrink-0" style={{ color: palette.muted }} />
+                  )}
+                </button>
+                {isOpen && (
+                  <p
+                    className="whitespace-pre-line px-4 pb-4 text-sm leading-relaxed"
+                    style={{ color: palette.muted }}
+                  >
+                    {item.answer}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Testimonials (one card, stepped with chevrons) ──────────────────────────
+
+function TestimonialsBlock({ section, ctx }: { section: TestimonialsSection; ctx: RenderCtx }) {
+  const { palette } = ctx
+  const items = section.items ?? []
+  const [i, setI] = useState(0)
+  if (items.length === 0) return null
+  const item = items[Math.min(i, items.length - 1)]
+  const step = (d: number) => setI((n) => (n + d + items.length) % items.length)
+  const many = items.length > 1
+  return (
+    <section id={section.id} className="py-20" style={{ background: palette.bg }}>
+      <div className="mx-auto max-w-3xl px-6">
+        <Heading text={section.heading} palette={palette} />
+        <div className="mt-8 flex items-center gap-3">
+          {many && (
+            <button
+              type="button"
+              aria-label="Previous"
+              onClick={() => step(-1)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-opacity hover:opacity-70"
+              style={{ borderColor: palette.border, color: palette.muted }}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div
+            className="flex-1 rounded-2xl border px-6 py-8 text-center shadow-sm"
+            style={{ background: palette.surface, borderColor: palette.border }}
+          >
+            <Quote className="mx-auto h-6 w-6" style={{ color: palette.accent }} />
+            <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed" style={{ color: palette.text }}>
+              {item.feedback}
+            </p>
+            <p className="mt-4 text-sm font-semibold" style={{ color: palette.text }}>
+              {item.name}
+            </p>
+            {item.activity && (
+              <p className="text-xs" style={{ color: palette.muted }}>
+                {item.activity}
+              </p>
+            )}
+          </div>
+          {many && (
+            <button
+              type="button"
+              aria-label="Next"
+              onClick={() => step(1)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-opacity hover:opacity-70"
+              style={{ borderColor: palette.border, color: palette.muted }}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+        {many && (
+          <div className="mt-4 flex justify-center gap-1.5">
+            {items.map((_, n) => (
+              <span
+                key={n}
+                className="h-1.5 w-1.5 rounded-full transition-colors"
+                style={{ background: n === i ? palette.accent : palette.border }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ─── dispatcher ───────────────────────────────────────────────────────────────
 
 export function SectionBlock({
@@ -2185,6 +2509,14 @@ export function SectionBlock({
       return <ContactBlock section={section} ctx={ctx} />
     case 'places':
       return <PlacesBlock section={section} ctx={ctx} />
+    case 'features':
+      return <FeaturesBlock section={section} ctx={ctx} />
+    case 'cta_banner':
+      return <CtaBannerBlock section={section} ctx={ctx} />
+    case 'faq':
+      return <FaqBlock section={section} ctx={ctx} />
+    case 'testimonials':
+      return <TestimonialsBlock section={section} ctx={ctx} />
     case 'clubs':
       return <ClubsBlock section={section} ctx={ctx} />
     case 'locations':
@@ -2219,6 +2551,14 @@ export function sectionNavLabel(section: WebsiteSection | OrgSiteSection, t: Sit
       return section.heading || t('navContact')
     case 'places':
       return section.heading || t('navLocations')
+    case 'features':
+      return section.heading || t('navFeatures')
+    case 'cta_banner':
+      return section.heading || t('navCta')
+    case 'faq':
+      return section.heading || t('navFaq')
+    case 'testimonials':
+      return section.heading || t('navTestimonials')
     case 'clubs':
       return section.heading || t('navClubs')
     case 'locations':

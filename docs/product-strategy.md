@@ -499,6 +499,7 @@ The platform should be modular, with these domains:
 | Goals & progress | Long-term goals, short-term tasks/homework, progress photos, bidirectional coach–client comment thread |
 | Resource sharing | File and link attachments per contact or coaching slot, accessible via bio link and mobile app |
 | Payments & Subscriptions | Recurring billing, session packages (class packs + coaching bundles), payment tracking |
+| Finance & accounting | Money journal + cash-basis double-entry ledger (finance plugin); studio-shaped accrual layer + asset register planned — see docs/finance-accrual.md |
 | Communication | Email / SMS / push notifications |
 | Automation engine | Triggers + workflows |
 | Gamification engine | Points, streaks, leaderboards, badges |
@@ -516,7 +517,13 @@ modules (gamification, referrals, courses, …) are gated by **plugin installati
 
 To avoid scope creep:
 
-* ❌ Full accounting system (defer or integrate externally)
+* ❌ Horizontal/statutory accounting suite — AR/AP & invoicing, VAT filing,
+  payroll, bank reconciliation, statutory exports stay external. ✅ In scope
+  instead: the studio-shaped finance layer — money journal, cash double-entry
+  ledger, and the planned accrual layer + asset register (docs/finance-accrual.md),
+  which feeds the fiduciary's tool rather than replacing it. (This line
+  originally read "Full accounting system"; the shipped finance plugin crossed
+  that wording, so the boundary is now drawn where it actually runs.)
 * ❌ Generic CRM features not tied to gym workflows
 * ❌ Over-complex reporting in early versions
 
@@ -544,7 +551,9 @@ Focus on: simplicity, speed, real gym use cases.
 4. Automations
 5. Gamification
 6. Org-level features
-7. APIs
+7. Finance v2 — accrual layer + asset register (post-launch adoptable by
+   design; see docs/finance-accrual.md for phasing)
+8. APIs
 
 ---
 

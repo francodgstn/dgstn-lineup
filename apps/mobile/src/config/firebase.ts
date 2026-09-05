@@ -28,6 +28,22 @@ const FUNCTIONS_REGION = 'europe-west6'; // Zurich, Switzerland
 const firebaseConfig = Constants.expoConfig?.extra?.firebase;
 const useEmulators = Constants.expoConfig?.extra?.useEmulators === true;
 
+/** Emulator ports for this checkout's port slot — resolved once, in
+ *  app.config.js, from EXPO_PUBLIC_*_EMULATOR_PORT (scripts/local-env.mjs
+ *  writes them to .env.local). The fallbacks are slot 0 / firebase.json. */
+const emulatorPorts: { firestore: number; auth: number; functions: number } = {
+  firestore: 8080,
+  auth: 9099,
+  functions: 5001,
+  ...(Constants.expoConfig?.extra?.emulatorPorts ?? {}),
+};
+
+/** The environment's web app origin (Space / admin) — set per environment in
+ *  app.config.js's `environments` map. Used to point a member at
+ *  `{webAppUrl}/public/{slug}/space` when their studio's plan does not
+ *  include the mobile app. */
+export const webAppUrl: string = Constants.expoConfig?.extra?.webAppUrl ?? 'https://app.linyup.com';
+
 if (!firebaseConfig) {
   throw new Error(
     'Firebase configuration not found. Ensure FIREBASE_* environment variables are set in eas.json or .env file.'
@@ -69,11 +85,12 @@ const functionsInstance = getFirebaseFunctions(app, FUNCTIONS_REGION);
 
 if (useEmulators) {
   const host = resolveEmulatorHost();
-  connectFirestoreEmulator(db, host, 8080);
-  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
-  connectFunctionsEmulator(functionsInstance, host, 5001);
-  // eslint-disable-next-line no-console
-  console.log(`[firebase] Using emulators at ${host} (firestore:8080, auth:9099, functions:5001)`);
+  connectFirestoreEmulator(db, host, emulatorPorts.firestore);
+  connectAuthEmulator(auth, `http://${host}:${emulatorPorts.auth}`, { disableWarnings: true });
+  connectFunctionsEmulator(functionsInstance, host, emulatorPorts.functions);
+  console.log(
+    `[firebase] Using emulators at ${host} (firestore:${emulatorPorts.firestore}, auth:${emulatorPorts.auth}, functions:${emulatorPorts.functions})`
+  );
 }
 
 /**

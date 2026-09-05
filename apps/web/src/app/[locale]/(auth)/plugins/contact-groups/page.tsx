@@ -29,6 +29,7 @@ import {
 } from '@/plugins/contact-groups/hooks'
 import type { GroupTreeNode } from '@/plugins/contact-groups/hooks'
 import { GroupRuleDialog, stashRuleForContactsPage } from '@/plugins/contact-groups/GroupRuleDialog'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,12 +69,14 @@ function useActiveContacts(teamId: string | null) {
 // ─── create / rename dialog ───────────────────────────────────────────────────
 
 function GroupFormDialog({
-  open, onOpenChange, title, initialName, initialColor, onSubmit,
+  open, onOpenChange, title, initialName, initialColor, isCreate, onSubmit,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void
   title: string
   initialName?: string
   initialColor?: string | null
+  /** Create, not edit — only then is the dynamic-group route worth offering. */
+  isCreate?: boolean
   onSubmit: (name: string, color: string | null) => Promise<void>
 }) {
   const t = useTranslations('ContactGroups')
@@ -125,6 +128,28 @@ function GroupFormDialog({
               ))}
             </div>
           </div>
+          {/* THE OTHER KIND OF GROUP, named where you'd look for it.
+              A dynamic group cannot be created here — its membership IS a
+              contact filter, so it can only be born from one, and the entry
+              point sits inside the saved-filters popover on the Contacts page.
+              Nothing on this page said so, which left this form quietly unable
+              to make half of what "group" means, with no explanation.
+              Create only: when editing an existing group this is just noise. */}
+          {isCreate && (
+            <div className="rounded-lg border border-dashed p-3 space-y-2">
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Zap className="h-3.5 w-3.5 shrink-0 text-violet-500 mt-px" />
+                <span>{t('dynamicHint')}</span>
+              </p>
+              <Link
+                href={'/contacts' as Route}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                {t('dynamicHintCta')}
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <button onClick={() => onOpenChange(false)}
@@ -646,11 +671,13 @@ export default function ContactGroupsPage() {
                         <FolderPlus className="h-4 w-4" />
                       </GroupPickerPopover>
                       {removable && (
-                        <button type="button" onClick={() => removeMember(c.id)}
-                          className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
-                          title={t('removeMember')}>
-                          <X className="h-4 w-4" />
-                        </button>
+                        <Tip label={t('removeMember')}>
+                          <button type="button" onClick={() => removeMember(c.id)}
+                            className="p-1.5 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+                            aria-label={t('removeMember')}>
+                            <X className="h-4 w-4" />
+                          </button>
+                        </Tip>
                       )}
                     </div>
                   )
@@ -670,6 +697,7 @@ export default function ContactGroupsPage() {
           : formMode?.parent
             ? t('newSubgroupTitle', { name: formMode.parent.name })
             : t('newGroupTitle')}
+        isCreate={formMode?.kind !== 'edit'}
         initialName={formMode?.kind === 'edit' ? formMode.group.name : ''}
         initialColor={formMode?.kind === 'edit' ? formMode.group.color ?? null : null}
         onSubmit={handleFormSubmit}

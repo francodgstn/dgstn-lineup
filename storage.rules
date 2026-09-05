@@ -38,9 +38,18 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/courses/$(courseId)).data.accessRule.type == 'free';
     }
 
-    // The calling contact session's single active subscription type id.
+    // The calling contact session's active subscription type id, or '' once the
+    // grant that carried it has lapsed. Same rule as `planGrantCurrent` in
+    // firestore.rules and `planGrantIsCurrent` in @linyup/shared — media must
+    // stop opening at exactly the moment the lesson does, or the object store
+    // becomes the way around the tier check (which is why this function exists
+    // at all). The `== null` guard is required: the field is written explicitly
+    // as null whenever a grant has no end of its own.
     function callerCourseSubTypeId() {
-      return firestore.get(/databases/(default)/documents/contacts/$(request.auth.token.contactId)).data.get('subscription_type_id', '');
+      let d = firestore.get(/databases/(default)/documents/contacts/$(request.auth.token.contactId)).data;
+      return (d.get('subscription_expires_at', null) == null || d.subscription_expires_at > request.time)
+        ? d.get('subscription_type_id', '')
+        : '';
     }
     // Whether the calling contact bought this course (lifetime entitlement).
     function contactPurchasedCourse(courseId) {

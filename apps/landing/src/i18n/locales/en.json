@@ -370,7 +370,7 @@
     "cmpAddon": "Add-on",
     "cmpLimited": "Limited",
     "cmpAutomationsNote": "Free & Coach: limited to your active modules & add-ons. Studio unlocks the full suite.",
-    "cmpWebsiteNote": "Includes embeddable sections you can drop into your existing website.",
+    "cmpWebsiteNote": "Includes embeddable sections you can drop into your existing website. Auto-translated into English, German, French and Italian.",
     "cmpSubscriptionsNote": "Rich pricing options: duration, credits and recurrence.",
     "cmpSoon": "Soon",
     "free": {
@@ -450,16 +450,16 @@
         "body": "Accept the methods Swiss customers actually use — including recurring subscriptions on TWINT."
       }
     },
-    "proof": "A subscription paid by TWINT on the Studio tier costs about 2% all-in — roughly half what card-only international tools charge.",
+    "proof": "A subscription paid by TWINT on the Studio tier costs roughly half what card-only international tools charge.",
     "cta": "Start for free",
     "feesTitle": "Payment fees, in plain sight",
     "feesIntro": "Charged on top of Stripe's standard fee, which we pass through at cost. Percentage only — no fixed per-transaction Linyup fee. Same rate on cards and TWINT.",
     "feesPlanHead": "Plan",
     "feesFeeHead": "Linyup payment fee",
-    "feeFree": "1.7%",
-    "feeCoach": "1.2%",
-    "feeStudio": "0.7%",
-    "feeOrg": "from 0.4%",
+    "feeFree": "2.5%",
+    "feeCoach": "1.5%",
+    "feeStudio": "0.8%",
+    "feeOrg": "from 0.5%",
     "feeOrgNote": "volume discounts available",
     "feesMicrocopy": "You see exactly what you pay: Stripe's processing fee at cost, plus a small Linyup percentage on the payments you take. No fixed per-transaction fee, no markup on Stripe's cut."
   },

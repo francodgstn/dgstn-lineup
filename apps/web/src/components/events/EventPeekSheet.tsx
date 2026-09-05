@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { EVENTS_COLLECTION } from '@linyup/shared'
 import type { Event } from '@linyup/shared'
 import type { Route } from 'next'
+import { Tip } from '@/components/ui/tip'
 
 // Matches the event-type palette used in SessionsCalendar
 const EVENT_TYPE_COLOR: Record<string, string> = {
@@ -145,23 +146,27 @@ export function EventPeekSheet({ eventId, onClose, onEdit, onDelete }: EventPeek
                 </div>
                 {/* Action icons in the header — visible immediately without scrolling */}
                 <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onEdit(event)}
-                    title={t('peekEdit')}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => onDelete(event)}
-                    title={t('peekDelete')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <Tip label={t('peekEdit')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onEdit(event)}
+                      aria-label={t('peekEdit')}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tip>
+                  <Tip label={t('peekDelete')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => onDelete(event)}
+                      aria-label={t('peekDelete')}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </Tip>
                 </div>
               </div>
               <div className="space-y-1.5 text-sm text-muted-foreground mt-1">

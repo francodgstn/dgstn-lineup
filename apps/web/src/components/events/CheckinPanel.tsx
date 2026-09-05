@@ -39,6 +39,7 @@ import { ExamCheckinForm } from './forms/ExamCheckinForm'
 import { PLUGIN_REGISTRY } from '@/plugins/registry'
 import { pluginSlot } from '@/plugins/slots'
 import type { ComponentType } from 'react'
+import { Tip } from '@/components/ui/tip'
 
 interface PluginCheckinFormProps {
   contact: Contact
@@ -702,17 +703,19 @@ export function CheckinPanel({
                 ) : (
                   <Badge variant="secondary" className="text-xs text-amber-600 border-amber-200 bg-amber-50">{t('statusPending')}</Badge>
                 )}
-                <button
-                  onClick={(e) => toggleComplete(checkin, e)}
-                  className={`p-1.5 rounded-full border transition-colors ${
-                    checkin.is_completed
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'border-border hover:bg-muted'
-                  }`}
-                  title={checkin.is_completed ? t('markPending') : t('markConfirmed')}
-                >
-                  <Check className="h-3 w-3" />
-                </button>
+                <Tip label={checkin.is_completed ? t('markPending') : t('markConfirmed')}>
+                  <button
+                    onClick={(e) => toggleComplete(checkin, e)}
+                    className={`p-1.5 rounded-full border transition-colors ${
+                      checkin.is_completed
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                    aria-label={checkin.is_completed ? t('markPending') : t('markConfirmed')}
+                  >
+                    <Check className="h-3 w-3" />
+                  </button>
+                </Tip>
               </div>
             </div>
           ))}

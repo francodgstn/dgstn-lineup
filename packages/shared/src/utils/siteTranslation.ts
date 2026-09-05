@@ -142,8 +142,22 @@ const SECTION_TEXT_PROPS: ReadonlyArray<{ prop: string; format: 'plain' | 'html'
   { prop: 'subheading', format: 'plain' },
   { prop: 'ctaLabel', format: 'plain' },
   { prop: 'hours', format: 'plain' },
+  // The CTA-banner body line. Only that section carries a top-level `text`; the
+  // per-item `text` (a feature card) is bound by index below, not here.
+  { prop: 'text', format: 'plain' },
   { prop: 'body', format: 'html' },
 ]
+
+/**
+ * The translatable text fields on a section's `items[]`, by section type. A
+ * person's `name` is deliberately absent — a testimonial's name is not
+ * translated, any more than the studio's own name is.
+ */
+const SECTION_ITEM_TEXT_PROPS: Record<string, readonly string[]> = {
+  features: ['title', 'text', 'linkLabel'],
+  faq: ['question', 'answer'],
+  testimonials: ['activity', 'feedback'],
+}
 
 function propBinding(
   target: Record<string, unknown>,
@@ -181,6 +195,22 @@ function sectionBindings(section: AnySection): UnitBinding[] {
         bindings.push(
           propBinding(image as Record<string, unknown>, `${prefix}cap.${index}`, 'caption', 'plain')
         )
+      }
+    })
+  }
+  // Repeatable items — features, FAQ, testimonials. Each field index-keyed so a
+  // reorder in the editor cannot silently rebind one item's text onto another's
+  // (the staleness guard would drop it, but the key makes the intent explicit).
+  const itemFields = SECTION_ITEM_TEXT_PROPS[(section as { type?: string }).type ?? '']
+  const items = s['items']
+  if (itemFields && Array.isArray(items)) {
+    items.forEach((item, index) => {
+      if (item && typeof item === 'object') {
+        for (const field of itemFields) {
+          bindings.push(
+            propBinding(item as Record<string, unknown>, `${prefix}item.${index}.${field}`, field, 'plain')
+          )
+        }
       }
     })
   }

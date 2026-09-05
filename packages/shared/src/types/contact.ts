@@ -114,6 +114,29 @@ export interface EmergencyContact {
 // `email`). Shared by the admin editor + the login callable.
 export const MAX_CONTACT_LOGIN_EMAILS = 5
 
+/**
+ * Telemetry the mobile (Expo) app writes to ITS OWN contact document on
+ * foreground — app + OTA runtime versions, so a studio/operator can tell what
+ * a contact is actually running without a support round-trip. Written by
+ * nobody else; read by nobody yet (a future support/diagnostics surface).
+ *
+ * Self-writable under `firestore.rules`' contact self-update arm, alongside
+ * `weight`/`last_seen_at` — see that rule for the exact field list this must
+ * stay in sync with.
+ */
+export interface MobileAppTelemetry {
+  /** App version (e.g. from `expo-application`). */
+  version?: string
+  /** Expo Updates runtime version. */
+  ota_runtime_version?: string | null
+  /** Expo Updates release channel. */
+  ota_channel?: string | null
+  /** True when running the build's embedded update (no OTA has applied yet). */
+  ota_is_embedded?: boolean | null
+  /** The applied Expo Updates update id, when not embedded. */
+  ota_update_id?: string | null
+}
+
 export interface Contact {
   id: string
   teamId: string
@@ -271,6 +294,22 @@ export interface Contact {
   // Matching on subscription_type_id instead would strip a renewal of the same
   // plan when an older payment for it is refunded.
   subscription_source_ref?: string | null
+  // When the fields above stop covering the member, or null/absent for "no end
+  // of its own". Set ONLY by a one_time price carrying `included_months` — the
+  // "CHF 100, 2 months included" shape, which has no renewal to end it.
+  //
+  // ENFORCED LAZILY, BY COMPARISON, NEVER BY A JOB: `planGrantIsCurrent`
+  // (types/activity.ts) is the ONE predicate, and every reader that decides
+  // coverage calls it. There is no sweep to clear this field and no event when
+  // it passes — which is exactly why nothing may treat the field's PRESENCE as
+  // the fact. The fact is the comparison.
+  //
+  // The consequence worth knowing: artifacts built from write EVENTS (the
+  // subscription-history row, the analytics rollups) do not close themselves
+  // when a grant lapses, because no write happens. The studio-facing answer is
+  // the `subscription_expires_in` automation condition, which reads this field
+  // on a scan rather than waiting for an event.
+  subscription_expires_at?: Timestamp | null
   // Contact-level rollup of member_subscriptions Stripe status (webhook-maintained).
   // 'none' when the contact holds no live subscription. See SubscriptionRollupStatus.
   subscription_status?: SubscriptionRollupStatus
@@ -319,6 +358,10 @@ export interface Contact {
 
   // Activity tracking
   last_seen_at?: Timestamp
+
+  // Mobile app telemetry — see MobileAppTelemetry's doc comment. Self-writable,
+  // same rules arm as last_seen_at above.
+  mobile_app?: MobileAppTelemetry
 
   // Alerts (denormalized count)
   alerts_count?: number
@@ -451,17 +494,58 @@ export interface SubscriptionPrice {
   id: string // client-generated; stable across edits
   amount: number // in the team default currency, e.g. 49.9
   recurrence: SubscriptionRecurrence
-  // For one_time prices: months of membership granted by the charge (e.g. an
-  // "intro offer: 100, 2 months incl." sets membership_expiration = now + 2 months).
-  // On a credit price, this is the pack's VALIDITY window (grant expiry).
+  // For one_time prices: months of access granted by the ONE charge — "CHF 100,
+  // 2 months included". Sets `Contact.subscription_expires_at` = now + N months,
+  // which is what ENDS the access (there is no renewal to end it, and no cron:
+  // every reader compares the stamp lazily — see `subscriptionGrantIsCurrent`).
+  // On a credit price, this is instead the pack's VALIDITY window (grant expiry).
   included_months?: number
   // Credit pack (one_time only): the purchase grants this many lesson credits,
   // decremented by bookSession on credit-gated activities. Materialized as a
   // CreditGrant under contacts/{id}/credit_grants by the Connect webhook /
   // grantCredits callable. Absent ⇒ a plain time-based price.
   credits?: number
+  // How many times ONE contact may buy this price — "the 2-month intro is a
+  // once-per-person offer". Absent = unlimited, which stays the default for
+  // every price that does not say otherwise.
+  //
+  // It is authored per PRICE, not per plan, because that is the grain the studio
+  // means: a plan may sell a monthly recurring price (you subscribe to it, you
+  // do not buy it repeatedly) beside a one-off intro price that must not be
+  // bought twice. The editor therefore offers it on one_time prices only, and a
+  // recurring price is never counted — a re-subscription is governed by the
+  // already-holds-this-type refusal in `createMembershipCheckout` instead.
+  //
+  // Counted from the `plan_purchases` ledger (doc id = the payment ref, so a
+  // retried webhook cannot inflate it) and ENFORCED on the self-service rail
+  // only. Manager rails record a purchase but are never refused by it — a studio
+  // selling the same offer again is exercising judgement, not making a mistake.
+  maxPurchasesPerContact?: number
   label?: string // optional, e.g. "Intro offer"
   active?: boolean // default true; inactive prices are hidden from the table + assignment
+}
+
+// ─── plan purchases (contacts/{contactId}/plan_purchases/{paymentRef}) ────────
+// One row per COMPLETED purchase of a subscription price by this contact. It
+// exists to answer exactly one question — "how many times has she bought this
+// price?" — for `SubscriptionPrice.maxPurchasesPerContact`.
+//
+// THE DOC ID IS THE PAYMENT REF, and that is the whole idempotency story: the
+// Connect webhook can deliver the same purchase through more than one event, and
+// a `create()` on a ref that already exists is a no-op rather than a second row.
+// Never key this by contact+price (that cannot express two legitimate purchases)
+// and never count it with an incrementing field (see the ONE-writer rule in
+// CLAUDE.md — this collection has no counter to contend over).
+export interface PlanPurchase {
+  id: string // = the payment ref that produced it
+  teamId: string
+  subscription_type_id: string
+  price_id: string
+  /** Major units, as charged — descriptive; nothing decides on it. */
+  amount?: number | null
+  /** Which rail recorded it: 'stripe_connect' | 'manual' | 'payrexx' | … */
+  source: string
+  created_at?: Timestamp
 }
 
 // ─── lesson credits (contacts/{id}/credit_grants) ─────────────────────────────
@@ -537,8 +621,15 @@ export interface SubscriptionUsageLimit {
 }
 
 // ─── intro offer ("first 3 months at CHF 1, then the full price") ─────────────
-// A property of the PLAN, and — this is the load-bearing part — a property of
-// the CHECKOUT, never of a price. It is NOT an arm of resolvePaymentOptions:
+// ONE offer PER PRICE — a plan that sells a monthly and an annual price can put
+// a different opener on each, which is the shape studios actually price in
+// ("first 3 months at 29, or your first year at 490"). The plan-level singular
+// (`introOffer`) came first and is still read: `introOffersOf` normalises the
+// two, so no stored document needs rewriting and no reader needs to know which
+// shape it is looking at.
+//
+// It is a property of the CHECKOUT, never of the price's own amount. It is NOT
+// an arm of resolvePaymentOptions:
 // that resolver returns ONE amount, and an intro offer is a SCHEDULE (an amount
 // AND how many periods it survives). The single-amount contract is exactly why
 // memberships were left out of the promo rails, and expressing this as a lower
@@ -582,12 +673,16 @@ export interface SubscriptionType {
   // studio per attended visit (major units, team currency). Drives the
   // partner_visits payout ledger — see Phase E1 of the pricing initiative.
   payoutPerVisit?: number
-  // ONE intro offer per plan, naming one of its own recurring prices. Absent /
-  // null = no offer. Never trusted as written: every reader resolves it through
-  // `resolveIntroOffer` (shared/utils/introOffer.ts), which returns null for
-  // anything Stripe cannot express — so an unsellable offer is invisible on the
-  // card AND unapplied at checkout, rather than promised in one place and
-  // charged in another.
+  // Intro offers, at most one per recurring price of this plan. Never trusted as
+  // written: every reader resolves through `resolveIntroOffer`
+  // (shared/utils/introOffer.ts), which returns null for anything Stripe cannot
+  // express — so an unsellable offer is invisible on the card AND unapplied at
+  // checkout, rather than promised in one place and charged in another.
+  introOffers?: SubscriptionIntroOffer[]
+  // LEGACY: the single plan-level offer, written before an offer could be put on
+  // each price. Still read (via `introOffersOf`) and still written by the editor
+  // as a deletion when it migrates a document forward. Never read it directly —
+  // a document may carry either shape.
   introOffer?: SubscriptionIntroOffer | null
 }
 
@@ -625,7 +720,17 @@ export function compareSubscriptionTypes(a: SubscriptionType, b: SubscriptionTyp
 }
 
 // ─── subscription history (contacts/{id}/subscription_history) ────────────────
-
+//
+// The ONLY store of a contact's plan PERIODS (`[start_date, end_date)`),
+// maintained SOLELY by `onContactSubscriptionChange`
+// (`packages/functions/src/sync/`) — Firestore rules deny client `create`/
+// `update` (a team member may still `delete` a row; see `firestore.rules`).
+//
+// ABSENT `end_date` MEANS OPEN, same as `null` — the reconciler
+// (`resolveHeldPlans` + `planSubscriptionHistory`,
+// `@linyup/shared/utils/subscriptionHistory`) treats the two identically, and a
+// row is only ever OPEN when it also carries a `start_date` (the mitigation for
+// a malformed/legacy row being read as an open track forever).
 export interface SubscriptionHistoryEntry {
   id: string
   subscription_type_id?: string
@@ -636,20 +741,54 @@ export interface SubscriptionHistoryEntry {
   start_date?: Timestamp
   end_date?: Timestamp | null
   termination_reason?: string
+  /** Never written by the reconciler on close — see its module header. Present
+   *  only where something else (a future manual editor) sets it. */
+  notes?: string | null
   created_at?: Timestamp
   created_by?: string
+  updated_at?: Timestamp
 }
 
 // ─── contact alert (contacts/{id}/contact_alerts) ─────────────────────────────
+//
+// THREE SCHEDULE KINDS, and `always` is not a degenerate case of the other two.
+//
+//   sessions_countdown — fires once the contact has reached N total sessions.
+//   datetime           — fires once an instant has passed.
+//   always             — fires on creation and stays fired until archived.
+//
+// `always` exists because "active from the moment I wrote it" was previously
+// only expressible by faking one of the other two, and both fakes are wrong:
+// a `datetime` of today is an INSTANT, which the mobile reader only surfaces
+// for a ±7 day window, so an alert meant to stand until dealt with quietly
+// stops showing; and `sessions_countdown: 0` is unreachable from the forms
+// (both enforce min 1) and would read as "0 sessions remaining" to the mobile
+// predicate. The end of an `always` alert is `archived_at`, which already
+// exists and which `trackContactAlerts` already respects.
+//
+// `schedule_value` is NOT narrowed by `schedule_type` — the pair predates the
+// union and is persisted in thousands of documents. Never read it directly:
+// `alertScheduleValue()` in `utils/contactAlerts.ts` narrows it in one place,
+// and `alertIsFired()` is the ONLY predicate that decides a alert has fired.
 
-export type AlertScheduleType = 'sessions_countdown' | 'datetime'
+export type AlertScheduleType = 'sessions_countdown' | 'datetime' | 'always'
 
 export interface ContactAlert {
   id: string
   schedule_type: AlertScheduleType
-  schedule_value: number | Timestamp
+  /** Sessions (number) for `sessions_countdown`, an instant for `datetime`,
+   *  and unused for `always`. Narrow it with `alertScheduleValue()`. */
+  schedule_value: number | Timestamp | null
   message: string
   show_in_app?: boolean
+  /** Freeform origin tag, read by the mobile AlertsCard to pick an icon — NOT
+   *  narrowed by a shared union: writers pick their own string ('automation',
+   *  'booking' today — see automationEngine.ts and booking/index.ts) and a
+   *  reader with no icon for an unrecognised value just shows the default.
+   *  Absent on alerts written before this field existed. */
+  alert_type?: string
+  /** Set = dismissed. The only end an `always` alert has, and the reason
+   *  `trackContactAlerts` counts non-archived rows only. */
   archived_at?: Timestamp | null
   created_at?: Timestamp
 }

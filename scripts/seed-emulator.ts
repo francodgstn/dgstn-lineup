@@ -125,8 +125,11 @@ import {
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
 import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { partnerAppNames } from './lib/partnerApps'
+import { printMemberAppLogin, seedMobileSettings, seedReviewTenant } from './lib/mobile'
 
 admin.initializeApp({ projectId: 'demo-linyup' })
 
@@ -849,24 +852,39 @@ async function seedTeam(opts: {
 
   // ── appointment activity ────────────────────────────────────────────────────────
   // The WHAT of an appointment: its name, the lengths it can be booked at (with
-  // their prices) and the ONE member-benefit rule. No access rule — the price is
+  // their prices) and one member rule PER LENGTH. No access rule — the price is
   // the gate. The availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
   const appointmentActName = plan === 'coach' ? 'Personal Training' : '1-on-1 Coaching'
-  // Per-duration BASE pricing (major units, CHF). The member benefit is ONE rule
-  // for the whole activity (`Activity.memberBenefit`, never per duration): the
-  // top tier has every priced duration INCLUDED (holders book free via the free
-  // path); every other subscription pays base — the benefit is explicit data,
-  // never implied. This seed demos `kind: 'included'`; seed-sandbox demos
-  // `kind: 'discount'`.
+  // Per-duration BASE pricing (major units, CHF), and ONE MEMBER RULE PER
+  // LENGTH (`Activity.durationBenefits`). The rule is per length because the
+  // price is: a single activity-wide rule could not say "the short one is
+  // included, the long one is cheaper", and could not express a fixed member
+  // price at all (one amount cannot be right for 30 and 60 minutes alike).
+  //
+  // THE SEEDS DEMO DIFFERENT EFFECTS ON PURPOSE, so a click-through meets each
+  // of them: this one gives the top tier the 30-minute session free and the
+  // 60-minute one at a flat member price of 60 (base 85). The legacy
+  // `memberBenefit` is deliberately NOT written anywhere here — its fallback is
+  // covered by a unit test, not by seed data a studio might mistake for the
+  // shape the product writes today.
   const appointmentDurations = [
     { minutes: 30, priceAmount: 45 },
     { minutes: 60, priceAmount: 85 },
   ]
-  const appointmentMemberBenefit = {
-    subscriptionTypeIds: [plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`],
-    kind: 'included',
-  }
+  const appointmentTopTier =
+    plan === 'coach' ? `${teamId}-sub-monthly` : `${teamId}-sub-elite`
+  const appointmentDurationBenefits = [
+    { minutes: 30, benefit: { subscriptionTypeIds: [appointmentTopTier], effect: 'included' } },
+    {
+      minutes: 60,
+      benefit: {
+        subscriptionTypeIds: [appointmentTopTier],
+        effect: 'fixed_price',
+        amount: 60,
+      },
+    },
+  ]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -879,7 +897,7 @@ async function seedTeam(opts: {
       providerId: uid,
       providerName: displayName,
       durations: appointmentDurations,
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
@@ -902,14 +920,15 @@ async function seedTeam(opts: {
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
-      // both mirrored verbatim, exactly as syncActivityPublicProfile does
-      // (public-safe: the subscription-type ids are already public in the shop).
+      // Duration menu ("from CHF 45" on public cards) + the per-length member
+      // rules, both mirrored verbatim, exactly as syncActivityPublicProfile
+      // does (public-safe: the subscription-type ids are already public in the
+      // shop).
       durations: appointmentDurations.map((d) => ({
         minutes: d.minutes,
         priceAmount: d.priceAmount ?? null,
       })),
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ──────────
@@ -1434,51 +1453,9 @@ async function seedTeam(opts: {
     }
   }
 
-  // ── subscription history ───────────────────────────────────────────────────
-  for (let i = 0; i < contactSeeds.length; i++) {
-    const subAssign = contactSubRank[i] ?? null
-    if (!subAssign) continue
-    const contactId = `${teamId}-contact-${i.toString().padStart(3, '0')}`
-    const startedAt = daysFromNow(-Math.floor(Math.random() * 90) - 30)
-    // Closed previous entry for some contacts (realistic history)
-    if (i < 4) {
-      const prevStartedAt = daysFromNow(-Math.floor(Math.random() * 120) - 90)
-      const prevEndedAt = new Date(startedAt.getTime() - 1)
-      await db
-        .collection('contacts')
-        .doc(contactId)
-        .collection('subscription_history')
-        .doc(`${contactId}-sub-prev`)
-        .set({
-          subscription_type_id: subAssign.subId,
-          subscription_type_name: subAssign.subName,
-          recurrence: subAssign.recurrence,
-          ...(subAssign.priceId
-            ? { subscription_price_id: subAssign.priceId, amount: subAssign.amount }
-            : {}),
-          start_date: ts(prevStartedAt),
-          end_date: ts(prevEndedAt),
-          created_at: ts(prevStartedAt),
-        })
-    }
-    // Current open entry
-    await db
-      .collection('contacts')
-      .doc(contactId)
-      .collection('subscription_history')
-      .doc(`${contactId}-sub-current`)
-      .set({
-        subscription_type_id: subAssign.subId,
-        subscription_type_name: subAssign.subName,
-        recurrence: subAssign.recurrence,
-        ...(subAssign.priceId
-          ? { subscription_price_id: subAssign.priceId, amount: subAssign.amount }
-          : {}),
-        start_date: ts(startedAt),
-        end_date: null,
-        created_at: ts(startedAt),
-      })
-  }
+  // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+  // (AFTER `seedTeamMoney`, which is what `active_subscriptions` — its
+  // multi-plan source — is read back from). See that call for why.
 
   // Past-session participants
   const studentContactIds = Array.from(
@@ -1641,6 +1618,11 @@ async function seedTeam(opts: {
   await seedContactAlerts({ teamId, vocabulary: 'martial_arts' })
 
   // ── goals & tasks (appointment data) ────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys:
+  // what a goal is about and how someone is doing are two vocabularies. A goal
+  // created FROM a weak axis carries `from_dimension` instead; nothing seeded
+  // here comes from one, because no check-ins are seeded.
   const goalDefs = [
     {
       title: 'Improve guard passing',
@@ -2138,6 +2120,11 @@ async function seedTeam(opts: {
   // inventing a membership for someone the studio never sold one to would put a
   // row on /payments that contradicts the contact's own profile.
   await seedTeamMoney({ teamId })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // ── the smaller cross-surface gaps (Phase 2 Lane 6) ────────────────────────
   // Each of these was a shipped feature with zero data behind it on every
@@ -2176,6 +2163,14 @@ async function seedTeam(opts: {
     await seedTeamSales({ teamId })
     await seedTeamFinance({ teamId, uid })
   }
+
+  // ── the asset register (Coach+, its OWN plugin) ─────────────────────────────
+  // Deliberately outside the studio-only branch above and UNCONDITIONAL: the
+  // register is included from Coach and stands alone, so a coach tenant must
+  // show one too — that tenant is the whole reason it stopped being a finance
+  // feature. Every team this function seeds is Coach or above by its own `plan`
+  // type, so there is no tier left to guard against.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents (a default feature on every plan, not a plugin) ────────────────
   await seedDocuments(teamId, teamSlug, teamName, uid)
@@ -3248,6 +3243,13 @@ async function main() {
   await seedStudioManager()
   await seedStudioCoach()
 
+  // The member app's test login: the SAME review studio production provisions
+  // from the console, plus its fixed sign-in code and the app's min-version
+  // policy. See scripts/lib/mobile.ts.
+  console.log('\n📱  Seeding the member-app review studio (linyup-demo)…')
+  const memberApp = await seedReviewTenant({ db, seededBy: 'seed-emulator' })
+  await seedMobileSettings({ db, seededBy: 'seed-emulator' })
+
   console.log('\n✅ Emulator seeded successfully!\n')
   console.log('   ┌─────────────────────┬──────────────────────┬──────────────┬────────────┐')
   console.log('   │ Plan                │ Email                │ Password     │ Status     │')
@@ -3260,6 +3262,7 @@ async function main() {
   console.log('   │ org admin           │ org@linyup.com       │ linyup123    │ active     │')
   console.log('   └─────────────────────┴──────────────────────┴──────────────┴────────────┘\n')
   console.log('   Organization: Titan Martial Arts Association (org@linyup.com is org admin)')
+  printMemberAppLogin(memberApp)
   console.log('   org@linyup.com is ALSO a manager of Iron Circle Gym — the two-studio')
   console.log('   login the scope switcher needs to be testable at all.')
   console.log('   Teams in org: Iron Circle Gym + Titan Combat Sports')

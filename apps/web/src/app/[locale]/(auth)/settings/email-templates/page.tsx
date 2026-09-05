@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TemplateEditor, type OutreachTemplate } from './TemplateEditor'
 import { templateDefault } from './templateDefaults'
 import { useConfirm } from '@/components/ui/confirm-dialog'
+import { Tip } from '@/components/ui/tip'
 
 export default function SettingsEmailTemplatesPage() {
   // Styled confirmation, replacing a browser `confirm()` (see confirm-dialog).
@@ -133,46 +134,54 @@ export default function SettingsEmailTemplatesPage() {
           <p className="text-xs text-muted-foreground truncate mt-0.5">{tmpl.subject}</p>
         </div>
         <div className="flex gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            title={ta('dialogs.templates.saveChanges')}
-            onClick={() => openEditor(tmpl)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            title={tCommon('duplicate')}
-            onClick={() => openDuplicate(tmpl)}
-          >
-            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-          </Button>
-          {def && (
+          <Tip label={ta('dialogs.templates.saveChanges')}>
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              title={t('reset')}
-              disabled={!modified}
-              onClick={() => onReset(tmpl)}
+              aria-label={ta('dialogs.templates.saveChanges')}
+              onClick={() => openEditor(tmpl)}
             >
-              <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
+          </Tip>
+          <Tip label={tCommon('duplicate')}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={tCommon('duplicate')}
+              onClick={() => openDuplicate(tmpl)}
+            >
+              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </Tip>
+          {def && (
+            <Tip label={t('reset')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t('reset')}
+                disabled={!modified}
+                onClick={() => onReset(tmpl)}
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </Tip>
           )}
           {!tmpl.system_key && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title={t('deactivate')}
-              onClick={() => onDeactivate(tmpl)}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
+            <Tip label={t('deactivate')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t('deactivate')}
+                onClick={() => onDeactivate(tmpl)}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            </Tip>
           )}
         </div>
       </div>

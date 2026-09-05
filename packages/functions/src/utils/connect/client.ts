@@ -582,8 +582,8 @@ export async function createSubscriptionCheckoutSession(params: {
  * object, and the refund above is then rejected while the same refund without
  * the flag succeeds.)
  *
- * A zero fee is not exotic. `computePlatformFee` floors, so at 70 bps any charge
- * under CHF 1.43 has always produced one — this refusal was reachable long
+ * A zero fee is not exotic. `computePlatformFee` floors, so at 80 bps any charge
+ * under CHF 1.25 has always produced one — this refusal was reachable long
  * before anything was comped, on any refund of a very small charge. A comped
  * tenant simply makes it EVERY refund rather than a rare one.
  *

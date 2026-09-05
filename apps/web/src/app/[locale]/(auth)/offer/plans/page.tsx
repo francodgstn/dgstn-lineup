@@ -1,13 +1,16 @@
+/**
+ * RETIRED — see the note on the activities page. The catalogue's Plans tab
+ * holds the same list plus the prices, the usage limit and the activity
+ * matcher, all of which this page could only link to.
+ *
+ * `?tab=affiliations` IS STILL HONOURED, as it was before: this was a two-tab
+ * hub, affiliations moved to their own destination, and that query string is in
+ * bookmarks and in the /offer/affiliations stub. Sending it on beats landing
+ * somebody on a list of plans they did not ask for.
+ */
 import { redirect } from 'next/navigation'
 import type { Route } from 'next'
-import { PlansTabs } from './PlansTabs'
 
-// Subscription plans.
-//
-// `?tab=affiliations` IS STILL HONOURED, as a redirect. This was a two-tab hub;
-// affiliations moved to their own destination, and that query string is in
-// bookmarks and in the /offer/affiliations stub. Sending it on beats rendering
-// subscriptions and quietly ignoring what the URL asked for.
 export const dynamic = 'force-dynamic'
 
 export default async function PlansPage({
@@ -17,12 +20,8 @@ export default async function PlansPage({
   params: Promise<{ locale: string }>
   searchParams: Promise<{ tab?: string }>
 }) {
+  const { locale } = await params
   const { tab } = await searchParams
-  if (tab === 'affiliations') {
-    // Locale-aware, like the other stubs: a bare path drops a non-English
-    // visitor into the English app under `localePrefix: 'as-needed'`.
-    const { locale } = await params
-    redirect((locale === 'en' ? '/affiliations' : `/${locale}/affiliations`) as Route)
-  }
-  return <PlansTabs />
+  const path = tab === 'affiliations' ? '/affiliations' : '/manage/offer?tab=plans'
+  redirect((locale === 'en' ? path : `/${locale}${path}`) as Route)
 }

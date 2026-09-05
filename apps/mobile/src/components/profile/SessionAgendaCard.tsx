@@ -4,6 +4,7 @@ import { Card, Icon, Text, useTheme, Button, ActivityIndicator, IconButton } fro
 import { SessionWithStatus, Contact } from '../../types';
 import { FirestoreService } from '../../services/firestore';
 import { waiverRefusal } from '../../utils/waiverRefusal';
+import { useTranslations } from '../../i18n';
 
 interface SessionAgendaCardProps {
   sessions: SessionWithStatus[];
@@ -14,11 +15,13 @@ interface SessionAgendaCardProps {
 
 export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, contact, onRefresh, onViewAll }) => {
   const theme = useTheme();
+  const t = useTranslations('Agenda');
+  const tWaiver = useTranslations('Waiver');
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
 
   const handleBook = async (session: SessionWithStatus) => {
     if (!contact?.id) {
-      Alert.alert('Error', 'Please sign in again to book.');
+      Alert.alert(t('errorTitle'), t('signInAgain'));
       return;
     }
 
@@ -29,7 +32,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
         teamId: session.teamId,
         sessionId: session.id,
       });
-      Alert.alert('Success', 'Session booked successfully!');
+      Alert.alert(t('successTitle'), t('bookedSuccess'));
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error(error);
@@ -40,20 +43,20 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
       // is a port), but it does have the refusal mapper written for exactly
       // this, and the same rail is gated server-side. So: name the document,
       // say who has to sign, and open the signing page when the server sent one.
-      const waiver = waiverRefusal(error, 'booking');
+      const waiver = waiverRefusal(tWaiver, error, 'booking');
       if (!waiver) {
-        Alert.alert('Error', 'Failed to book session. Please try again.');
+        Alert.alert(t('errorTitle'), t('bookFailed'));
         return;
       }
       if (waiver.signUrl) {
         const url = waiver.signUrl;
-        Alert.alert('Signature needed', waiver.message, [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open', onPress: () => { Linking.openURL(url).catch(() => undefined); } },
+        Alert.alert(t('signatureNeeded'), waiver.message, [
+          { text: t('notNow'), style: 'cancel' },
+          { text: t('open'), onPress: () => { Linking.openURL(url).catch(() => undefined); } },
         ]);
         return;
       }
-      Alert.alert('Signature needed', waiver.message);
+      Alert.alert(t('signatureNeeded'), waiver.message);
     } finally {
       setLoadingSessionId(null);
     }
@@ -67,12 +70,12 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
     }
 
     Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel your booking?',
+      t('cancelBookingTitle'),
+      t('cancelBookingConfirm'),
       [
-        { text: 'No', style: 'cancel' },
+        { text: t('no'), style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: t('yesCancel'),
           style: 'destructive',
           onPress: async () => {
             setLoadingSessionId(session.id);
@@ -81,12 +84,12 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
                 sessionId: session.id,
                 contactId: contact.id
               });
-              Alert.alert('Success', 'Booking cancelled.');
+              Alert.alert(t('successTitle'), t('cancelledSuccess'));
               if (onRefresh) onRefresh();
             } catch (error: any) {
               console.error('Cancel booking error:', error);
-              const message = error?.message || error?.code || 'Failed to cancel booking.';
-              Alert.alert('Error', message);
+              const message = error?.message || error?.code || t('cancelFailed');
+              Alert.alert(t('errorTitle'), message);
             } finally {
               setLoadingSessionId(null);
             }
@@ -102,7 +105,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
         <Card.Content style={styles.emptyState}>
           <Icon source="calendar-blank-outline" size={48} color={theme.colors.outline} />
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
-            No upcoming sessions scheduled.
+            {t('noUpcomingSessions')}
           </Text>
         </Card.Content>
       </Card>
@@ -155,11 +158,11 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
     if (now >= start && now <= end) currentStatus = 'ongoing' as any;
 
     const statusLabels: Record<string, string> = {
-      'attended': 'ATTENDED',
-      'not attended': 'MISSED',
-      'booked': 'BOOKED',
-      'book': 'AVAILABLE',
-      'ongoing': 'ONGOING'
+      'attended': t('statusAttended').toUpperCase(),
+      'not attended': t('statusMissed').toUpperCase(),
+      'booked': t('statusBooked').toUpperCase(),
+      'book': t('statusAvailable').toUpperCase(),
+      'ongoing': t('statusOngoing').toUpperCase()
     };
 
     const config = getStatusConfig(currentStatus);
@@ -182,7 +185,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
           style={styles.bookBtn}
           labelStyle={styles.btnLabel}
         >
-          Book
+          {t('bookButton')}
         </Button>
       );
     } else if (currentStatus === 'booked' && new Date(session.start) > new Date()) {
@@ -205,7 +208,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
        // Default status pill
        actionElement = (
         <View style={[styles.statusPill, { backgroundColor: config.bg }]}>
-          <Text variant="labelSmall" style={[styles.statusText, { color: config.text }]}>{statusLabels[currentStatus] || 'AVAILABLE'}</Text>
+          <Text variant="labelSmall" style={[styles.statusText, { color: config.text }]}>{statusLabels[currentStatus] || t('statusAvailable').toUpperCase()}</Text>
         </View>
        );
     }
@@ -219,7 +222,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
 
         <View style={styles.detailsSection}>
           <Text variant="titleMedium" style={[styles.className, { color: theme.colors.onSurface }]} numberOfLines={1}>
-            {session.activityName || 'Kickboxing Session'}
+            {session.activityName || t('sessionFallback')}
           </Text>
           <View style={styles.infoRow}>
             <Icon source="clock-outline" size={14} color={theme.colors.onSurfaceVariant} />
@@ -230,7 +233,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
           <View style={styles.infoRow}>
              <Icon source="map-marker-outline" size={14} color={theme.colors.onSurfaceVariant} />
              <Text variant="bodySmall" style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-               {session.locationName || 'Main Dojo'}
+               {session.location || t('studioFallback')}
              </Text>
           </View>
         </View>
@@ -246,8 +249,8 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text variant="titleLarge" style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Upcoming Classes</Text>
-        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>Next 3 sessions</Text>
+        <Text variant="titleLarge" style={[styles.headerTitle, { color: theme.colors.onSurface }]}>{t('upcomingClasses')}</Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.outline }}>{t('nextThreeSessions')}</Text>
       </View>
 
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
@@ -265,7 +268,7 @@ export const SessionAgendaCard: React.FC<SessionAgendaCardProps> = ({ sessions, 
               icon="calendar-month-outline"
               labelStyle={styles.viewAllLabel}
             >
-              View all classes
+              {t('viewAllClasses')}
             </Button>
           </Card.Actions>
         )}

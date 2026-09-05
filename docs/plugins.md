@@ -97,6 +97,53 @@ settings page, and HMD installs at org level.
 
 ---
 
+## Requirements — a plugin that needs another
+
+`PLUGIN_REQUIREMENTS` in `packages/shared/src/types/plugin-requirements.ts`:
+"installing A requires B". Today: `finance` requires `asset-register`, because
+the statement of assets is an accounting artifact over the register's records
+and the accrual phase's depreciation postings will read them.
+
+**A REQUIREMENT IS NOT A BUNDLE MEMBER**, and conflating the two is the way this
+area goes wrong. A member is hidden from every catalogue, owned by one
+container, stamped `installedByBundle`, and deleted when the container goes. A
+requirement is a first-class plugin a tenant discovers, installs and KEEPS on
+its own, which something else also happens to need. The bundle file rules itself
+out for this anyway: "a container is never an `addon`", and `finance` is one.
+
+**`reconcileRequirements` is the ONE writer** of a requirement install
+(`packages/functions/src/plugins/requirementsReconcile.ts`), riding the same two
+triggers as the bundle reconciler. It is a trigger and not the Install button
+because there are **five** writers of an install document — the marketplace's
+client `setDoc`, `activatePluginAddon`, `unlockPlugin`, `onTeamCreated`'s
+`DEFAULT_TEAM_PLUGINS`, and `bundleReconcile` — and finance reaches a Coach
+through `activatePluginAddon`, which never touches the client at all. A
+dependency implemented at the install button would be silently absent for
+exactly the tenants it matters most to.
+
+It reconciles **both directions** from whichever document changed: a requirer
+appearing materialises its requirements, and a requirement disappearing while a
+requirer is still active puts it back. Two loop breakers, mirroring the bundle
+reconciler: a plugin in neither side of the relation returns before any read,
+and an empty diff returns before committing.
+
+Three rules, each pinned by `packages/functions/src/plugins/requirements.test.ts`:
+
+- **A requirement is installed as an ORDINARY standalone install** — no
+  provenance stamp, and deliberately not `installedByBundle` (one writer of that
+  field, and reusing it would make a requirement deletable by a container it
+  does not belong to). It follows that **removing the requirer never removes the
+  requirement**: after the fact it is indistinguishable from one the tenant
+  chose, and it usually is.
+- **No cascade.** Removing a plugin something else needs is refused in the
+  marketplace, naming the requirer, with the confirm button disabled. That is
+  the honest version of what the reconciler would do anyway.
+- **A requirement is never a paid add-on and never gated above its requirer** —
+  the reconciler installs it for free and `firestore.rules` must admit that
+  install at the requirer's own tier.
+
+---
+
 ## Audience — discovery, never running
 
 `PluginAudience` + `pluginVisibleToTenant` keep one customer's name out of every
@@ -226,3 +273,8 @@ authenticated layout.
    `REMOVE_EFFECT_KEY`, because the default text promises the data is kept.
 5. To make it a bundle member: one line in `PLUGIN_BUNDLES`. Nothing else — the
    catalogues and the reconciler follow.
+6. To make another plugin depend on it: one line in `PLUGIN_REQUIREMENTS`.
+   Nothing else — `reconcileRequirements` and the marketplace's blocked-remove
+   follow. If its `minPlan` is below Studio, remember the
+   `CLIENT_INSTALLABLE_FROM` / `clientInstallableRank` pair (both, or the build
+   fails).

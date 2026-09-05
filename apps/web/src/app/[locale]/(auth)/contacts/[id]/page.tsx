@@ -1,7 +1,7 @@
 'use client'
 
 import { useConfirm } from '@/components/ui/confirm-dialog'
-import { useState, use, useMemo, useEffect } from 'react'
+import { useState, use, useMemo, useEffect, useCallback } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useRecentContacts } from '@/contexts/RecentContactsContext'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -39,6 +39,9 @@ import { FloatingSlot } from '@/components/layout/FloatingDock'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Segmented } from '@/components/ui/segmented'
+import { useSubscriptionHistory } from '@/hooks/useSubscriptionHistory'
+import { LedgerSegment } from './LedgerSegment'
 import {
   Dialog,
   DialogContent,
@@ -90,6 +93,10 @@ import {
   ALERT_PRESETS_SUBCOLLECTION,
   TEAM_ACTIVITY_LOG_SUBCOLLECTION,
   contactDeletionState,
+  readAlert,
+  alertIsFired,
+  planGrantExpiryMs,
+  planGrantIsCurrent,
 } from '@linyup/shared'
 import type {
   Contact,
@@ -102,6 +109,7 @@ import type {
   SubscriptionHistoryEntry,
   ContactAlert,
   AlertScheduleType,
+  RawContactAlert,
   RankingSystem,
   ActivityLogEntry,
   ActivityEventType,
@@ -111,6 +119,7 @@ import type {
   OrgAffiliationStatusDef,
   EngagementBand,
   EngagementThresholds,
+  Booking,
 } from '@linyup/shared'
 import {
   ACQUISITION_STAGES,
@@ -121,6 +130,8 @@ import {
   DEFAULT_ORG_AFFILIATION_STATUSES,
   computeEngagementBand,
   MAX_CONTACT_LOGIN_EMAILS,
+  SUBSCRIPTION_ROLLUP_STATUSES,
+  type SubscriptionRollupStatus,
 } from '@linyup/shared'
 import { usePlan } from '@/hooks/usePlan'
 import { useInstalledPlugins } from '@/hooks/useInstalledPlugins'
@@ -158,6 +169,7 @@ import {
   CalendarCheck,
   CalendarX,
   CreditCard,
+  Wallet,
   BarChart2,
   Lock,
   Flag,
@@ -174,6 +186,8 @@ import {
   Ticket,
   FileSignature,
   CheckSquare,
+  Search,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -186,7 +200,12 @@ import {
 import { XAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { GoalsTab } from './GoalsTab'
 import { NotesTab, useContactNotesCount, useContactNotes, noteColorClasses, type ContactNote } from './NotesTab'
-import { PaymentsTab, MemberSubscriptionsSection, useContactMemberSubscriptions } from './PaymentsTab'
+import { PaymentsTab } from './PaymentsTab'
+import {
+  MemberSubscriptionsSection,
+  RollupBadge,
+  useContactMemberSubscriptions,
+} from '@/components/contacts/MemberSubscriptionsSection'
 import { isoWeekLabel, useContactWeeklyReports } from './AttendanceTrendCard'
 import { PlanGate } from '@/components/plan/PlanGate'
 import {
@@ -199,6 +218,23 @@ import { RenewConfirmDialog } from '@/components/affiliations/RenewUI'
 import { renewAffiliationCall, previewRenewedUntil } from '@/components/affiliations/renew'
 import { ContactGroupsChips } from '@/plugins/contact-groups/ContactGroupsChips'
 import { CustomFieldsCardBody } from '@/plugins/custom-fields/CustomFieldsCardBody'
+import {
+  BookingRow,
+  buildBookingStatusLabels,
+  type BookingStatus,
+} from '@/components/bookings/BookingRow'
+import {
+  RebookDialog,
+  useFutureSessions,
+  EMPTY_SESSION_IDS,
+} from '@/components/bookings/RebookDialog'
+import {
+  useBookingAction,
+  useRebookAction,
+  type BookingAction,
+} from '@/hooks/useBookingActions'
+import { useContactBookedSessions, type SessionInfo } from '@/hooks/useBookingsWindow'
+import { Tip } from '@/components/ui/tip'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -461,39 +497,26 @@ function useTeamRankingSystems(teamId: string | null, orgId?: string | null) {
   })
 }
 
-function useSubscriptionHistory(contactId: string) {
-  return useQuery<SubscriptionHistoryEntry[]>({
-    queryKey: ['subscription-history', contactId],
-    queryFn: async () => {
-      const snap = await getDocs(
-        query(
-          collection(
-            db,
-            CONTACTS_COLLECTION,
-            contactId,
-            CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION
-          ),
-          orderBy('start_date', 'desc')
-        )
-      )
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as SubscriptionHistoryEntry)
-    },
-  })
-}
-
-interface BookingSummary {
-  id: string
-  sessionId: string
-  sessionLabel: string
-  sessionStart: { toDate(): Date } | null
-  joinedAt: { toDate(): Date } | null
-  status: string | null
-}
+// `useSubscriptionHistory` moved to @/hooks/useSubscriptionHistory — the Overview
+// ledger needs the same query and the same cache entry, and a second copy would
+// have doubled the reads while inviting the two to drift.
 
 /** How many of a contact's bookings this tab loads. Newest first, so the cap
  *  trims the oldest history rather than the part anybody is looking at, and it
  *  bounds the session hydration below to at most one batch per 30 rows. */
 const CONTACT_BOOKINGS_LIMIT = 60
+
+export interface ContactBookings {
+  bookings: Booking[]
+  /** Session info for the loaded bookings, keyed by session id — same shape
+   *  the bookings list uses, so `BookingRow` renders identically here. */
+  sessions: Record<string, SessionInfo>
+  /** The cap was hit: `bookings` is the newest 60, not the whole history. A
+   *  contact sitting on EXACTLY 60 rows reads as truncated too — the same
+   *  imprecision `useBookingsWindow`'s booking axis accepts for not having to
+   *  fetch one extra row just to know. */
+  truncated: boolean
+}
 
 /**
  * A contact's bookings.
@@ -512,12 +535,26 @@ const CONTACT_BOOKINGS_LIMIT = 60
  * `contact.total_sessions`, written only by the `sessions/{id}/participants`
  * trigger, i.e. by ATTENDANCE. Zero attended after a booking is correct; the
  * number that was missing is this one.
+ *
+ * Returns the SAME shape `useBookingsWindow` does (`Booking[]` +
+ * `Record<sessionId, SessionInfo>`) rather than a bespoke summary, because the
+ * row is now `BookingRow` — the general bookings list's row — and it wants a
+ * real `Booking`. The old shape kept `id: d.ref.path`, which every action
+ * (`doc(db,'sessions', b.session, 'bookings', b.id)`) would have turned into a
+ * broken ref built from a full Firestore path instead of a bare doc id.
+ *
+ * No server-side status filter: that would need a new composite index, and
+ * the bookings page already filters status client-side over an already-loaded
+ * page, which this hook feeds identically.
  */
 function useContactBookings(contactId: string, teamId: string | null) {
-  return useQuery<BookingSummary[]>({
-    queryKey: ['contact-bookings', contactId],
+  return useQuery<ContactBookings>({
+    // `teamId` in the key: two different tenants must never share a cache
+    // entry keyed only by `contactId` (which is not itself tenant-scoped).
+    queryKey: ['contact-bookings', teamId, contactId],
     enabled: !!teamId,
     queryFn: async () => {
+      if (!teamId) return { bookings: [], sessions: {}, truncated: false }
       const snap = await getDocs(
         query(
           collectionGroup(db, 'bookings'),
@@ -527,45 +564,29 @@ function useContactBookings(contactId: string, teamId: string | null) {
           limit(CONTACT_BOOKINGS_LIMIT)
         )
       )
-      const rows = snap.docs.map((d) => {
-        const data = d.data()
-        return {
-          id: d.ref.path,
-          sessionId: d.ref.parent.parent?.id ?? '',
-          joinedAt: (data.joinedAt as BookingSummary['joinedAt']) ?? null,
-          status: (data.status as string | undefined) ?? 'pending',
-        }
-      })
+      const bookings = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Booking)
 
-      // WHAT and WHEN come from the SESSION, not the booking: a booking document
-      // carries neither an activity name nor a start time (the old code read
-      // `sessionLabel` / `sessionStart`, which no writer has ever set, so every
-      // row would have rendered "Session" and the join date). Batched by
+      // WHAT and WHEN come from the SESSION, not the booking. Batched by
       // documentId, 30 at a time — Firestore's `in` limit.
-      const ids = [...new Set(rows.map((r) => r.sessionId).filter(Boolean))]
-      const sessions = new Map<string, { label: string; start: BookingSummary['sessionStart'] }>()
-      for (let i = 0; i < ids.length; i += 30) {
-        const batch = ids.slice(i, i + 30)
+      const sessionIds = [...new Set(bookings.map((b) => b.session).filter((s): s is string => !!s))]
+      const sessions: Record<string, SessionInfo> = {}
+      for (let i = 0; i < sessionIds.length; i += 30) {
+        const batch = sessionIds.slice(i, i + 30)
         const sSnap = await getDocs(
           query(collection(db, 'sessions'), where(documentId(), 'in', batch))
         )
         sSnap.docs.forEach((sd) => {
           const s = sd.data()
-          sessions.set(sd.id, {
-            label: (s.activityName as string | undefined) || (s.name as string | undefined) || '',
-            start: (s.start as BookingSummary['sessionStart']) ?? null,
-          })
+          sessions[sd.id] = {
+            activityName: s.activityName as string | undefined,
+            start: tsToDate(s.start)?.toISOString(),
+            end: tsToDate(s.end)?.toISOString(),
+            allowBooking: s.allowBooking as boolean | undefined,
+          }
         })
       }
 
-      return rows.map((r) => {
-        const s = sessions.get(r.sessionId)
-        return {
-          ...r,
-          sessionLabel: s?.label || 'Session',
-          sessionStart: s?.start ?? null,
-        }
-      })
+      return { bookings, sessions, truncated: bookings.length === CONTACT_BOOKINGS_LIMIT }
     },
   })
 }
@@ -632,28 +653,10 @@ function useContactRecentSessions(contactId: string, count: number) {
   })
 }
 
-/**
- * TWO shapes exist in `contact_alerts`, and this page only ever understood one.
- *
- * This page (and the migration) write the FLAT `schedule_type` / `schedule_value`
- * of the `ContactAlert` type. The server writers — `bookSession`'s booking
- * notification and the automation engine's `create_alert` — write a NESTED
- * `schedule: { type, value }` (which is also what the mobile app reads). A
- * nested-shape alert therefore rendered here with no date, no icon and a
- * permanent "pending" badge, because `schedule_type` was simply undefined.
- *
- * Normalising on READ fixes both writers at once and needs no migration; the
- * flat shape stays canonical for anything this page writes.
- */
-function normaliseAlert(raw: Record<string, unknown>, id: string): ContactAlert {
-  const nested = raw.schedule as { type?: string; value?: unknown } | undefined
-  return {
-    ...(raw as Omit<ContactAlert, 'id'>),
-    id,
-    schedule_type: (raw.schedule_type ?? nested?.type ?? 'datetime') as AlertScheduleType,
-    schedule_value: (raw.schedule_value ?? nested?.value) as ContactAlert['schedule_value'],
-  }
-}
+// TWO shapes exist in `contact_alerts` (a flat pair this page/the migration
+// write, and a nested `schedule: { type, value }` the server writers use) —
+// `readAlert()` (`@linyup/shared`) is the one reader that understands both.
+// See its module header for the mobile bug that motivated it.
 
 function useContactAlerts(contactId: string) {
   return useQuery<ContactAlert[]>({
@@ -665,7 +668,7 @@ function useContactAlerts(contactId: string) {
           orderBy('created_at', 'desc')
         )
       )
-      return snap.docs.map((d) => normaliseAlert(d.data() as Record<string, unknown>, d.id))
+      return snap.docs.map((d) => readAlert(d.id, d.data() as RawContactAlert))
     },
   })
 }
@@ -1133,21 +1136,24 @@ function HeaderActionButton({
   count?: number
   onClick: () => void
 }) {
+  // The count badge is a NUMBER, not a label: it says how many notes there are,
+  // never what pressing this does. Icon-only in the sense that matters.
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-    >
-      <Icon className="h-4 w-4" />
-      {count > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-          {count}
-        </span>
-      )}
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <Icon className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+    </Tip>
   )
 }
 
@@ -1169,7 +1175,14 @@ function NotesSheet({
       <SheetContent side="right" className="sm:max-w-md!">
         <SheetHeader>
           <SheetTitle>{t('tabNotes')}</SheetTitle>
-          <SheetDescription className="sr-only">{t('notesPanelDesc')}</SheetDescription>
+          {/* Notes vs alerts is genuinely ambiguous, so it is worth saying —
+              but HERE, not on the page. The contact page is already dense, and
+              a caption under a glance heading spends permanent page weight on
+              something you need once. In the panel it reaches the reader at the
+              moment they are choosing, and costs the page nothing. It doubles
+              as the sheet's accessible description, so there is still exactly
+              one string. */}
+          <SheetDescription>{t('notesPanelDesc')}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <NotesTab contact={contact} />
@@ -1207,7 +1220,8 @@ function AlertsSheet({
       <SheetContent side="right" className="sm:max-w-md!">
         <SheetHeader>
           <SheetTitle>{t('tabAlerts')}</SheetTitle>
-          <SheetDescription className="sr-only">{t('alertsPanelDesc')}</SheetDescription>
+          {/* Visible, for the reason given on the notes sheet above. */}
+          <SheetDescription>{t('alertsPanelDesc')}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <AlertsTab contact={contact} teamId={teamId} />
@@ -1235,19 +1249,8 @@ function AlertsGlance({
   const shown = alerts.slice(0, GLANCE_LIMIT)
   const extra = alerts.length - shown.length
 
-  // The same test AlertsTab runs. Duplicated rather than lifted because the two
-  // are three hundred lines apart in one file; if a third reader appears it
-  // wants to become a shared helper.
-  const fired = (alert: ContactAlert): boolean => {
-    if (alert.schedule_type === 'sessions_countdown') {
-      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
-    }
-    if (alert.schedule_type === 'datetime') {
-      const ts = alert.schedule_value as { toDate(): Date } | null
-      return ts ? ts.toDate() <= new Date() : false
-    }
-    return false
-  }
+  const fired = (alert: ContactAlert) =>
+    alertIsFired(alert, { totalSessions: contact.total_sessions })
 
   return (
     <div className="space-y-3">
@@ -1261,15 +1264,16 @@ function AlertsGlance({
             <span className="text-xs text-muted-foreground">({alerts.length})</span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={t('addAlert')}
-          title={t('addAlert')}
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <Tip label={t('addAlert')}>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={t('addAlert')}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   >
+            <Plus className="h-4 w-4" />
+          </button>
+        </Tip>
       </div>
 
       {isLoading ? (
@@ -1344,15 +1348,16 @@ function NotesGlance({ contact, onOpen }: { contact: Contact; onOpen: () => void
             <span className="text-xs text-muted-foreground">({notes.length})</span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={t('notesAddNote')}
-          title={t('notesAddNote')}
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <Tip label={t('notesAddNote')}>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={t('notesAddNote')}
+            className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+   >
+            <Plus className="h-4 w-4" />
+          </button>
+        </Tip>
       </div>
 
       {isLoading ? (
@@ -1977,22 +1982,106 @@ function ProfileTab({
 // ─── notes tab ────────────────────────────────────────────────────────────────
 
 // ─── bookings tab ─────────────────────────────────────────────────────────────
+// Reuses the general bookings list's row and its action menu (`BookingRow`,
+// `@/hooks/useBookingActions`) — a card list with no filters and no actions
+// used to sit here, a second, poorer implementation of the same list. The
+// status vocabulary is `BookingRow`'s shared `STATUS_VARIANT` now, not a local
+// `BOOKING_STATUS_KEY` (deleted): both already styled `no_show` `destructive`
+// here, but the BOOKINGS PAGE used to style it `secondary` — sharing a row
+// settles that in favour of red on both surfaces (a no-show is a seat held
+// and wasted), so /bookings' no-show colour changes, not this tab's
+// (Franco, 2026-08-29).
+//
+// Status tabs + text search are ported from the bookings page — purely
+// presentational filters over rows already loaded by `useContactBookings`.
+// Deliberately NOT ported: the bookings page's date-AXIS toggle and date
+// window. Those aren't a filter, they ARE the query (`useBookingsWindow`), and
+// there is no contact-scoped equivalent to build — the class date lives on the
+// SESSION doc, not the booking, so a "bookings for this contact within this
+// class-date range" query isn't a filter over what's already loaded, it would
+// need its own fan-out. Don't add one here; if a manager needs that, it
+// belongs on /bookings with a contact filter, not here.
 
-// Booking status → the label the bookings LIST already uses. Reusing that
-// namespace keeps one wording for one fact; a second set of strings here would
-// drift the moment either side was edited.
-const BOOKING_STATUS_KEY: Record<string, string> = {
-  pending: 'statusPending',
-  confirmed: 'statusConfirmed',
-  cancelled: 'statusCancelled',
-  no_show: 'statusNoShow',
-  rebooked: 'statusRebooked',
-}
+type ContactBookingStatusFilter = BookingStatus | 'all'
 
 function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
   const tBookings = useTranslations('Bookings')
-  const { data: bookings = [], isLoading } = useContactBookings(contact.id, teamId)
+  const { data, isLoading } = useContactBookings(contact.id, teamId)
+  // Memoized (matching the bookings page's `windowData?.bookings ?? []`
+  // pattern) so `searchFiltered` below doesn't see a fresh array identity on
+  // every render while `data` is genuinely unchanged.
+  const bookings = useMemo(() => data?.bookings ?? [], [data])
+  const sessions = useMemo(() => data?.sessions ?? {}, [data])
+  const truncated = data?.truncated ?? false
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<ContactBookingStatusFilter>('all')
+  const [rebookTarget, setRebookTarget] = useState<Booking | null>(null)
+
+  const { mutate: doAction } = useBookingAction(teamId)
+  const { mutate: doRebook, isPending: rebooking } = useRebookAction(teamId)
+  const { data: futureSessions = [], isLoading: futureLoading } = useFutureSessions(
+    teamId,
+    !!rebookTarget
+  )
+  const { data: bookedSessionIds, isLoading: bookedLoading } = useContactBookedSessions(
+    teamId,
+    rebookTarget?.contact ?? null
+  )
+
+  const statusLabel = buildBookingStatusLabels(tBookings)
+
+  const handleAction = useCallback(
+    (booking: Booking, action: BookingAction) => doAction({ booking, action }),
+    [doAction]
+  )
+  const handleRebookConfirm = useCallback(
+    (newSessionId: string) => {
+      if (!rebookTarget?.booking_token) return
+      doRebook(
+        { token: rebookTarget.booking_token, newSessionId },
+        { onSuccess: () => setRebookTarget(null) }
+      )
+    },
+    [rebookTarget, doRebook]
+  )
+
+  // Search on the CLASS name — not the contact's own name, which would just be
+  // redundant with being on their page already.
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return bookings
+    return bookings.filter((b) => {
+      const activityName = (b.session ? sessions[b.session]?.activityName : undefined) ?? ''
+      return activityName.toLowerCase().includes(q)
+    })
+  }, [bookings, sessions, search])
+
+  const counts: Record<ContactBookingStatusFilter, number> = {
+    all: searchFiltered.length,
+    pending: searchFiltered.filter((b) => (b.status ?? 'pending') === 'pending').length,
+    confirmed: searchFiltered.filter((b) => b.status === 'confirmed').length,
+    cancelled: searchFiltered.filter((b) => b.status === 'cancelled').length,
+    no_show: searchFiltered.filter((b) => b.status === 'no_show').length,
+    rebooked: searchFiltered.filter((b) => b.status === 'rebooked').length,
+  }
+
+  const filtered = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? searchFiltered
+        : searchFiltered.filter((b) => (b.status ?? 'pending') === statusFilter),
+    [searchFiltered, statusFilter]
+  )
+
+  const TABS: { key: ContactBookingStatusFilter; label: string }[] = [
+    { key: 'all', label: tBookings('tabAll') },
+    { key: 'pending', label: tBookings('statusPending') },
+    { key: 'confirmed', label: tBookings('statusConfirmed') },
+    { key: 'no_show', label: tBookings('statusNoShow') },
+    { key: 'cancelled', label: tBookings('statusCancelled') },
+  ]
 
   if (isLoading)
     return (
@@ -2004,68 +2093,123 @@ function BookingsTab({ contact, teamId }: { contact: Contact; teamId: string | n
     )
   if (bookings.length === 0)
     return <div className="py-12 text-center text-muted-foreground text-sm">{t('noBookings')}</div>
+
   return (
-    <div className="space-y-2">
-      {bookings.map((b) => (
-        <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg border">
-          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <CalendarDays className="h-4 w-4 text-primary" />
+    <div className="space-y-3">
+      {/* A capped list must not look like a complete one. */}
+      {truncated && (
+        <p className="text-xs text-muted-foreground">
+          {t('bookingsTruncated', { count: bookings.length })}
+        </p>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder={t('bookingsSearchPlaceholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      <div className="flex gap-1 border-b overflow-x-auto">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+              statusFilter === key
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+            {counts[key] > 0 && (
+              <span
+                className={`text-xs rounded-full px-1.5 py-0.5 leading-none ${
+                  statusFilter === key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {counts[key]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-xl border overflow-hidden bg-card">
+        {filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center text-muted-foreground text-sm">
+            {search ? tBookings('emptySearch') : t('noBookingsFilter')}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{b.sessionLabel}</p>
-            <p className="text-xs text-muted-foreground">
-              {b.sessionStart
-                ? formatDate(b.sessionStart)
-                : b.joinedAt
-                  ? formatDate(b.joinedAt)
-                  : '—'}
-            </p>
-          </div>
-          {b.status && BOOKING_STATUS_KEY[b.status] && (
-            <Badge
-              variant={
-                b.status === 'confirmed'
-                  ? 'default'
-                  : b.status === 'cancelled' || b.status === 'no_show'
-                    ? 'destructive'
-                    : 'secondary'
-              }
-              className="shrink-0"
-            >
-              {tBookings(BOOKING_STATUS_KEY[b.status] as Parameters<typeof tBookings>[0])}
-            </Badge>
-          )}
-        </div>
-      ))}
+        ) : (
+          filtered.map((b) => (
+            <BookingRow
+              key={b.session ? `${b.session}_${b.id}` : b.id}
+              booking={b}
+              sessionInfo={b.session ? sessions[b.session] : undefined}
+              statusLabel={statusLabel}
+              showContact={false}
+              onAction={handleAction}
+              onRebook={setRebookTarget}
+            />
+          ))
+        )}
+      </div>
+
+      {rebookTarget && (
+        <RebookDialog
+          booking={rebookTarget}
+          futureSessions={futureSessions}
+          bookedSessionIds={bookedSessionIds ?? EMPTY_SESSION_IDS}
+          loadingOptions={futureLoading || bookedLoading}
+          onConfirm={handleRebookConfirm}
+          onClose={() => setRebookTarget(null)}
+          loading={rebooking}
+        />
+      )}
     </div>
   )
 }
 
-// ─── membership tab (subscription + affiliation) ──────────────────────────────
-// Both axes describe the contact's ongoing standing with the studio, so they
-// share one tab with a segmented toggle. The subscription side is plan-gated
-// (PlanGate shows the upgrade prompt when locked); affiliation is always shown.
-// `seg` is owned by the page so the header summary chips can deep-link a segment.
+// ─── "Plans & Payments" tab ───────────────────────────────────────────────────
+// THE QUESTION THIS TAB EXISTS TO ANSWER: "in period X, what did this contact pay
+// for, and what plan or allowance did they hold?" It used to require switching
+// between a Plans tab and a Payments tab and searching by hand — the two overlap
+// in a coach's mental model, and often a payment IS a plan's payment.
+//
+// Three segments:
+//   overview — a period-scoped LEDGER: plan starts/ends, payments, credit grants
+//              and expiries in one dated stream. Read-only; it answers.
+//   plans    — the assigned plan, lesson credits, recurring billing, plan history.
+//   payments — the full payment list, all time, with its dialogs. They act.
+//
+// Affiliation is NOT here: belonging to a club or federation is a different
+// concept whose fee is paid to the issuer and never processed by Linyup. It has
+// its own tab now, and only ever shared this one by accident of history.
+//
+// `seg` is owned by the page (in `?seg=`) so the header summary chip can
+// deep-link a segment and the choice survives a refresh.
 
 function MembershipTab({
   contact,
   teamId,
-  orgId,
-  membershipFieldLocked,
   seg,
   onSegChange,
 }: {
   contact: Contact
   teamId: string | null
-  orgId?: string | null
-  membershipFieldLocked: boolean
-  seg: 'subscription' | 'affiliation'
-  onSegChange: (s: 'subscription' | 'affiliation') => void
+  seg: MembershipSeg
+  onSegChange: (s: MembershipSeg) => void
 }) {
   const t = useTranslations('Contacts')
   const SEGMENTS = [
-    { id: 'subscription', label: t('tabSubscriptions') },
-    { id: 'affiliation', label: t('tabAffiliations') },
+    { id: 'overview', label: t('segOverview') },
+    { id: 'plans', label: t('segPlans') },
+    { id: 'payments', label: t('segPayments') },
   ] as const
 
   // Relationship timeline data — subscription + affiliation periods as spans, and
@@ -2102,35 +2246,22 @@ function MembershipTab({
         affiliations={affiliationSpans}
       />
 
-      <div className="inline-flex gap-0.5 rounded-lg border bg-background p-0.5">
-        {SEGMENTS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onSegChange(s.id)}
-            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              seg === s.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        options={SEGMENTS.map((s) => ({ value: s.id, label: s.label }))}
+        value={seg}
+        onChange={onSegChange}
+      />
 
-      {seg === 'subscription' ? (
+      {/* Each segment body mounts only while it is showing, the same way the tabs
+          themselves do — so standing on Overview never pays for the payment
+          dialogs' journal read, and standing on Plans never loads payments. */}
+      {seg === 'overview' && <LedgerSegment contact={contact} teamId={teamId} />}
+      {seg === 'plans' && (
         <PlanGate feature="subscriptions">
           <SubscriptionsTab contact={contact} teamId={teamId} />
         </PlanGate>
-      ) : (
-        <AffiliationsTab
-          contact={contact}
-          teamId={teamId}
-          orgId={orgId}
-          membershipFieldLocked={membershipFieldLocked}
-        />
       )}
+      {seg === 'payments' && <PaymentsTab contact={contact} teamId={teamId} />}
     </div>
   )
 }
@@ -2150,6 +2281,10 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
   const [grantOpen, setGrantOpen] = useState(false)
   const { team } = useAuth()
   const currency = (team?.default_currency ?? 'CHF').toUpperCase()
+  // The one-word summary of what Stripe is doing, denormalised onto the contact
+  // by the rollup trigger. It came with the billing section from the Payments
+  // tab — the copy that used to live there was the only one that showed it.
+  const rollupStatus = contact.subscription_status as SubscriptionRollupStatus | undefined
 
   const invalidateContact = () => {
     qc.invalidateQueries({ queryKey: ['contact', contact.id] })
@@ -2194,6 +2329,33 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
                     {t(`recurrence_${contact.subscription_recurrence}`)}
                     {contact.subscription_amount != null && (
                       <span> · {formatCurrency(contact.subscription_amount, currency)}</span>
+                    )}
+                  </p>
+                )}
+                {/* WHEN A ONE-OFF GRANT RUNS OUT ("2 months included"). It ends
+                    by comparison and nothing writes when it passes, so this
+                    line is the only place the studio can see it coming — and
+                    once it has passed, the only explanation of why a member
+                    the screen still lists is being turned away at the door. */}
+                {contact.subscription_expires_at && (
+                  <p
+                    className={`text-xs ${
+                      planGrantIsCurrent(contact) ? 'text-muted-foreground' : 'text-amber-600'
+                    }`}
+                  >
+                    {t(
+                      planGrantIsCurrent(contact)
+                        ? 'subscriptionExpiresOn'
+                        : 'subscriptionExpired',
+                      {
+                        date: contact.subscription_expires_at
+                          .toDate()
+                          .toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          }),
+                      }
                     )}
                   </p>
                 )}
@@ -2249,17 +2411,24 @@ function SubscriptionsTab({ contact, teamId }: { contact: Contact; teamId: strin
         )}
       </div>
 
-      {/* ── Stripe billing (freeze / resume) ── */}
+      {/* ── Stripe billing (freeze / resume / cancel) ──
+          The ONLY copy of this section. It was rendered here and on the Payments
+          tab at the same time; the badge below came only from that other copy,
+          so a plain deletion would have lost it. */}
       {teamId && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {tPayments('stripeSubscriptionsTitle')}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {tPayments('stripeSubscriptionsTitle')}
+            </p>
+            {rollupStatus && SUBSCRIPTION_ROLLUP_STATUSES.includes(rollupStatus) && (
+              <RollupBadge status={rollupStatus} />
+            )}
+          </div>
           <MemberSubscriptionsSection
             teamId={teamId}
             contactId={contact.id}
             assignedTypeId={contact.subscription_type_id ?? null}
-            t={tPayments}
           />
         </div>
       )}
@@ -2665,12 +2834,18 @@ function SetSubscriptionDialog({
 
       const typeName = subTypes.find((s) => s.id === typeId)?.name ?? ''
       const chosenPrice = activePrices.find((p) => p.id === priceId)
+      // The grant's own end date, from the chosen price ("2 months included").
+      // WRITTEN WHOLE, null included — assigning a monthly plan to someone whose
+      // intro lapsed must ERASE that old date, or the plan she was just given is
+      // already expired and no screen would explain why.
+      const grantExpiryMs = planGrantExpiryMs(chosenPrice)
       await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
         subscription_type_id: typeId,
         subscription_type_name: typeName,
         subscription_price_id: chosenPrice ? chosenPrice.id : null,
         subscription_recurrence: chosenPrice ? chosenPrice.recurrence : recurrence || null,
         subscription_amount: chosenPrice ? chosenPrice.amount : null,
+        subscription_expires_at: grantExpiryMs === null ? null : Timestamp.fromMillis(grantExpiryMs),
         subscription_type_updated_at: serverTimestamp(),
         // Assigning a subscription materializes a provisional lead (offline-paid
         // members count toward the cap too). See Contact.provisional.
@@ -2722,6 +2897,8 @@ function SetSubscriptionDialog({
         subscription_price_id: null,
         subscription_recurrence: null,
         subscription_amount: null,
+        // Goes with the grant it described — see the assign branch above.
+        subscription_expires_at: null,
         subscription_type_updated_at: serverTimestamp(),
       })
       onSaved()
@@ -3304,22 +3481,12 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
           ))}
         </div>
         {/* Period selector */}
-        <div className="flex items-center rounded-lg border bg-background p-0.5 gap-0.5 shrink-0">
-          {ACTIVITY_PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPeriod(p.key)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
-                period === p.key
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          size="sm"
+          options={ACTIVITY_PERIODS.map((p) => ({ value: p.key, label: p.label }))}
+          value={period}
+          onChange={setPeriod}
+        />
       </div>
 
       {/* Content */}
@@ -3406,13 +3573,39 @@ function ActivityTab({ contact, teamId }: { contact: Contact; teamId: string | n
 // ─── alerts tab ───────────────────────────────────────────────────────────────
 
 const alertSchema = z.object({
-  schedule_type: z.enum(['sessions_countdown', 'datetime']),
+  schedule_type: z.enum(['sessions_countdown', 'datetime', 'always']),
   schedule_value_sessions: z.coerce.number().min(1).optional(),
   schedule_value_date: z.date().optional(),
   message: z.string().min(1).max(500),
   show_in_app: z.boolean().optional(),
 })
 type AlertFormValues = z.infer<typeof alertSchema>
+
+/** Icon + i18n key for a schedule type — one place, read by the dialog, the
+ *  list and the preset picker so all three render a trigger type the same way. */
+function alertTypeIcon(type: AlertScheduleType, className = 'h-4 w-4') {
+  switch (type) {
+    case 'sessions_countdown':
+      return <Timer className={className} />
+    case 'datetime':
+      return <CalendarDays className={className} />
+    case 'always':
+      return <Zap className={className} />
+  }
+}
+
+function alertTypeLabelKey(
+  type: AlertScheduleType
+): 'alertTypeSessionsCountdown' | 'alertTypeDatetime' | 'alertTypeAlways' {
+  switch (type) {
+    case 'sessions_countdown':
+      return 'alertTypeSessionsCountdown'
+    case 'datetime':
+      return 'alertTypeDatetime'
+    case 'always':
+      return 'alertTypeAlways'
+  }
+}
 
 function AlertDialog({
   open,
@@ -3455,8 +3648,13 @@ function AlertDialog({
     }
     if (data.schedule_type === 'sessions_countdown') {
       payload.schedule_value = Number(data.schedule_value_sessions)
-    } else if (data.schedule_value_date) {
-      payload.schedule_value = Timestamp.fromDate(data.schedule_value_date)
+    } else if (data.schedule_type === 'datetime') {
+      payload.schedule_value = data.schedule_value_date
+        ? Timestamp.fromDate(data.schedule_value_date)
+        : null
+    } else {
+      // 'always' — nothing to collect; it fires on creation (see alertIsFired).
+      payload.schedule_value = null
     }
     await addDoc(
       collection(db, CONTACTS_COLLECTION, contactId, CONTACT_ALERTS_SUBCOLLECTION),
@@ -3474,11 +3672,15 @@ function AlertDialog({
           <DialogTitle>{t('addAlert')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1">
-          {/* Trigger type */}
+          {/* Trigger type — "Active now" sits alongside the other two because
+              this row asks WHEN, not what kind of value to collect. It exists
+              so "active from the moment I wrote it" doesn't have to be faked
+              as today's date or a 0-session countdown (see alertTypeIcon /
+              alertTypeLabel). */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">{t('alertScheduleType')}</label>
             <div className="flex gap-2">
-              {(['sessions_countdown', 'datetime'] as AlertScheduleType[]).map((type) => (
+              {(['sessions_countdown', 'datetime', 'always'] as AlertScheduleType[]).map((type) => (
                 <label key={type} className="flex-1 cursor-pointer">
                   <input
                     type="radio"
@@ -3493,14 +3695,8 @@ function AlertDialog({
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {type === 'sessions_countdown' ? (
-                      <Timer className="h-3.5 w-3.5" />
-                    ) : (
-                      <CalendarDays className="h-3.5 w-3.5" />
-                    )}
-                    {type === 'sessions_countdown'
-                      ? t('alertTypeSessionsCountdown')
-                      : t('alertTypeDatetime')}
+                    {alertTypeIcon(type, 'h-3.5 w-3.5')}
+                    {t(alertTypeLabelKey(type))}
                   </div>
                 </label>
               ))}
@@ -3512,7 +3708,7 @@ function AlertDialog({
               <label className="text-sm font-medium">{t('alertSessionCount')}</label>
               <Input type="number" min="1" {...register('schedule_value_sessions')} />
             </div>
-          ) : (
+          ) : scheduleType === 'datetime' ? (
             <div className="space-y-1">
               <label className="text-sm font-medium">{t('alertDate')}</label>
               <Controller
@@ -3521,7 +3717,7 @@ function AlertDialog({
                 render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} />}
               />
             </div>
-          )}
+          ) : null}
 
           <div className="space-y-1">
             <label className="text-sm font-medium">{t('alertMessage')}</label>
@@ -3594,11 +3790,7 @@ function AlertPresetPicker({
                 className="w-full flex items-center gap-3 p-3 rounded-lg border text-left hover:bg-muted transition-colors"
               >
                 <div className="shrink-0 text-muted-foreground">
-                  {p.schedule_type === 'sessions_countdown' ? (
-                    <Timer className="h-4 w-4" />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" />
-                  )}
+                  {alertTypeIcon(p.schedule_type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{p.name}</p>
@@ -3661,20 +3853,115 @@ function AlertPresetPicker({
   )
 }
 
+/**
+ * The three-way dismissal, restored from the original product.
+ *
+ * A two-button confirm cannot express this choice, because "dismiss" and
+ * "delete" are genuinely different intentions here and the destructive one is
+ * not recoverable. So the dialog names both outcomes rather than making the
+ * coach infer them from a single "Remove this alert?".
+ *
+ * An ALREADY-dismissed alert drops to two buttons: dismissing it again would do
+ * nothing, and a control that does nothing reads as a broken one.
+ */
+function AlertDismissDialog({
+  alert,
+  contactName,
+  onCancel,
+  onDismissOnly,
+  onDelete,
+}: {
+  alert: ContactAlert | null
+  contactName: string
+  onCancel: () => void
+  onDismissOnly: (alert: ContactAlert) => void
+  onDelete: (alert: ContactAlert) => void
+}) {
+  const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
+  const dismissed = !!alert?.archived_at
+
+  return (
+    <Dialog open={!!alert} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {dismissed ? t('alertDeleteConfirm') : t('alertDismissTitle')}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {dismissed
+            ? t('alertDeleteBody', { message: alert?.message ?? '' })
+            : t('alertDismissBody', { message: alert?.message ?? '', name: contactName })}
+        </p>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={onCancel}>
+            {tCommon('cancel')}
+          </Button>
+          {!dismissed && (
+            <Button variant="outline" onClick={() => alert && onDismissOnly(alert)}>
+              {t('alertDismissOnly')}
+            </Button>
+          )}
+          <Button variant="destructive" onClick={() => alert && onDelete(alert)}>
+            {dismissed ? tCommon('delete') : t('alertDismissAndDelete')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | null }) {
   const t = useTranslations('Contacts')
+  const tCommon = useTranslations('Common')
   const qc = useQueryClient()
   const { data: alerts = [], isLoading } = useContactAlerts(contact.id)
   const { data: presets = [] } = useAlertPresets(teamId)
   const [addOpen, setAddOpen] = useState(false)
   const [presetOpen, setPresetOpen] = useState(false)
+  // The alert awaiting a dismissal decision. See AlertDismissDialog.
+  const [dismissing, setDismissing] = useState<ContactAlert | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['contact-alerts', contact.id] })
 
-  const handleDeleteAlert = async (id: string) => {
-    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, id))
+  // DISMISSING IS NOT DELETING, and a single confirm cannot say which one you
+  // meant. An alert is two things at once: a notification, and a note the coach
+  // wrote on this person's record. Clearing the first must not silently destroy
+  // the second — so the choice is explicit, as it was in the original product.
+  //
+  //   Dismiss only    -> archived_at. The record stays; it stops counting
+  //                      towards alerts_count (trackContactAlerts counts
+  //                      non-archived rows), so the contacts-list badge and the
+  //                      dashboard queue row clear.
+  //   Dismiss & delete-> the document goes.
+  //
+  // This is the only writer of `archived_at` for a contact alert. Every reader
+  // already honoured the field — the mobile query filters on it and the counter
+  // respects it — but nothing had ever set it, so "dismiss" was unreachable and
+  // permanent deletion was the only way out of a fired alert.
+  const dismissOnly = async (alert: ContactAlert) => {
+    setDismissing(null)
+    await updateDoc(
+      doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, alert.id),
+      { archived_at: serverTimestamp() }
+    )
     invalidate()
   }
+
+  const dismissAndDelete = async (alert: ContactAlert) => {
+    setDismissing(null)
+    await deleteDoc(doc(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION, alert.id))
+    invalidate()
+  }
+
+  // Live alerts first, dismissed ones after. Dismissed alerts stay VISIBLE —
+  // this page is the record, and hiding them would make "dismiss only" look
+  // identical to a delete — but they must not push live ones down the list.
+  const orderedAlerts = useMemo(
+    () => [...alerts].sort((a, b) => Number(!!a.archived_at) - Number(!!b.archived_at)),
+    [alerts]
+  )
 
   const applyPreset = async (preset: AlertPresetRecord, date?: Date) => {
     const payload: Record<string, unknown> = {
@@ -3686,26 +3973,17 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
     }
     if (preset.schedule_type === 'sessions_countdown') {
       payload.schedule_value = preset.schedule_value ?? 10
-    } else if (date) {
-      payload.schedule_value = Timestamp.fromDate(date)
+    } else if (preset.schedule_type === 'datetime') {
+      payload.schedule_value = date ? Timestamp.fromDate(date) : null
+    } else {
+      // 'always' — nothing to collect; it fires on creation (see alertIsFired).
+      payload.schedule_value = null
     }
     await addDoc(
       collection(db, CONTACTS_COLLECTION, contact.id, CONTACT_ALERTS_SUBCOLLECTION),
       payload
     )
     invalidate()
-  }
-
-  const isAlertFired = (alert: ContactAlert): boolean => {
-    if (alert.schedule_type === 'sessions_countdown') {
-      return (contact.total_sessions ?? 0) >= (alert.schedule_value as number)
-    }
-    if (alert.schedule_type === 'datetime') {
-      const ts = alert.schedule_value as { toDate(): Date } | null
-      if (!ts) return false
-      return ts.toDate() <= new Date()
-    }
-    return false
   }
 
   if (isLoading)
@@ -3742,21 +4020,20 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         <div className="py-12 text-center text-muted-foreground text-sm">{t('noAlerts')}</div>
       ) : (
         <div className="space-y-2">
-          {alerts.map((alert) => {
-            const fired = isAlertFired(alert)
+          {orderedAlerts.map((alert) => {
+            const dismissed = !!alert.archived_at
+            // A dismissed alert is never "fired" — it has been dealt with, and
+            // showing it in alarm colours would undo the dismissal visually.
+            const fired = !dismissed && alertIsFired(alert, { totalSessions: contact.total_sessions })
             return (
               <div
                 key={alert.id}
-                className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''}`}
+                className={`flex items-start gap-3 p-3 rounded-lg border ${fired ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : ''} ${dismissed ? 'opacity-60' : ''}`}
               >
                 <div
                   className={`mt-0.5 shrink-0 ${fired ? 'text-orange-500' : 'text-muted-foreground'}`}
                 >
-                  {alert.schedule_type === 'sessions_countdown' ? (
-                    <Timer className="h-4 w-4" />
-                  ) : (
-                    <CalendarDays className="h-4 w-4" />
-                  )}
+                  {alertTypeIcon(alert.schedule_type)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -3764,7 +4041,7 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                       <span className="text-xs font-medium text-muted-foreground">
                         {t('alertTypeSessionsCountdown')}: {alert.schedule_value as number}
                       </span>
-                    ) : (
+                    ) : alert.schedule_type === 'datetime' ? (
                       <span className="text-xs font-medium text-muted-foreground">
                         {(alert.schedule_value as { toDate(): Date } | null)
                           ?.toDate()
@@ -3774,12 +4051,20 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                             year: 'numeric',
                           }) ?? '—'}
                       </span>
+                    ) : (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {t('alertTypeAlways')}
+                      </span>
                     )}
                     <Badge
                       variant={fired ? 'default' : 'outline'}
                       className={`text-xs ${fired ? 'bg-orange-500 border-orange-500' : ''}`}
                     >
-                      {fired ? t('alertFired') : t('alertPending')}
+                      {dismissed
+                        ? t('alertDismissed')
+                        : fired
+                          ? t('alertFired')
+                          : t('alertPending')}
                     </Badge>
                     {alert.show_in_app && (
                       <Badge variant="outline" className="text-xs">
@@ -3790,7 +4075,8 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
                   <p className="text-sm mt-0.5">{alert.message}</p>
                 </div>
                 <button
-                  onClick={() => handleDeleteAlert(alert.id)}
+                  onClick={() => setDismissing(alert)}
+                  aria-label={dismissed ? tCommon('delete') : t('alertDismissTitle')}
                   className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -3812,6 +4098,13 @@ function AlertsTab({ contact, teamId }: { contact: Contact; teamId: string | nul
         onOpenChange={setPresetOpen}
         presets={presets}
         onSelect={applyPreset}
+      />
+      <AlertDismissDialog
+        alert={dismissing}
+        contactName={`${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim()}
+        onCancel={() => setDismissing(null)}
+        onDismissOnly={dismissOnly}
+        onDelete={dismissAndDelete}
       />
     </div>
   )
@@ -4525,42 +4818,50 @@ function AffiliationsTab({
                 <div className="flex items-center gap-1 shrink-0">
                   {/* Approve action for pending/requested affiliations */}
                   {!membershipFieldLocked && isRequested && (
-                    <button
-                      onClick={() => handleApprove(aff.id)}
-                      disabled={isApproving}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-green-600 disabled:opacity-50"
-                      title={t('approveButton')}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('approveButton')}>
+                      <button
+                        onClick={() => handleApprove(aff.id)}
+                        disabled={isApproving}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-green-600 disabled:opacity-50"
+                        aria-label={t('approveButton')}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {canRenew && (
-                    <button
-                      onClick={() => setRenewTarget(aff)}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
-                      title={t('renewButton')}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('renewButton')}>
+                      <button
+                        onClick={() => setRenewTarget(aff)}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                        aria-label={t('renewButton')}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {!membershipFieldLocked && (
-                    <button
-                      onClick={() => { setEditing(aff); setDialogOpen(true) }}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                      title={t('colType')}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('colType')}>
+                      <button
+                        onClick={() => { setEditing(aff); setDialogOpen(true) }}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                        aria-label={t('colType')}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                   {!membershipFieldLocked && (
-                    <button
-                      onClick={() => handleRemove(aff.id)}
-                      disabled={isRemoving}
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
-                      title={t('removeTitle')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('removeTitle')}>
+                      <button
+                        onClick={() => handleRemove(aff.id)}
+                        disabled={isRemoving}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        aria-label={t('removeTitle')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                   )}
                 </div>
               </div>
@@ -4771,6 +5072,19 @@ function UpsertAffiliationDialog({
 // tab that exists to be empty is worse than one destination fewer. A bookmarked
 // `?tab=stats` is safe: `useTabParam` falls back rather than opening an empty
 // pane on an id it does not recognise.
+// BOTH `payments` and `affiliation` SURVIVE AS IDS, and each keeps the meaning it
+// already had — which is what makes the 2026-08 restructure free:
+//   `payments`    is now "Plans & Payments" (plans, credits, billing AND payments,
+//                 one tab with three segments). `?tab=payments` still means "this
+//                 person's money", so the live link from the payments table and
+//                 every stored open-tab keeps working.
+//   `affiliation` is now "Affiliations" alone — belonging to a club or federation,
+//                 whose fee is paid to the issuer and never processed by Linyup.
+//                 It was only ever sharing a tab with plans.
+// An id must not track its label — same rule as `followups` below, and the reason
+// is the same: a saved `linyup_contact_tab_order` array names ids. Minting a NEW
+// id for the merged tab would rank it +Infinity in `applyTabOrder` for everyone
+// who has ever reordered their strip, silently moving it to the end.
 const TAB_IDS = [
   'profile',
   'activity',
@@ -4783,6 +5097,12 @@ const TAB_IDS = [
   'gamification',
 ] as const
 type TabId = (typeof TAB_IDS)[number]
+
+// The segments of the "Plans & Payments" tab, carried in `?seg=` so a refresh, a
+// shared link and a reopened tab all land where the reader was — the same UX-22
+// argument `useTabParam` was written for, one level down.
+const MEMBERSHIP_SEGMENTS = ['overview', 'plans', 'payments'] as const
+type MembershipSeg = (typeof MEMBERSHIP_SEGMENTS)[number]
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -4806,8 +5126,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   // User-reorderable tab strip (opt-in edit mode; order persisted per-browser).
   const [tabOrder, setTabOrder] = useContactTabOrder()
   const [editingTabs, setEditingTabs] = useState(false)
-  // Which segment the merged Membership tab shows (deep-linked from header chips)
-  const [membershipSeg, setMembershipSeg] = useState<'subscription' | 'affiliation'>('subscription')
+  // Which segment of "Plans & Payments" is showing. In the URL (`?seg=`) rather
+  // than component state: the header chip below deep-links a segment, and that
+  // choice used to die on refresh — a live instance of the bug useTabParam
+  // exists to remove. `enabled` keeps `?seg=` off the URL of every other tab.
+  const [membershipSeg, setMembershipSeg] = useTabParam(
+    MEMBERSHIP_SEGMENTS,
+    'overview',
+    'seg',
+    { enabled: tab === 'payments' }
+  )
   const t = useTranslations('Contacts')
   const tCommon = useTranslations('Common')
   const { goBack, isHistoryBack } = useBack('/contacts' as Route)
@@ -4827,7 +5155,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   // Register this contact as an open tab (label upgraded once the contact loads).
   // The stored href carries the active sub-tab so reopening lands where you left.
   useRegisterTab({
-    href: `/contacts/${id}?tab=${tab}`,
+    href:
+      tab === 'payments'
+        ? `/contacts/${id}?tab=${tab}&seg=${membershipSeg}`
+        : `/contacts/${id}?tab=${tab}`,
     label: contact ? `${contact.firstname ?? ''} ${contact.lastname ?? ''}`.trim() : '',
     entityKind: 'contact',
     enabled: !!contact,
@@ -4892,8 +5223,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { id: 'profile', label: t('tabProfile'), icon: User },
     { id: 'goals', label: t('tabGoals'), icon: Flag, feature: 'goals' },
     { id: 'bookings', label: t('tabBookings'), icon: CalendarDays },
-    { id: 'affiliation', label: t('tabAffiliation'), icon: IdCard },
-    { id: 'payments', label: t('tabPayments'), icon: CreditCard },
+    // Plans, credits, recurring billing AND payments — one tab, three segments,
+    // because a coach asking "what did they pay for in March, and what did they
+    // hold then" was being made to switch tabs and search by hand. `Wallet`
+    // rather than `CreditCard`: the tab is not only about card charges.
+    { id: 'payments', label: t('tabPlansPayments'), icon: Wallet },
+    // Affiliations kept the `affiliation` id and lost the plans: belonging to a
+    // club or federation is a different concept, and its fee is paid to the
+    // issuer, never processed by Linyup. It was only sharing a tab with plans.
+    { id: 'affiliation', label: t('tabAffiliations'), icon: IdCard },
     { id: 'activity', label: t('tabActivity'), icon: Activity },
     // The ID STAYS `followups` — a `?tab=followups` deep link and every saved
     // `linyup_contact_tab_order` array in a browser somewhere still name it.
@@ -4942,14 +5280,16 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     contact a link to update their own details" — rather than
                     describing them like the status and contact lines below. */}
                 {team?.slug && !contact.archived_at && !contact.deleted_at && (
-                  <button
-                    onClick={handleCopyUpdateLink}
-                    className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    title={t('copyUpdateLink')}
-                  >
-                    <Link2 className="h-3.5 w-3.5 shrink-0" />
-                    {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
-                  </button>
+                  <Tip label={t('copyUpdateLink')}>
+                    <button
+                      onClick={handleCopyUpdateLink}
+                      className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={t('copyUpdateLink')}
+                    >
+                      <Link2 className="h-3.5 w-3.5 shrink-0" />
+                      {linkCopied ? t('updateLinkCopied') : t('copyUpdateLink')}
+                    </button>
+                  </Tip>
                 )}
               </div>
             </div>
@@ -4998,19 +5338,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <span className="group/email flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Mail className="h-3 w-3 shrink-0" />
                     <span className="truncate">{contact.email}</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyEmail}
-                      title={emailCopied ? t('emailCopied') : t('copyEmail')}
-                      aria-label={emailCopied ? t('emailCopied') : t('copyEmail')}
-                      className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      {emailCopied ? (
-                        <Check className="h-3 w-3 text-green-600" />
-                      ) : (
-                        <Copy className="h-3 w-3" />
-                      )}
-                    </button>
+                    <Tip label={emailCopied ? t('emailCopied') : t('copyEmail')}>
+                      <button
+                        type="button"
+                        onClick={handleCopyEmail}
+                        aria-label={emailCopied ? t('emailCopied') : t('copyEmail')}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+   >
+                        {emailCopied ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </button>
+                    </Tip>
                   </span>
                 )}
                 {contact.phone && (
@@ -5051,8 +5392,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       <button
                         type="button"
                         onClick={() => {
-                          setMembershipSeg('subscription')
-                          setTab('affiliation')
+                          setMembershipSeg('plans')
+                          setTab('payments')
                         }}
                         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
@@ -5072,10 +5413,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     {contact.affiliation_summary?.has_active && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setMembershipSeg('affiliation')
-                          setTab('affiliation')
-                        }}
+                        // Affiliations is its own tab now — no segment to pick.
+                        onClick={() => setTab('affiliation')}
                         className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-colors"
                       >
                         <CheckCircle className="h-3 w-3 shrink-0" />
@@ -5208,19 +5547,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </div>
                 {/* Edit-mode toggle — secondary action */}
-                <button
-                  type="button"
-                  onClick={() => setEditingTabs((v) => !v)}
-                  title={editingTabs ? t('tabReorderDone') : t('tabReorder')}
-                  aria-label={editingTabs ? t('tabReorderDone') : t('tabReorder')}
-                  className={`mb-1 flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-lg border transition-colors ${
-                    editingTabs
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {editingTabs ? <Check className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
-                </button>
+                <Tip label={editingTabs ? t('tabReorderDone') : t('tabReorder')}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTabs((v) => !v)}
+                    aria-label={editingTabs ? t('tabReorderDone') : t('tabReorder')}
+                    className={`mb-1 flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-lg border transition-colors ${
+                      editingTabs
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+   >
+                    {editingTabs ? <Check className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
+                  </button>
+                </Tip>
               </div>
             )
           })()}
@@ -5250,17 +5590,22 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {tab === 'activity' && <ActivityTab contact={contact} teamId={currentTeamId} />}
             {tab === 'followups' && <FollowUpsTab contact={contact} teamId={currentTeamId} />}
             {tab === 'bookings' && <BookingsTab contact={contact} teamId={currentTeamId} />}
-            {tab === 'affiliation' && (
+            {tab === 'payments' && (
               <MembershipTab
                 contact={contact}
                 teamId={currentTeamId}
-                orgId={team?.org_id}
-                membershipFieldLocked={membershipFieldLocked}
                 seg={membershipSeg}
                 onSegChange={setMembershipSeg}
               />
             )}
-            {tab === 'payments' && <PaymentsTab contact={contact} teamId={currentTeamId} />}
+            {tab === 'affiliation' && (
+              <AffiliationsTab
+                contact={contact}
+                teamId={currentTeamId}
+                orgId={team?.org_id}
+                membershipFieldLocked={membershipFieldLocked}
+              />
+            )}
             {tab === 'goals' && <GoalsTab contact={contact} teamId={currentTeamId} team={team} />}
             {tab === 'gamification' && <GamificationTab contact={contact} teamId={currentTeamId} />}
           </div>

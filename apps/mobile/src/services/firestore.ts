@@ -1,8 +1,60 @@
 import { db, getFunctions } from '../config/firebase';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, collectionGroup, orderBy, Timestamp, addDoc, serverTimestamp, limit, writeBatch } from 'firebase/firestore';
-import { Contact, TeamPublicProfile, ReferralInfo, AuthToken, SessionPublicProfile, WeeklyReport, ContactAlert, Leaderboard, GamificationSettings, Goal, GoalCreatedBy, GoalEvaluation, GoalType, PerformanceCheckin, PerformanceIndicator, Appointment, AppointmentWithStatus, AvailabilityCoach, RankingSystem } from '../types';
-import { detectPerformanceProfile, resolveCoachingDimensions } from '../utils/goalContract';
+import { CONTACTS_COLLECTION, SESSIONS_COLLECTION, TEAMS_COLLECTION, densifyWeeklyCounts, isoWeekKeysBack } from '@linyup/shared';
+import {
+  Contact,
+  TeamPublicProfile,
+  ReferralInfo,
+  SessionPublicProfile,
+  WeeklyReport,
+  ContactAlert,
+  Leaderboard,
+  GamificationSettings,
+  Goal,
+  GoalCreatedBy,
+  GoalEvaluation,
+  GoalType,
+  PerformanceCheckin,
+  PerformanceIndicator,
+  AppointmentWithStatus,
+  ListAvailabilityCoach,
+  MyBookingsResult,
+  MobileAppTelemetry,
+  RankingSystem,
+  SessionParticipationStatus,
+} from '../types';
+import { detectPerformanceProfile, resolveCoachingDimensions, resolveGoalCategories } from '../utils/goalContract';
+import { readAlert, alertIsFired, RawContactAlert } from '../utils/contactAlerts';
+import { mapPublicProfileMirror } from '../utils/publicProfileMapper';
+import { resolveAffiliationTerm } from '../utils/profileUtils';
 import { httpsCallable } from 'firebase/functions';
+import { SESSION_MIRROR_TYPE } from './sessionMirror';
+
+export { SESSION_MIRROR_TYPE };
+
+/** Sessions live at `sessions/{sessionId}/bookings/{contactId}` — no shared
+ *  path constant exists for this subcollection yet (functions code keeps it
+ *  as a local literal too — see packages/functions/src/booking/myBookings.ts). */
+const BOOKINGS_SUBCOLLECTION = 'bookings';
+const PARTICIPANTS_SUBCOLLECTION = 'participants';
+const PUBLIC_PROFILE_SUBCOLLECTION = 'public_profile';
+
+/** Map one `sessions/{id}/public_profile/{id}` mirror doc to the app's view. */
+function mapSessionPublicProfile(sessionId: string, data: Record<string, unknown>): SessionPublicProfile {
+  const start = data.start as { toDate?: () => Date } | undefined;
+  const end = data.end as { toDate?: () => Date } | undefined;
+  return {
+    id: sessionId,
+    activityId: data.activityId as string | undefined,
+    activityName: (data.activityName as string) || '',
+    teamId: data.teamId as string,
+    start: start?.toDate?.() || new Date(data.start as any),
+    end: end?.toDate?.() || new Date(data.end as any),
+    location: data.location as string | null | undefined,
+    providerName: data.providerName as string | undefined,
+    allowBooking: data.allowBooking as boolean | undefined,
+  };
+}
 
 export const FirestoreService = {
   /**
@@ -58,7 +110,10 @@ export const FirestoreService = {
     }
   },
 
-  // Verify code and log in via loginContactWithCode (validates OTP + mints session)
+  // Verify code and log in via loginContactWithCode (validates OTP + mints session).
+  // Always sent as the mobile client (`client: 'mobile'`) — the ONE thing that
+  // separates the app's login from the web Space's: it activates the
+  // `member_app` plan gate server-side (packages/functions/src/auth/loginContactWithCode.ts).
   async verifyCode(codeId: string, code: string, selectedContactId?: string): Promise<{
     verified: boolean;
     email: string;
@@ -69,6 +124,11 @@ export const FirestoreService = {
     sessionExpires?: number | null;
     contact?: Contact | null;
     teamSummaries?: { id: string; name: string }[] | null;
+    /** Every match existed, but none of their teams' plans include the member
+     *  app — no session was minted. See AuthContext / LoginScreen for how this
+     *  is surfaced. */
+    appNotIncluded?: boolean;
+    teams?: { teamId: string; teamName: string | null; slug: string | null }[];
   }> {
     try {
       const loginContactWithCode = httpsCallable(getFunctions(), 'loginContactWithCode');
@@ -77,13 +137,18 @@ export const FirestoreService = {
         codeId,
         code,
         selectedContactId,
+        client: 'mobile',
       });
 
       const data = result.data as any;
 
       // loginContactWithCode returns customToken+contact on success,
-      // requiresContactSelection for multi-match, or requiresSignup for no match.
-      // Map to the shape AuthContext expects.
+      // requiresContactSelection for multi-match, requiresSignup for no match,
+      // or appNotIncluded when every match's team lacks the member_app plan
+      // feature. Map to the shape AuthContext expects.
+      if (data.appNotIncluded) {
+        return { verified: true, email: data.email ?? '', appNotIncluded: true, teams: data.teams ?? [] };
+      }
       if (data.customToken) {
         return { verified: true, email: data.email ?? '', ...data };
       }
@@ -104,7 +169,7 @@ export const FirestoreService = {
   // Get contact profile (requires authenticated session with custom claims)
   async getContact(contactId: string): Promise<Contact | null> {
     try {
-      const contactRef = doc(db, 'contacts', contactId);
+      const contactRef = doc(db, CONTACTS_COLLECTION, contactId);
       const contactSnap = await getDoc(contactRef);
 
       if (!contactSnap.exists()) {
@@ -124,62 +189,21 @@ export const FirestoreService = {
     }
   },
 
-  // Get team public profile from the public_profile subcollection
+  // Get the team's public profile — the ONE world-readable mirror a contact
+  // session may read. Everything the member surfaces need that used to live on
+  // `teams/{id}` or `organizations/{id}` (ranking systems, affiliation term,
+  // gamification settings, coaching axes, goal categories) is denormalised onto
+  // this doc by syncTeamPublicProfile precisely so a contact session — which has
+  // no `team_members` row and fails every `teams/`/`organizations/` rule check —
+  // never needs to read those collections at all.
   async getTeamPublicProfile(teamId: string): Promise<TeamPublicProfile | null> {
     try {
-      // Access the public_profile subcollection: teams/{teamId}/public_profile/{teamId}
-      const publicProfileRef = doc(db, 'teams', teamId, 'public_profile', teamId);
+      const publicProfileRef = doc(db, TEAMS_COLLECTION, teamId, PUBLIC_PROFILE_SUBCOLLECTION, teamId);
       const profileSnap = await getDoc(publicProfileRef);
-
       if (!profileSnap.exists()) {
-        // Fallback to main team doc for basic info
-        const teamRef = doc(db, 'teams', teamId);
-        const teamSnap = await getDoc(teamRef);
-        if (!teamSnap.exists()) {
-          return null;
-        }
-        const teamData = teamSnap.data();
-        return {
-          id: teamSnap.id,
-          name: teamData.name || '',
-          description: teamData.description,
-        } as TeamPublicProfile;
+        return null;
       }
-
-      const profileData = profileSnap.data();
-
-      return {
-        id: teamId,
-        name: profileData.name || '',
-        description: profileData.description,
-        slug: profileData.slug,
-        links: profileData.links || [],
-        socialLinks: profileData.socialLinks || [],
-        profileImage: profileData.profileImage,
-        referralEnabled: profileData.referralEnabled ?? false,
-        // BOTH HALVES, composed here once — this flag says the appointments UI
-        // is worth PROMOTING, not that a toggle is on. It gates invitations to
-        // book (the dashboard card, the "book new" entry point); a member's own
-        // booked appointments are a record and are never hidden behind it.
-        //
-        // The studio's toggle lives in bookingSettings (written by the admin
-        // Settings → Booking page; there is no top-level flag on this doc) and
-        // ABSENT MEANS ON, so on its own it is true for every studio that never
-        // opened that page. The content half is `active_public_surfaces
-        // .appointments`, computed server-side from the same inputs
-        // listAvailability reads, and it fails closed. Without it the dashboard
-        // promo card — which does not fetch availability itself — would invite
-        // every member of every studio to book a coach who has published none.
-        //
-        // This is the composition `appointmentPickerLive` performs on the web.
-        // It is inlined because the mobile app does not depend on @linyup/shared;
-        // the readers of this default are listed on `BookingSettings
-        // .appointmentsEnabled` in packages/shared/src/types/team.ts — add there,
-        // never copy the list.
-        appointmentsEnabled:
-          profileData.bookingSettings?.appointmentsEnabled !== false &&
-          profileData.active_public_surfaces?.appointments === true,
-      } as TeamPublicProfile;
+      return mapPublicProfileMirror(teamId, profileSnap.data());
     } catch (error) {
       console.error('Error fetching team public profile:', error);
       return null;
@@ -187,69 +211,26 @@ export const FirestoreService = {
   },
 
   /**
-   * The ranking systems that apply to a team — the organisation's when it has
-   * any, otherwise the team's own.
-   *
-   * Same rule as `effectiveRankingSystems` in @linyup/shared and the same shape
-   * as `getOrgAffiliationTerm` below; a structural copy because this app has no
-   * dependency on that package. WHEN SET is load-bearing: an organisation with
-   * none configured has not taken the feature away from its studios.
+   * The ranking systems that apply to a team — already the EFFECTIVE list
+   * (the organisation's when it has any, otherwise the team's own), computed
+   * server-side by `syncTeamPublicProfile` and mirrored onto `public_profile`.
+   * No client-side org lookup needed or possible (a contact session cannot
+   * read `organizations/{id}`).
    */
   async getRankingSystems(teamId: string): Promise<RankingSystem[]> {
-    try {
-      const teamSnap = await getDoc(doc(db, 'teams', teamId));
-      const teamSystems = teamSnap.exists()
-        ? ((teamSnap.data().ranking_systems as RankingSystem[] | undefined) ?? [])
-        : [];
-      const orgId = teamSnap.exists() ? (teamSnap.data().org_id as string | undefined) : undefined;
-      if (!orgId) return teamSystems;
-
-      const orgSnap = await getDoc(doc(db, 'organizations', orgId));
-      const orgSystems = orgSnap.exists()
-        ? ((orgSnap.data().ranking_systems as RankingSystem[] | undefined) ?? [])
-        : [];
-      return orgSystems.length > 0 ? orgSystems : teamSystems;
-    } catch {
-      return [];
-    }
+    const profile = await this.getTeamPublicProfile(teamId);
+    return profile?.ranking_systems ?? [];
   },
 
   async getOrgAffiliationTerm(teamId: string): Promise<string> {
-    try {
-      const teamSnap = await getDoc(doc(db, 'teams', teamId));
-      const orgId = teamSnap.exists() ? (teamSnap.data().org_id as string | undefined) : undefined;
-      if (!orgId) return 'Affiliation';
-
-      const orgSnap = await getDoc(doc(db, 'organizations', orgId));
-      if (!orgSnap.exists()) return 'Affiliation';
-
-      const termObj = orgSnap.data().affiliation_term as Record<string, string> | undefined;
-      if (!termObj) return 'Affiliation';
-
-      // Resolve using device language (first 2 chars of locale, e.g. "de" from "de-CH")
-      const locale = (Intl.DateTimeFormat().resolvedOptions().locale ?? 'en').slice(0, 2);
-      return termObj[locale] ?? termObj['en'] ?? 'Affiliation';
-    } catch {
-      return 'Affiliation';
-    }
-  },
-
-  async getSubscriptionTypeName(teamId: string, subscriptionTypeId: string): Promise<string | null> {
-    try {
-      const ref = doc(db, 'teams', teamId, 'subscription_types', subscriptionTypeId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      const name = snap.data().name || null;
-      return name;
-    } catch {
-      return null;
-    }
+    const profile = await this.getTeamPublicProfile(teamId);
+    return resolveAffiliationTerm(profile?.affiliation_term);
   },
 
   // Get all contacts for an email (for managing multiple contacts)
   async getContactsByEmail(email: string): Promise<Contact[]> {
     try {
-      const contactsRef = collection(db, 'contacts');
+      const contactsRef = collection(db, CONTACTS_COLLECTION);
       const q = query(contactsRef, where('email', '==', email.toLowerCase()));
       const querySnapshot = await getDocs(q);
 
@@ -274,49 +255,26 @@ export const FirestoreService = {
         'switchActiveContact'
       );
 
-      const result = await switchActiveContact({ contactId });
+      // `client: 'mobile'` activates the same member_app plan gate the login
+      // applies (packages/functions/src/contacts/switchActiveContact.ts).
+      const result = await switchActiveContact({ contactId, client: 'mobile' });
 
       return result.data as any;
     } catch (error) {
+      // The plan gate's refusal carries a member-facing message — let it reach
+      // the screen (AuthContext.selectContact's catch) instead of collapsing
+      // into the generic "failed to switch".
+      if ((error as { details?: { reason?: string } })?.details?.reason === 'app_not_included') throw error;
       console.error('Error switching contact:', error);
       return null;
     }
   },
 
-  // Get all active teams for selection on login
-  async getActiveTeams(): Promise<TeamPublicProfile[]> {
-    try {
-      // Query the public_profile subcollection across all teams
-      // Structure: teams/{teamId}/public_profile/{docId}
-      const publicProfileSnapshot = await getDocs(
-        collectionGroup(db, 'public_profile')
-      );
-
-      return publicProfileSnapshot.docs
-        .filter(doc => {
-          // Only include documents from teams collection
-          // Path format: teams/{teamId}/public_profile/{docId}
-          const pathParts = doc.ref.path.split('/');
-          return pathParts[0] === 'teams';
-        })
-        .map(doc => {
-          const profileData = doc.data();
-          // Extract teamId from the document path
-          const pathParts = doc.ref.path.split('/');
-          const teamId = pathParts[1];
-
-          return {
-            id: teamId,
-            name: profileData.name || 'Team',
-            description: profileData.description,
-            logo: profileData.logo,
-          } as TeamPublicProfile;
-        });
-    } catch (error) {
-      console.error('Error fetching active teams:', error);
-      return [];
-    }
-  },
+  // (`getActiveTeams` — an anonymous, UNFILTERED read of every public_profile
+  // mirror on the platform (sessions, activities, courses, everything), made on
+  // every login-screen mount just to name studios — is gone. The names now come
+  // from `sendContactVerificationCode`'s `teamSummaries`, which the server
+  // resolves for exactly the teams the email belongs to.)
 
   // Get QR code data for check-in (calls getContactQR cloud function)
   async getContactQR(): Promise<{
@@ -342,25 +300,25 @@ export const FirestoreService = {
 
   // Update the weight field on a contact document
   async updateContactWeight(contactId: string, weight: number): Promise<void> {
-    const contactRef = doc(db, 'contacts', contactId);
+    const contactRef = doc(db, CONTACTS_COLLECTION, contactId);
     await updateDoc(contactRef, { weight });
   },
 
-  // Record that the contact was seen (app came to foreground)
-  async updateLastSeen(
-    contactId: string,
-    appVersion?: string,
-    extra?: Record<string, unknown>
-  ): Promise<void> {
-    const contactRef = doc(db, 'contacts', contactId);
+  /**
+   * Record that the contact was seen (app came to foreground). Writes EXACTLY
+   * the self-update rules arm admits — `last_seen_at` + `mobile_app` — nothing
+   * else at top level. See `Contact.mobile_app` (MobileAppTelemetry) in
+   * @linyup/shared and the matching `hasOnly([...])` clause in firestore.rules.
+   */
+  async updateLastSeen(contactId: string, telemetry?: MobileAppTelemetry): Promise<void> {
+    const contactRef = doc(db, CONTACTS_COLLECTION, contactId);
     await updateDoc(contactRef, {
       last_seen_at: serverTimestamp(),
-      ...(appVersion ? { app_version: appVersion } : {}),
-      ...extra,
+      ...(telemetry ? { mobile_app: telemetry } : {}),
     });
   },
 
-  // Get upcoming sessions for a team from public_profile subcollection
+  // Get upcoming sessions for a team from the public_profile mirror
   async getUpcomingSessions(teamId: string, date: Date = new Date()): Promise<SessionPublicProfile[]> {
     try {
       const startOfDay = new Date(date);
@@ -370,9 +328,9 @@ export const FirestoreService = {
 
       const publicProfileSnapshot = await getDocs(
         query(
-          collectionGroup(db, 'public_profile'),
+          collectionGroup(db, PUBLIC_PROFILE_SUBCOLLECTION),
           where('teamId', '==', teamId),
-          where('doc_type', '==', 'session'),
+          where('type', '==', SESSION_MIRROR_TYPE),
           where('start', '>=', Timestamp.fromDate(startOfDay)),
           where('start', '<=', Timestamp.fromDate(upperLimit)),
           orderBy('start', 'asc'),
@@ -380,36 +338,20 @@ export const FirestoreService = {
         )
       );
 
-      const sessions = publicProfileSnapshot.docs
-        .map(docSnap => {
-          const data = docSnap.data();
-          const sessionId = docSnap.ref.path.split('/')[1];
-
-          return {
-            id: sessionId,
-            activityId: data.activityId,
-            activityName: data.activityName || '',
-            teamId: data.teamId,
-            start: data.start?.toDate?.() || new Date(data.start),
-            end: data.end?.toDate?.() || new Date(data.end),
-            locationName: data.locationName,
-            locationAddress: data.locationAddress,
-            locationMapsUrl: data.locationMapsUrl,
-            providerName: data.providerName,
-            allowBooking: data.allowBooking,
-          } as SessionPublicProfile;
-        })
-        // Sort by start time
+      return publicProfileSnapshot.docs
+        .map(docSnap => mapSessionPublicProfile(docSnap.ref.path.split('/')[1], docSnap.data()))
         .sort((a, b) => a.start.getTime() - b.start.getTime());
-
-      return sessions;
     } catch (error) {
       console.error('Error fetching upcoming sessions:', error);
       return [];
     }
   },
 
-  // Get attended sessions for a contact within a date range
+  // Get attended sessions for a contact within a date range. Attendance is a
+  // fact the member surface cannot get from `getMyBookings` (that callable
+  // answers UPCOMING bookings only), so this is the one place a per-session
+  // fan-out remains legitimate — it checks her own `participants` doc, which
+  // firestore.rules permits for a contact session (doc id == her contactId).
   async getContactAttendance(
     contactId: string,
     startDate: Date,
@@ -417,53 +359,16 @@ export const FirestoreService = {
     teamId?: string
   ): Promise<SessionPublicProfile[]> {
     try {
-      // 1. Query sessions in the date range via public_profile (server-side filtered)
-      const constraints = [
-        where('teamId', '==', teamId),
-        where('doc_type', '==', 'session'),
-        where('start', '>=', Timestamp.fromDate(startDate)),
-        where('start', '<=', Timestamp.fromDate(endDate)),
-        orderBy('start', 'asc')
-      ];
+      const sessions = await this.getTeamSessionsInRange(teamId ?? '', startDate, endDate);
 
-      const publicProfileSnapshot = await getDocs(
-        query(collectionGroup(db, 'public_profile'), ...constraints)
-      );
-
-      // Map to session data
-      const potentialSessions = publicProfileSnapshot.docs
-        .map(docSnap => {
-          const data = docSnap.data();
-          const sessionId = docSnap.ref.path.split('/')[1];
-          return {
-            id: sessionId,
-            data: {
-              id: sessionId,
-              activityId: data.activityId,
-              activityName: data.activityName || '',
-              teamId: data.teamId,
-              start: data.start?.toDate?.() || new Date(data.start),
-              end: data.end?.toDate?.() || new Date(data.end),
-              locationName: data.locationName,
-              locationAddress: data.locationAddress,
-              locationMapsUrl: data.locationMapsUrl,
-              providerName: data.providerName,
-              allowBooking: data.allowBooking,
-            } as SessionPublicProfile
-          };
-        });
-
-      // 2. Check participation for each session in parallel
       const attendedSessions: SessionPublicProfile[] = [];
-
       await Promise.all(
-        potentialSessions.map(async (session) => {
+        sessions.map(async (session) => {
           try {
-            const participantRef = doc(db, 'sessions', session.id, 'participants', contactId);
+            const participantRef = doc(db, SESSIONS_COLLECTION, session.id, PARTICIPANTS_SUBCOLLECTION, contactId);
             const participantSnap = await getDoc(participantRef);
-
             if (participantSnap.exists()) {
-              attendedSessions.push(session.data);
+              attendedSessions.push(session);
             }
           } catch (e) {
             console.warn(`Failed to check participation for session ${session.id}`, e);
@@ -478,114 +383,116 @@ export const FirestoreService = {
     }
   },
 
-  // Get all sessions for a team within a date range (available classes)
+  // All sessions for a team within a date range (the public_profile mirror).
   async getTeamSessionsInRange(
     teamId: string,
     startDate: Date,
     endDate: Date
   ): Promise<SessionPublicProfile[]> {
     try {
+      if (!teamId) return [];
       const publicProfileSnapshot = await getDocs(
         query(
-          collectionGroup(db, 'public_profile'),
+          collectionGroup(db, PUBLIC_PROFILE_SUBCOLLECTION),
           where('teamId', '==', teamId),
-          where('doc_type', '==', 'session'),
+          where('type', '==', SESSION_MIRROR_TYPE),
           where('start', '>=', Timestamp.fromDate(startDate)),
           where('start', '<=', Timestamp.fromDate(endDate)),
           orderBy('start', 'asc')
         )
       );
 
-      return publicProfileSnapshot.docs
-        .map(docSnap => {
-          const data = docSnap.data();
-          const sessionId = docSnap.ref.path.split('/')[1];
-          return {
-            id: sessionId,
-            activityId: data.activityId,
-            activityName: data.activityName || '',
-            teamId: data.teamId,
-            start: data.start?.toDate?.() || new Date(data.start),
-            end: data.end?.toDate?.() || new Date(data.end),
-            locationName: data.locationName,
-            locationAddress: data.locationAddress,
-            locationMapsUrl: data.locationMapsUrl,
-            providerName: data.providerName,
-            allowBooking: data.allowBooking,
-          } as SessionPublicProfile;
-        });
+      return publicProfileSnapshot.docs.map(docSnap =>
+        mapSessionPublicProfile(docSnap.ref.path.split('/')[1], docSnap.data())
+      );
     } catch (error) {
       console.error('Error fetching team sessions in range:', error);
       return [];
     }
   },
 
-  // Get sessions for a team within range and check participation/booking for each
+  /**
+   * Sessions for a team within range, with the contact's own participation /
+   * booking status attached. The booking half comes from ONE `getMyBookings`
+   * call (never a per-session `bookings/{contactId}` fan-out — see the module
+   * header of packages/functions/src/booking/myBookings.ts for why that fan-out
+   * was wrong in three ways); attendance for PAST sessions still needs the
+   * per-session `participants` check, since `getMyBookings` only answers
+   * upcoming bookings.
+   */
   async getSessionsWithParticipation(
     contactId: string,
     teamId: string,
     startDate: Date,
     endDate: Date
-  ): Promise<any[]> {
+  ): Promise<(SessionPublicProfile & { status: SessionParticipationStatus })[]> {
     try {
-      const sessions = await this.getTeamSessionsInRange(teamId, startDate, endDate);
-      const now = new Date();
+      const [sessions, bookingsResult] = await Promise.all([
+        this.getTeamSessionsInRange(teamId, startDate, endDate),
+        this.getMyBookings(teamId).catch(() => ({ bookings: [], cursor: null, scanned: 0 }) as MyBookingsResult),
+      ]);
 
-      const sessionsWithStatus = await Promise.all(
-        sessions.map(async (session) => {
-          let isParticipant = false;
-          let isBooked = false;
+      const bookedSessionIds = new Set(
+        bookingsResult.bookings.filter(b => b.kind === 'class').map(b => b.sessionId)
+      );
+
+      const now = new Date();
+      const pastSessions = sessions.filter(s => s.start < now);
+      const attendedIds = new Set<string>();
+      await Promise.all(
+        pastSessions.map(async (session) => {
           try {
-            // Check both participants and bookings subcollections
-            const [participantSnap, bookingSnap] = await Promise.all([
-              getDoc(doc(db, 'sessions', session.id, 'participants', contactId)),
-              getDoc(doc(db, 'sessions', session.id, 'bookings', contactId))
-            ]);
-            isParticipant = participantSnap.exists();
-            // Only treat as actively booked if status is 'pending' or absent (legacy)
-            const bookingStatus = bookingSnap.exists() ? bookingSnap.data()?.status : null;
-            isBooked = bookingSnap.exists() && (!bookingStatus || bookingStatus === 'pending');
+            const participantRef = doc(db, SESSIONS_COLLECTION, session.id, PARTICIPANTS_SUBCOLLECTION, contactId);
+            const participantSnap = await getDoc(participantRef);
+            if (participantSnap.exists()) attendedIds.add(session.id);
           } catch (e) {
             console.warn(`Failed to check participation for session ${session.id}`, e);
           }
-          const isPast = session.start < now;
-
-          let status: 'attended' | 'not attended' | 'booked' | 'book';
-          if (isParticipant) {
-            // In participants = confirmed attendance. Past = attended; future = booked (manually added / promoted).
-            status = isPast ? 'attended' : 'booked';
-          } else if (isBooked) {
-            status = 'booked';
-          } else {
-            status = isPast ? 'not attended' : 'book';
-          }
-
-          return {
-            ...session,
-            status
-          };
         })
       );
 
-      return sessionsWithStatus;
+      return sessions.map((session) => {
+        const isPast = session.start < now;
+        let status: SessionParticipationStatus;
+        if (isPast) {
+          status = attendedIds.has(session.id) ? 'attended' : 'not attended';
+        } else {
+          status = bookedSessionIds.has(session.id) ? 'booked' : 'book';
+        }
+        return { ...session, status };
+      });
     } catch (error) {
       console.error('Error fetching sessions with participation:', error);
       return [];
     }
   },
 
-  // Get weekly reports for a contact (attendance chart data)
-  async getContactWeeklyReports(contactId: string): Promise<WeeklyReport[]> {
+  // Get weekly reports for a contact (attendance chart data).
+  //
+  // A WEEK WITH NO ROW IS A WEEK WITH NO ATTENDANCE: `weeklyReports` writes a
+  // document only for a contact who turned up, so the stored rows are sparse and
+  // row count says nothing about elapsed time. Ask for a window of weeks and let
+  // the shared densifier fill the gaps with zero — the same rule the web chart
+  // reads through, so the two platforms cannot disagree about what a missing
+  // week means.
+  //
+  // Nothing calls this yet; the window also replaces an unbounded fetch that
+  // would have pulled every row a long-standing contact has (migrated HMD
+  // contacts carry years of them).
+  async getContactWeeklyReports(contactId: string, weeks = 16): Promise<WeeklyReport[]> {
     try {
-      const reportsRef = collection(db, 'contacts', contactId, 'contact_weekly_reports');
-      const q = query(reportsRef, orderBy('iso_week', 'asc'));
+      const window = isoWeekKeysBack(weeks);
+      const reportsRef = collection(db, CONTACTS_COLLECTION, contactId, 'contact_weekly_reports');
+      const q = query(reportsRef, where('iso_week', '>=', window[0]), orderBy('iso_week', 'asc'));
       const snapshot = await getDocs(q);
 
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        iso_week: doc.data().iso_week,
-        sessions_count: doc.data().sessions_count || 0,
-      }));
+      return densifyWeeklyCounts(
+        snapshot.docs.map(doc => ({
+          iso_week: doc.data().iso_week as string,
+          sessions_count: (doc.data().sessions_count as number) || 0,
+        })),
+        weeks,
+      ).map(r => ({ id: r.iso_week, ...r }));
     } catch (error) {
       console.error('Error fetching weekly reports:', error);
       return [];
@@ -595,7 +502,7 @@ export const FirestoreService = {
   // Get team leaderboard (denormalized document for gamification)
   async getTeamLeaderboard(teamId: string): Promise<Leaderboard | null> {
     try {
-      const leaderboardRef = doc(db, 'teams', teamId, 'leaderboard', 'current');
+      const leaderboardRef = doc(db, TEAMS_COLLECTION, teamId, 'leaderboard', 'current');
       const leaderboardSnap = await getDoc(leaderboardRef);
 
       if (!leaderboardSnap.exists()) {
@@ -615,28 +522,23 @@ export const FirestoreService = {
     }
   },
 
-  // Get gamification settings (badge thresholds + coach badges) from team config
+  // Get gamification settings (badge thresholds + coach badges) from the
+  // public_profile mirror — never `teams/{id}.settings.gamification`, which a
+  // contact session cannot read.
   async getTeamGamificationSettings(teamId: string): Promise<GamificationSettings | null> {
-    try {
-      const teamRef = doc(db, 'teams', teamId);
-      const teamSnap = await getDoc(teamRef);
-      if (!teamSnap.exists()) return null;
-      const gamification = teamSnap.data()?.settings?.gamification;
-      if (!gamification) return null;
-      return {
-        badge_thresholds: gamification.badge_thresholds || null,
-        coach_badges: gamification.coach_badges || null,
-      };
-    } catch (error) {
-      console.error('Error fetching gamification settings:', error);
-      return null;
-    }
+    const profile = await this.getTeamPublicProfile(teamId);
+    return profile?.gamification_settings ?? null;
   },
 
-  // Get active alerts for a contact (alerts with show_in_app=true and not archived)
-  async getContactAlerts(contactId: string): Promise<ContactAlert[]> {
+  // Get active alerts for a contact: fired, not dismissed, and flagged to
+  // show in the app. Reads BOTH document shapes a contact_alerts doc may
+  // carry (flat schedule_type/schedule_value from the studio web app + the
+  // HMD migration, nested schedule{} from bookSession + the automation
+  // engine) and uses the shared fired predicate — see utils/contactAlerts.ts.
+  // `totalSessions` is Contact.total_sessions, needed for sessions_countdown.
+  async getContactAlerts(contactId: string, totalSessions?: number | null): Promise<ContactAlert[]> {
     try {
-      const alertsRef = collection(db, 'contacts', contactId, 'contact_alerts');
+      const alertsRef = collection(db, CONTACTS_COLLECTION, contactId, 'contact_alerts');
       const q = query(
         alertsRef,
         where('show_in_app', '==', true),
@@ -645,48 +547,9 @@ export const FirestoreService = {
       );
       const snapshot = await getDocs(q);
 
-      const now = new Date();
-      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-
       return snapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          const scheduleValue = data.schedule?.value;
-          let parsedValue: number | Date;
-
-          if (data.schedule?.type === 'datetime') {
-            // Convert Firestore Timestamp to Date
-            parsedValue = scheduleValue?.toDate?.() || new Date(scheduleValue);
-          } else {
-            // sessions_countdown - value is a number
-            parsedValue = scheduleValue;
-          }
-
-          return {
-            id: doc.id,
-            message: data.message || '',
-            schedule: {
-              type: data.schedule?.type || 'datetime',
-              value: parsedValue,
-            },
-            alert_type: data.alert_type,
-            show_in_app: data.show_in_app,
-            created_at: data.created_at?.toDate?.() || new Date(data.created_at),
-            archived_at: data.archived_at ? (data.archived_at?.toDate?.() || new Date(data.archived_at)) : null,
-          } as ContactAlert;
-        })
-        .filter(alert => {
-          // Filter based on schedule type
-          if (alert.schedule.type === 'sessions_countdown') {
-            // Show when value <= 1 (1 or fewer sessions remaining)
-            return (alert.schedule.value as number) <= 1;
-          } else {
-            // datetime: show 1 week before and after the scheduled date
-            const scheduledDate = alert.schedule.value as Date;
-            const diff = scheduledDate.getTime() - now.getTime();
-            return diff >= -oneWeekMs && diff <= oneWeekMs;
-          }
-        });
+        .map(doc => readAlert(doc.id, doc.data() as RawContactAlert))
+        .filter(alert => alertIsFired(alert, { totalSessions }));
     } catch (error) {
       console.error('Error fetching contact alerts:', error);
       return [];
@@ -695,8 +558,25 @@ export const FirestoreService = {
 
   // Request contact update via cloud function. Like bookSession, the signed-in
   // contact session rides along on the callable and identifies us server-side.
+  //
+  // NOTE: this payload shape is `requestContactUpdate`'s OWN wire contract
+  // (packages/functions/src/contacts/requestContactUpdate.ts /
+  // manageContactUpdateRequest.ts's ALLOWED_UPDATE_FIELDS) — it is not
+  // `Partial<Contact>`, and it predates the shared Contact type's field names.
+  // `taxnumber` is deliberately absent: the approval flow's allow-list has
+  // never included it, so a submitted value was silently dropped either way.
   async requestContactUpdate(params: {
-    contactDetails: Partial<Contact>;
+    contactDetails: {
+      firstname: string;
+      lastname: string;
+      phone: string;
+      birthdate: string | null;
+      birthplace: string;
+      gender: string;
+      residence: { route: string; street_number: string; postal_code: string; locality: string };
+      emergencyContact: { name: string; phone: string };
+      weight?: number;
+    };
     note?: string;
   }): Promise<{ success: boolean; requestId: string }> {
     try {
@@ -730,7 +610,23 @@ export const FirestoreService = {
     }
   },
 
-  // Get booked sessions for a contact within a date range (from bookings subcollection)
+  /**
+   * The signed-in contact's own upcoming bookings — class AND appointment,
+   * including ones the studio entered on her behalf. THE ONE READ for "my
+   * bookings" anywhere in this app; see the module header of
+   * packages/functions/src/booking/myBookings.ts for why a client-side
+   * `sessions` query could never answer this honestly (the `doc_type` bug, the
+   * team-volume cap, and bookings with no public mirror at all).
+   */
+  async getMyBookings(teamId: string, cursor?: number | null): Promise<MyBookingsResult> {
+    const fn = httpsCallable(getFunctions(), 'getMyBookings');
+    const result = await fn({ teamId, cursor: cursor ?? null });
+    return result.data as MyBookingsResult;
+  },
+
+  // Get booked sessions for a contact within a date range — sourced from
+  // `getMyBookings` (ONE call) rather than a `bookings/{contactId}` fan-out
+  // per session in range.
   async getContactBookings(
     contactId: string,
     startDate: Date,
@@ -738,87 +634,43 @@ export const FirestoreService = {
     teamId?: string
   ): Promise<SessionPublicProfile[]> {
     try {
-      // Same approach as getContactAttendance but checking bookings instead of participants
-      const constraints = [
-        where('teamId', '==', teamId),
-        where('doc_type', '==', 'session'),
-        where('start', '>=', Timestamp.fromDate(startDate)),
-        where('start', '<=', Timestamp.fromDate(endDate)),
-        orderBy('start', 'asc')
-      ];
-
-      const publicProfileSnapshot = await getDocs(
-        query(collectionGroup(db, 'public_profile'), ...constraints)
-      );
-
-      const potentialSessions = publicProfileSnapshot.docs
-        .map(docSnap => {
-          const data = docSnap.data();
-          const sessionId = docSnap.ref.path.split('/')[1];
-          return {
-            id: sessionId,
-            data: {
-              id: sessionId,
-              activityId: data.activityId,
-              activityName: data.activityName || '',
-              teamId: data.teamId,
-              start: data.start?.toDate?.() || new Date(data.start),
-              end: data.end?.toDate?.() || new Date(data.end),
-              locationName: data.locationName,
-              locationAddress: data.locationAddress,
-              locationMapsUrl: data.locationMapsUrl,
-              providerName: data.providerName,
-              allowBooking: data.allowBooking,
-            } as SessionPublicProfile
-          };
-        });
-
-      const bookedSessions: SessionPublicProfile[] = [];
-
-      await Promise.all(
-        potentialSessions.map(async (session) => {
-          try {
-            const bookingRef = doc(db, 'sessions', session.id, 'bookings', contactId);
-            const bookingSnap = await getDoc(bookingRef);
-
-            if (bookingSnap.exists()) {
-              const bookingStatus = bookingSnap.data()?.status;
-              // Only include pending bookings (or legacy docs without status field)
-              if (!bookingStatus || bookingStatus === 'pending') {
-                bookedSessions.push(session.data);
-              }
-            }
-          } catch (e) {
-            console.warn(`Failed to check booking for session ${session.id}`, e);
-          }
-        })
-      );
-
-      return bookedSessions;
+      if (!teamId) return [];
+      const [sessions, bookingsResult] = await Promise.all([
+        this.getTeamSessionsInRange(teamId, startDate, endDate),
+        this.getMyBookings(teamId),
+      ]);
+      const bookedIds = new Set(bookingsResult.bookings.filter(b => b.kind === 'class').map(b => b.sessionId));
+      return sessions.filter(s => bookedIds.has(s.id));
     } catch (error) {
       console.error('Error fetching contact bookings:', error);
       return [];
     }
   },
 
-  // Cancel a session booking (requires fetching token from bookings subcollection)
+  // Cancel a booking (class or appointment) via its `booking_token` —
+  // `getMyBookings` / `getUpcomingAppointments` already hand back a
+  // `cancelToken` for every cancellable row, so this never needs a lookup.
+  async cancelBookingByToken(token: string): Promise<{ success: boolean; message?: string }> {
+    const cancelBookingFn = httpsCallable(getFunctions(), 'cancelBooking');
+    const result = await cancelBookingFn({ token });
+    return result.data as any;
+  },
+
+  // Cancel a CLASS booking by session — looks up the booking token once (a
+  // single doc read on this user action, not a listing fan-out) and delegates
+  // to cancelBookingByToken.
   async cancelSession(params: {
     sessionId: string;
     contactId: string;
   }): Promise<{ success: boolean; message?: string }> {
     try {
-      console.log('[cancelSession] Starting cancel for session:', params.sessionId, 'contact:', params.contactId);
-
-      // 1. Get booking doc to find the booking token (check bookings first, fall back to participants for pre-migration data)
-      const bookingRef = doc(db, 'sessions', params.sessionId, 'bookings', params.contactId);
+      const bookingRef = doc(db, SESSIONS_COLLECTION, params.sessionId, BOOKINGS_SUBCOLLECTION, params.contactId);
       let bookingSnap = await getDoc(bookingRef);
-      console.log('[cancelSession] Booking doc exists:', bookingSnap.exists());
 
       if (!bookingSnap.exists()) {
         // Fallback: check participants for bookings not yet migrated
-        const participantRef = doc(db, 'sessions', params.sessionId, 'participants', params.contactId);
+        const participantRef = doc(db, SESSIONS_COLLECTION, params.sessionId, PARTICIPANTS_SUBCOLLECTION, params.contactId);
         bookingSnap = await getDoc(participantRef);
-        console.log('[cancelSession] Participant fallback exists:', bookingSnap.exists());
       }
 
       if (!bookingSnap.exists()) {
@@ -832,21 +684,13 @@ export const FirestoreService = {
       }
 
       const bookingToken = bookingData?.booking_token;
-      console.log('[cancelSession] Has booking_token:', !!bookingToken);
-
       if (!bookingToken) {
         throw new Error('No booking token found for this session');
       }
 
-      // 2. Call cancelBooking with the token
-      console.log('[cancelSession] Calling cancelBooking cloud function...');
-      const cancelBookingFn = httpsCallable(getFunctions(), 'cancelBooking');
-      const result = await cancelBookingFn({ token: bookingToken });
-      console.log('[cancelSession] Cloud function result:', result.data);
-
-      return result.data as any;
+      return await this.cancelBookingByToken(bookingToken);
     } catch (error) {
-      console.error('[cancelSession] Error:', error);
+      console.error('Error cancelling session:', error);
       throw error;
     }
   },
@@ -859,7 +703,7 @@ export const FirestoreService = {
     sessionId?: string;
   }): Promise<
     | { status: 'checked_in'; alreadyCheckedIn: boolean; sessionName: string; sessionStart: number }
-    | { status: 'session_required'; sessions: Array<{ id: string; activityName: string; start: any; end: any }> }
+    | { status: 'session_required'; sessions: { id: string; activityName: string; start: any; end: any }[] }
     | { status: 'no_sessions' }
   > {
     const fn = httpsCallable(getFunctions(), 'selfCheckIn');
@@ -895,10 +739,10 @@ export const FirestoreService = {
 
   async getGoals(contactId: string): Promise<Goal[]> {
     try {
-      const goalsRef = collection(db, 'contacts', contactId, 'goals');
+      const goalsRef = collection(db, CONTACTS_COLLECTION, contactId, 'goals');
       const q = query(goalsRef, orderBy('created_at', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(docSnap => {
+      const all = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
           id: docSnap.id,
@@ -909,6 +753,18 @@ export const FirestoreService = {
           type: (data.type as GoalType | undefined) ?? 'goal',
         } as Goal;
       });
+      // A goal the coach archived is hidden here too, with its steps — the same
+      // rule the admin tab and the member Space apply. IN MEMORY, because
+      // `archived_at` is absent on older goals and a `where(== null)` would
+      // match none of them.
+      const archivedGoalIds = new Set(
+        all.filter(g => g.type !== 'task' && !!g.archived_at).map(g => g.id),
+      );
+      return all.filter(
+        g =>
+          !g.archived_at &&
+          !(g.type === 'task' && g.parent_goal_id && archivedGoalIds.has(g.parent_goal_id)),
+      );
     } catch (error) {
       console.error('Error fetching goals:', error);
       return [];
@@ -917,7 +773,7 @@ export const FirestoreService = {
 
   async updateGoal(contactId: string, goalId: string, data: Partial<Omit<Goal, 'id'>>): Promise<void> {
     try {
-      const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
+      const goalRef = doc(db, CONTACTS_COLLECTION, contactId, 'goals', goalId);
       await updateDoc(goalRef, data as any);
     } catch (error) {
       console.error('Error updating goal:', error);
@@ -927,7 +783,7 @@ export const FirestoreService = {
 
   async deleteGoal(contactId: string, goalId: string): Promise<void> {
     try {
-      const goalRef = doc(db, 'contacts', contactId, 'goals', goalId);
+      const goalRef = doc(db, CONTACTS_COLLECTION, contactId, 'goals', goalId);
       await deleteDoc(goalRef);
     } catch (error) {
       console.error('Error deleting goal:', error);
@@ -937,7 +793,7 @@ export const FirestoreService = {
 
   async createGoal(contactId: string, data: Omit<Goal, 'id'>): Promise<string> {
     try {
-      const goalsRef = collection(db, 'contacts', contactId, 'goals');
+      const goalsRef = collection(db, CONTACTS_COLLECTION, contactId, 'goals');
       const docRef = await addDoc(goalsRef, data);
       return docRef.id;
     } catch (error) {
@@ -948,7 +804,7 @@ export const FirestoreService = {
 
   async getGoalEvaluations(contactId: string, goalId: string): Promise<GoalEvaluation[]> {
     try {
-      const evalsRef = collection(db, 'contacts', contactId, 'goals', goalId, 'evaluations');
+      const evalsRef = collection(db, CONTACTS_COLLECTION, contactId, 'goals', goalId, 'evaluations');
       const q = query(evalsRef, orderBy('evaluated_at', 'desc'));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(docSnap => ({
@@ -978,14 +834,14 @@ export const FirestoreService = {
     goalCreatedBy: GoalCreatedBy,
   ): Promise<void> {
     try {
-      const evalsRef = collection(db, 'contacts', contactId, 'goals', goalId, 'evaluations');
+      const evalsRef = collection(db, CONTACTS_COLLECTION, contactId, 'goals', goalId, 'evaluations');
       // ONE BATCH: the evaluation and the status it moves the goal to are a
       // single fact. Landing one without the other leaves a goal whose status
       // its own newest evaluation contradicts, and nothing reconciles them.
       const batch = writeBatch(db);
       batch.set(doc(evalsRef), data);
       if (goalCreatedBy === 'student') {
-        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
+        batch.update(doc(db, CONTACTS_COLLECTION, contactId, 'goals', goalId), { status: data.status_after });
       }
       await batch.commit();
     } catch (error) {
@@ -1002,11 +858,11 @@ export const FirestoreService = {
     goalCreatedBy: GoalCreatedBy,
   ): Promise<void> {
     try {
-      const evalRef = doc(db, 'contacts', contactId, 'goals', goalId, 'evaluations', evalId);
+      const evalRef = doc(db, CONTACTS_COLLECTION, contactId, 'goals', goalId, 'evaluations', evalId);
       const batch = writeBatch(db);
       batch.update(evalRef, { ...data, edited: true });
       if (data.status_after && goalCreatedBy === 'student') {
-        batch.update(doc(db, 'contacts', contactId, 'goals', goalId), { status: data.status_after });
+        batch.update(doc(db, CONTACTS_COLLECTION, contactId, 'goals', goalId), { status: data.status_after });
       }
       await batch.commit();
     } catch (error) {
@@ -1019,7 +875,7 @@ export const FirestoreService = {
 
   async getPerformanceCheckins(contactId: string, limitCount: number = 10): Promise<PerformanceCheckin[]> {
     try {
-      const checkinsRef = collection(db, 'contacts', contactId, 'performance_checkins');
+      const checkinsRef = collection(db, CONTACTS_COLLECTION, contactId, 'performance_checkins');
       const q = query(checkinsRef, orderBy('taken_at', 'desc'), limit(limitCount));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(docSnap => ({
@@ -1034,7 +890,7 @@ export const FirestoreService = {
 
   async addPerformanceCheckin(contactId: string, data: Omit<PerformanceCheckin, 'id'>): Promise<void> {
     try {
-      const checkinsRef = collection(db, 'contacts', contactId, 'performance_checkins');
+      const checkinsRef = collection(db, CONTACTS_COLLECTION, contactId, 'performance_checkins');
 
       const profile = detectPerformanceProfile(data.scores);
       const payload = { ...data, ...profile };
@@ -1055,7 +911,7 @@ export const FirestoreService = {
       const existingSnap = await getDocs(existingQ);
 
       if (!existingSnap.empty) {
-        const existingDocRef = doc(db, 'contacts', contactId, 'performance_checkins', existingSnap.docs[0].id);
+        const existingDocRef = doc(db, CONTACTS_COLLECTION, contactId, 'performance_checkins', existingSnap.docs[0].id);
         await updateDoc(existingDocRef, { ...payload });
         return;
       }
@@ -1068,104 +924,51 @@ export const FirestoreService = {
   },
 
   /**
-   * The team's coaching dimensions — ONE list, used both as goal categories
-   * and as performance check-in axes (see `resolveCoachingDimensions`). This
-   * replaces the old, separate `getTeamPerformanceIndicators` / (goal-category-
-   * reading) pair: `performance_indicators` and `goal_categories` were two
-   * vocabularies for the same concept, which is drift, not design.
+   * The team's performance check-in axes — HOW SOMEONE IS DOING, the radar's
+   * dimensions (see `resolveCoachingDimensions`). Read from the public_profile
+   * mirror — never `teams/{id}`, which a contact session cannot read.
+   *
+   * NOT the goal categories: that is `getGoalCategories` below.
    */
   async getCoachingDimensions(teamId: string): Promise<PerformanceIndicator[]> {
-    try {
-      const teamRef = doc(db, 'teams', teamId);
-      const teamSnap = await getDoc(teamRef);
-      if (!teamSnap.exists()) return resolveCoachingDimensions(null);
-      return resolveCoachingDimensions(
-        teamSnap.data() as { performance_indicators?: PerformanceIndicator[] | null },
-      );
-    } catch (error) {
-      console.error('Error fetching coaching dimensions:', error);
-      return resolveCoachingDimensions(null);
-    }
+    const profile = await this.getTeamPublicProfile(teamId);
+    return resolveCoachingDimensions({ performance_indicators: profile?.performance_indicators ?? null });
+  },
+
+  /**
+   * The team's goal categories — WHAT A GOAL IS ABOUT (see
+   * `resolveGoalCategories`), read from the public_profile mirror. Falls back
+   * to the defaults for a team that never configured its own.
+   */
+  async getGoalCategories(teamId: string): Promise<PerformanceIndicator[]> {
+    const profile = await this.getTeamPublicProfile(teamId);
+    return resolveGoalCategories({ goal_categories: profile?.goal_categories ?? null });
   },
 
   // ── Appointments (backed by sessions with activityType === 'appointment') ────
 
   /**
-   * The contact's OWN upcoming booked appointments.
-   *
-   * Appointments are availability-only: a provider publishes free time
-   * (`availability` docs) and NOTHING is pre-generated — an appointment session is
-   * created only when someone books. So every session this query returns is
-   * already booked by someone; we keep only the ones booked by THIS contact
-   * (other members' appointments are none of their business, and there are no
-   * "open" slots left to browse).
+   * The contact's OWN upcoming booked appointments — derived from
+   * `getMyBookings`, never a root `sessions` query (appointments are
+   * availability-only: nothing exists until booked, and the studio may have
+   * booked one on the member's behalf with online booking off).
    */
-  async getUpcomingAppointments(
-    teamId: string,
-    contactId: string
-  ): Promise<AppointmentWithStatus[]> {
+  async getUpcomingAppointments(teamId: string): Promise<AppointmentWithStatus[]> {
     try {
-      const now = Timestamp.now();
-      const slotsQuery = query(
-        collection(db, 'sessions'),
-        where('teamId', '==', teamId),
-        where('activityType', '==', 'appointment'),
-        where('start', '>=', now),
-        orderBy('start', 'asc'),
-        limit(20)
-      );
-
-      const slotsSnap = await getDocs(slotsQuery);
-      const slots = slotsSnap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          teamId: data.teamId,
-          templateId: data.templateId || null,
-          providerId: data.providerId || '',
-          providerName: data.providerName || '',
-          activityName: data.activityName || '',
-          start: data.start?.toDate?.() || new Date(),
-          end: data.end?.toDate?.() || new Date(),
-          max_participants: data.max_participants || 1,
-          // ONE counter for classes and appointments alike: bookings HOLDING
-          // CAPACITY (status neither 'cancelled' nor 'no_show'). The separate
-          // bio-link counter classes used to count into was merged into this one.
-          bookings_count: data.bookings_count || 0,
-          location: data.location || null,
-          // An absent status means nobody has booked yet → 'open'.
-          status: data.status || 'open',
-        } as Appointment;
-      });
-
-      // For each slot check if the contact has a confirmed/pending booking
-      const results: AppointmentWithStatus[] = await Promise.all(
-        slots.map(async (slot) => {
-          let bookingStatus: AppointmentWithStatus['bookingStatus'] = 'available';
-          if (slot.status === 'cancelled') {
-            bookingStatus = 'cancelled';
-          } else {
-            try {
-              const bookingRef = doc(db, 'sessions', slot.id, 'bookings', contactId);
-              const bookingSnap = await getDoc(bookingRef);
-              if (bookingSnap.exists()) {
-                const bStatus = bookingSnap.data()?.status;
-                if (bStatus === 'confirmed' || bStatus === 'pending' || !bStatus) {
-                  bookingStatus = 'booked';
-                }
-              } else if (slot.status === 'full') {
-                bookingStatus = 'full';
-              }
-            } catch {
-              if (slot.status === 'full') bookingStatus = 'full';
-            }
-          }
-          return { ...slot, bookingStatus };
-        })
-      );
-
-      // Only the contact's own bookings — see the doc comment above.
-      return results.filter((r) => r.bookingStatus === 'booked');
+      const result = await this.getMyBookings(teamId);
+      return result.bookings
+        .filter(b => b.kind === 'appointment')
+        .map((b): AppointmentWithStatus => ({
+          id: b.sessionId,
+          providerName: b.providerName,
+          activityName: b.activityName,
+          start: b.start ? new Date(b.start) : new Date(),
+          end: b.end ? new Date(b.end) : new Date(),
+          location: b.location,
+          bookingStatus: b.sessionCancelled ? 'cancelled' : 'booked',
+          cancelToken: b.cancelToken,
+          cancellable: b.cancellable,
+        }));
     } catch (error) {
       console.error('Error fetching appointments:', error);
       return [];
@@ -1177,12 +980,14 @@ export const FirestoreService = {
    * each coach's bookable `type: 'appointment'` activities and their free start
    * times per day/duration. Pure read, no writes; mirrors the public web picker
    * at /public/{slug}/appointments. See `listAvailability` in
-   * packages/functions/src/appointments/window.ts.
+   * packages/functions/src/appointments/window.ts and
+   * @linyup/shared's `ListAvailabilityResult` — the ONE typed owner of this
+   * payload.
    */
-  async listAppointmentAvailability(teamId: string, days: number = 60): Promise<AvailabilityCoach[]> {
+  async listAppointmentAvailability(teamId: string, days: number = 60): Promise<ListAvailabilityCoach[]> {
     const listAvailabilityFn = httpsCallable(getFunctions(), 'listAvailability');
     const result = await listAvailabilityFn({ teamId, days });
-    return (result.data as { coaches: AvailabilityCoach[] })?.coaches ?? [];
+    return (result.data as { coaches: ListAvailabilityCoach[] })?.coaches ?? [];
   },
 
   /**
@@ -1206,11 +1011,9 @@ export const FirestoreService = {
     return result.data as { success: boolean };
   },
 
-  // Cancel an appointment booking — delegates to the unified cancelSession logic
-  async cancelAppointment(params: {
-    slotId: string;
-    contactId: string;
-  }): Promise<{ success: boolean }> {
-    return this.cancelSession({ sessionId: params.slotId, contactId: params.contactId });
+  // Cancel an appointment booking by its `booking_token` — the token
+  // `getUpcomingAppointments` already hands back per row, so no lookup is needed.
+  async cancelAppointment(params: { cancelToken: string }): Promise<{ success: boolean }> {
+    return this.cancelBookingByToken(params.cancelToken);
   },
 };

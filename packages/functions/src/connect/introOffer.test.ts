@@ -141,16 +141,80 @@ describe('resolveIntroOffer — one answer every surface acts on', () => {
     assert.deepEqual(r.stripe, { duration: 'repeating', durationInMonths: 3 })
   })
 
-  it('returns null for a DIFFERENT price of the same plan', () => {
+  it('returns null for a price with NO offer of its own', () => {
     const type = monthly({
       prices: [
         { id: 'p_m', amount: 79, recurrence: 'monthly' },
         { id: 'p_y', amount: 790, recurrence: 'annual' },
       ],
-      introOffer: { priceId: 'p_m', periods: 3, amount: 1 },
+      introOffers: [{ priceId: 'p_m', periods: 3, amount: 1 }],
     })
     assert.ok(resolveIntroOffer(type, 'p_m'))
     assert.equal(resolveIntroOffer(type, 'p_y'), null)
+  })
+
+  it('EACH price carries its own offer — the monthly and the annual differ', () => {
+    // The reason the list exists: a studio prices an opener on both cadences
+    // ("3 months at 29, or your first year at 490"), and the plan-level single
+    // offer could express only one of them.
+    const type = monthly({
+      prices: [
+        { id: 'p_m', amount: 79, recurrence: 'monthly' },
+        { id: 'p_y', amount: 790, recurrence: 'annual' },
+      ],
+      introOffers: [
+        { priceId: 'p_m', periods: 3, amount: 29 },
+        { priceId: 'p_y', periods: 1, amount: 490 },
+      ],
+    })
+    const m = resolveIntroOffer(type, 'p_m')
+    const y = resolveIntroOffer(type, 'p_y')
+    assert.equal(m?.amount, 29)
+    assert.deepEqual(m?.stripe, { duration: 'repeating', durationInMonths: 3 })
+    assert.equal(y?.amount, 490)
+    assert.deepEqual(y?.stripe, { duration: 'once' })
+  })
+
+  it('one price falling foul of a rule leaves the OTHER price selling', () => {
+    // Independence is the point: an offer the studio has since undercut must go
+    // quiet on its own price without silencing the plan's other opener.
+    const type = monthly({
+      prices: [
+        { id: 'p_m', amount: 79, recurrence: 'monthly' },
+        { id: 'p_y', amount: 790, recurrence: 'annual' },
+      ],
+      introOffers: [
+        { priceId: 'p_m', periods: 3, amount: 99 }, // not cheaper — unsellable
+        { priceId: 'p_y', periods: 1, amount: 490 },
+      ],
+    })
+    assert.equal(resolveIntroOffer(type, 'p_m'), null)
+    assert.ok(resolveIntroOffer(type, 'p_y'))
+  })
+
+  it('reads a plan still carrying the LEGACY single offer, unchanged', () => {
+    // Stored documents are read, never rewritten to be readable. A plan written
+    // before the list existed must keep selling exactly as it did.
+    const type = monthly({
+      prices: [{ id: 'p_m', amount: 79, recurrence: 'monthly' }],
+      introOffer: { priceId: 'p_m', periods: 3, amount: 1 },
+    })
+    const r = resolveIntroOffer(type, 'p_m')
+    assert.equal(r?.amount, 1)
+    assert.equal(r?.periods, 3)
+  })
+
+  it('the list WINS over a legacy field left beside it', () => {
+    // The editor writes the list and deletes the legacy field in one update, so
+    // both are present only if a write half-landed. The list is the newer
+    // statement of intent, and picking it keeps the card and the checkout
+    // agreeing on ONE answer rather than on whichever they read first.
+    const type = monthly({
+      prices: [{ id: 'p_m', amount: 79, recurrence: 'monthly' }],
+      introOffer: { priceId: 'p_m', periods: 3, amount: 1 },
+      introOffers: [{ priceId: 'p_m', periods: 2, amount: 19 }],
+    })
+    assert.equal(resolveIntroOffer(type, 'p_m')?.amount, 19)
   })
 
   it('returns null once the offer is unsellable — so the CARD and the CHECKOUT go quiet together', () => {

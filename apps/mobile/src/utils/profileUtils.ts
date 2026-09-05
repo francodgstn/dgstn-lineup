@@ -1,41 +1,8 @@
-import { AffiliationSummary, ContactResidence, AffiliationStatus, Contact, RankingSystem } from '../types';
+import { AffiliationSummary, ContactAddress, Contact, RankingSystem } from '../types';
 
-/**
- * @deprecated HMD's belt scale, hardcoded.
- *
- * It is NOT the source of truth and must not be used for a migrated contact:
- * ranking systems are tenant configuration (`RankingSystem` on the team, or on
- * the organisation when it has any), HMD is about to insert two new belts into
- * its own scale, and this table is one of three hand-maintained copies of it.
- *
- * It survives for exactly one case — a contact still carrying the pre-migration
- * scalar `rank` with no configured systems to resolve against — and that case
- * disappears with the migration. Read through `resolvePrimaryRank` instead,
- * which reaches this only as a last resort.
- */
-export const RANKS = [
-  { rank: 0, belt: 'No belt', badgeColor: '#AAAAAA' },
-  { rank: 1, belt: 'White', badgeColor: '#DDDDDD' },
-  { rank: 2, belt: 'Yellow', badgeColor: '#FFDC00' },
-  { rank: 3, belt: 'Orange', badgeColor: '#FF851B' },
-  { rank: 4, belt: 'Orange/Green', badgeColor: '#FF851B', secondColor: '#1c9c2b' },
-  { rank: 5, belt: 'Green', badgeColor: '#1c9c2b' },
-  { rank: 6, belt: 'Green/Blue', badgeColor: '#1c9c2b', secondColor: '#0074D9' },
-  { rank: 7, belt: 'Blue', badgeColor: '#0074D9' },
-  { rank: 8, belt: 'Blue/Red', badgeColor: '#0074D9', secondColor: '#d41010' },
-  { rank: 9, belt: 'Red', badgeColor: '#d41010' },
-  { rank: 10, belt: 'Red/Black', badgeColor: '#d41010', secondColor: '#111111' },
-  { rank: 11, belt: 'Black I Dan', badgeColor: '#111111' },
-  { rank: 12, belt: 'Black II Dan', badgeColor: '#111111' },
-  { rank: 13, belt: 'Black III Dan', badgeColor: '#111111' },
-  { rank: 14, belt: 'Master', badgeColor: '#111111' },
-];
-
-/** @deprecated Resolves against the hardcoded HMD table — see RANKS. */
-export const getRankInfo = (rank?: number) => {
-  if (rank == null) return null;
-  return RANKS.find((r) => r.rank === rank) || null;
-};
+/** What a few helpers below need from `useTranslations(...)` — the caller's
+ *  own namespace (these are plain utilities with no namespace of their own). */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 /** What the badge needs to draw a level, whatever scale it came from. */
 export interface ResolvedRank {
@@ -49,51 +16,36 @@ export interface ResolvedRank {
 }
 
 /**
- * THE contact's belt — resolved against the tenant's CONFIGURED ranking systems.
- *
- * This app read `contact.rank`, a scalar the HMD migration deletes, so every
- * migrated member's profile rendered "NO BELT". The stored fact is
- * `contact.ranks`, keyed by ranking-system id.
+ * THE contact's rank — resolved against the tenant's CONFIGURED ranking
+ * systems only. No sport-specific fallback: a tenant that has not configured
+ * any ranking system simply has nothing to show here, and the caller hides
+ * the badge rather than inventing a default belt table.
  *
  * Returns null when there is nothing to show — no systems configured, or no
- * level recorded — and callers must hide the belt rather than invent a default.
- * A tenant that does not use ranks should not be shown an empty one.
+ * level recorded for the contact.
  */
 export function resolvePrimaryRank(
-  contact: Pick<Contact, 'ranks' | 'rank'>,
+  contact: Pick<Contact, 'ranks'>,
   systems: RankingSystem[] | undefined | null,
 ): ResolvedRank | null {
   const list = systems ?? [];
   const system = list.find((s) => s.is_primary) ?? list[0] ?? null;
+  if (!system) return null;
 
-  if (system) {
-    const value = contact.ranks?.[system.id];
-    if (value == null) return null;
-    const level = (system.levels ?? []).find((l) => l.value === value);
-    if (!level) return null; // a level the scale no longer defines
-    return {
-      system,
-      value,
-      label: level.label,
-      color: level.color ?? '#DDDDDD',
-      secondColor: level.secondColor,
-      emoji: level.emoji,
-      imageUrl: level.imageUrl,
-    };
-  }
+  const value = contact.ranks?.[system.id];
+  if (value == null) return null;
+  const level = (system.levels ?? []).find((l) => l.value === value);
+  if (!level) return null; // a level the scale no longer defines
 
-  // Last resort: an unmigrated contact with the legacy scalar and no configured
-  // systems to read it against. Dies with the migration — see RANKS.
-  const legacy = getRankInfo(contact.rank);
-  return legacy
-    ? {
-        system: null,
-        value: legacy.rank,
-        label: legacy.belt,
-        color: legacy.badgeColor,
-        secondColor: (legacy as { secondColor?: string }).secondColor,
-      }
-    : null;
+  return {
+    system,
+    value,
+    label: level.label,
+    color: level.color ?? '#DDDDDD',
+    secondColor: level.secondColor,
+    emoji: level.emoji,
+    imageUrl: level.imageUrl,
+  };
 }
 
 // Returns white or black text depending on background luminance
@@ -104,70 +56,6 @@ export const contrastTextColor = (hex: string) => {
   const b = parseInt(c.substring(4, 6), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
-};
-
-// Affiliation status configuration
-export const AFFILIATION_STATUS_CONFIG: Record<string, { label: string; description: string; bgColor: string; textColor: string }> = {
-  guest: {
-    label: 'GUEST',
-    description: 'You are registered as a guest. Contact your team to start the affiliation process.',
-    bgColor: '#FF9800', // Orange
-    textColor: '#FFFFFF',
-  },
-  requested: {
-    label: 'REQUESTED',
-    description: 'Your affiliation request has been submitted. Waiting for the Team Manager to forward it.',
-    bgColor: '#9E9E9E', // Grey
-    textColor: '#FFFFFF',
-  },
-  being_checked: {
-    label: 'BEING CHECKED',
-    description: 'The Organization Admin is reviewing your request after the team forwarded it.',
-    bgColor: '#2196F3', // Blue
-    textColor: '#FFFFFF',
-  },
-  almost_ready: {
-    label: 'ALMOST READY',
-    description: 'The Organization Admin has sent your details to the federation and is awaiting approval.',
-    bgColor: '#9C27B0', // Purple
-    textColor: '#FFFFFF',
-  },
-  active: {
-    label: 'ACTIVE',
-    description: 'Your affiliation has been approved by the federation and is now valid.',
-    bgColor: '#4CAF50', // Green
-    textColor: '#FFFFFF',
-  },
-  expired: {
-    label: 'EXPIRED',
-    description: 'Your affiliation has reached its end date or was manually expired. Contact your team to renew.',
-    bgColor: '#F44336', // Red
-    textColor: '#FFFFFF',
-  },
-};
-
-// Map affiliation status to display label
-export const getStatusLabel = (status?: AffiliationStatus): string => {
-  if (!status) return 'MEMBER';
-  return AFFILIATION_STATUS_CONFIG[status]?.label || 'MEMBER';
-};
-
-// Map affiliation status to badge color
-export const getStatusColors = (status?: AffiliationStatus, themeColors?: any): { bg: string; text: string } => {
-  if (!status) {
-    return { bg: themeColors?.secondaryContainer || '#E8DEF8', text: themeColors?.onSecondaryContainer || '#1D192B' };
-  }
-  const config = AFFILIATION_STATUS_CONFIG[status];
-  if (config) {
-    return { bg: config.bgColor, text: config.textColor };
-  }
-  return { bg: themeColors?.secondaryContainer || '#E8DEF8', text: themeColors?.onSecondaryContainer || '#1D192B' };
-};
-
-// Get status description for the info modal
-export const getStatusDescription = (status?: AffiliationStatus): string => {
-  if (!status) return 'Your affiliation status is not set.';
-  return AFFILIATION_STATUS_CONFIG[status]?.description || 'Your affiliation status is not set.';
 };
 
 export const formatDateValue = (value: unknown) => {
@@ -228,34 +116,38 @@ export const calculateAge = (birthdate: unknown): number | null => {
   return age >= 0 ? age : null;
 };
 
-export const formatGender = (gender?: string): string | null => {
+export const formatGender = (t: Translate, gender?: string): string | null => {
   if (!gender) return null;
-  if (gender === 'M') return 'M';
-  if (gender === 'F') return 'F';
+  if (gender === 'M') return t('genderM');
+  if (gender === 'F') return t('genderF');
   return gender;
 };
 
-export const formatResidence = (residence?: ContactResidence | null) => {
-  if (!residence) {
+/** `Contact.address` — narrower than the pre-migration `residence` (no
+ *  region/country; see @linyup/shared's `ContactAddress`). */
+export const formatAddress = (address?: ContactAddress | null) => {
+  if (!address) {
     return null;
   }
 
-  const firstLine = [residence.route, residence.street_number].filter(Boolean).join(' ').trim();
-  const secondLine = [residence.postal_code, residence.locality].filter(Boolean).join(' ').trim();
-  const thirdLine = [residence.region, residence.country].filter(Boolean).join(' ').trim();
+  const firstLine = [address.route, address.street_number].filter(Boolean).join(' ').trim();
+  const secondLine = [address.postal_code, address.locality].filter(Boolean).join(' ').trim();
 
-  const lines = [firstLine, secondLine, thirdLine].filter(Boolean);
+  const lines = [firstLine, secondLine].filter(Boolean);
 
-  return lines.length ? lines.join(',') : null;
+  return lines.length ? lines.join(', ') : null;
 };
 
 // ── Affiliation helpers ──────────────────────────────────────────────────────
 
-/** Returns a short display label for the affiliation badge on the card. */
-export const getAffiliationLabel = (summary?: AffiliationSummary): string => {
-  if (!summary || !summary.has_active) return 'NOT AFFILIATED';
+/** Returns a short display label for the affiliation badge on the card. When
+ *  there is exactly one active type, its name is the studio's own affiliation
+ *  type identifier (Firestore-authored) and is never translated — only the
+ *  "not affiliated" / "affiliated (N)" states are app copy. */
+export const getAffiliationLabel = (t: Translate, summary?: AffiliationSummary): string => {
+  if (!summary || !summary.has_active) return t('notAffiliated').toUpperCase();
   if (summary.types.length === 1) return summary.types[0].replace(/_/g, ' ').toUpperCase();
-  return `AFFILIATED (${summary.types.length})`;
+  return t('affiliatedCount', { count: summary.types.length }).toUpperCase();
 };
 
 /** Returns badge background/text colors for the affiliation badge. */
@@ -269,3 +161,38 @@ export const getAffiliationColors = (
     text: themeColors?.onSurfaceVariant ?? '#555555',
   };
 };
+
+type AffiliationTermLocale = 'en' | 'de' | 'fr' | 'it';
+
+/**
+ * Resolve the organisation's affiliation-concept label (`TeamPublicProfile
+ * .affiliation_term`, e.g. "Membership", "Lizenz") for the device's language,
+ * falling back to English then to the generic "Affiliation" — same rule the
+ * org-facing web surfaces apply. `locale` is injectable for tests; defaults to
+ * the device locale.
+ */
+export function resolveAffiliationTerm(
+  term: Partial<Record<AffiliationTermLocale, string>> | null | undefined,
+  locale: string = Intl.DateTimeFormat().resolvedOptions().locale ?? 'en',
+): string {
+  if (!term) return 'Affiliation';
+  const short = locale.slice(0, 2).toLowerCase() as AffiliationTermLocale;
+  return term[short] ?? term.en ?? 'Affiliation';
+}
+
+/**
+ * The plan name to show a member — read off the contact's own denormalised
+ * subscription snapshot, never from `teams/{id}/subscription_types/*` (rule-
+ * denied to a contact session). Prefers the matching `active_subscriptions`
+ * entry; falls back to the single-field snapshot for a manually-assigned
+ * subscription that has no Stripe-maintained array entry yet.
+ */
+export function resolveSubscriptionTypeName(
+  contact: Pick<Contact, 'active_subscriptions' | 'subscription_type_id' | 'subscription_type_name'>,
+): string | null {
+  const active = contact.active_subscriptions ?? [];
+  const matching = contact.subscription_type_id
+    ? active.find((s) => s.subscription_type_id === contact.subscription_type_id)
+    : undefined;
+  return matching?.subscription_type_name ?? active[0]?.subscription_type_name ?? contact.subscription_type_name ?? null;
+}

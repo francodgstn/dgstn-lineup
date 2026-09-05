@@ -69,9 +69,16 @@ studio's edits. The advisor-review caveat below covers these seeds too.
 
 ## Workflows
 
-- **Opening balances** (required for a meaningful balance sheet): one manual
-  entry dated at your fiscal-year start — debit bank/cash with the real
-  balances, credit equity with the total.
+- **Opening balances** (required for a meaningful balance sheet): the
+  **Opening balances wizard** (`/plugins/finance/opening`, owner-only) asks
+  studio-language questions (cash, bank, money owed, unpaid bills, owner loan,
+  member prepayments, free extra lines), computes the balancing equity figure
+  live, and posts ONE ordinary balanced entry through the same
+  `createManualEntry` path — no new posting semantics; corrections go through
+  Reverse like any manual entry. Question defaults come from
+  `OPENING_BALANCE_ROLE_ACCOUNTS` (shared `accounting/chartTemplates.ts`,
+  pinned by its test). The raw manual entry (debit bank/cash, credit equity)
+  remains valid for anyone who prefers composing it directly.
 - **BYO gateway fees**: Payrexx / own-Stripe journal rows are fee-blind, so
   clearing overstates by the gateway's fee. Book the gateway's monthly fee
   statement manually: debit the payment-fees account, credit the gateway's
@@ -104,6 +111,8 @@ studio's edits. The advisor-review caveat below covers these seeds too.
 
 1. **Cash-basis only** — entries mirror money events; no deferred revenue or
    accruals. Receivables/payables/RA accounts are seeded for MANUAL use only.
+   The plan that lifts this — an opt-in accrual basis with automatic writers
+   for those accounts, plus an asset register — is `docs/finance-accrual.md`.
 2. **VAT schema-only** — `tax_code`/`tax_rate_bp` fields exist and each
    template seeds its VAT-payable account (2200 MWST / 3800 USt / IVA a
    debito), but nothing computes or reports VAT. Not a substitute for
@@ -118,8 +127,11 @@ studio's edits. The advisor-review caveat below covers these seeds too.
    yet; both are roadmap alongside the VAT module.
 5. **Owner-only manual entries** — bookkeepers with a manager role need the
    owner; a capability-system grant is a candidate follow-up.
-6. **Opening balances are manual** — the module never pretends pre-Linyup
-   completeness; history starts at your opening entry.
+6. **Opening balances are yours to state** — the wizard guides the entry (see
+   Workflows) but nothing is computed from pre-Linyup data; the module never
+   pretends pre-Linyup completeness, and history starts at your opening entry.
+   Computing the member-obligation side from live operational data is the
+   accrual activation flow planned in `docs/finance-accrual.md`.
 
 ## Before real customers rely on it
 

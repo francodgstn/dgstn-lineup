@@ -18,8 +18,8 @@ import {
   TEAM_MEMBERS_SUBCOLLECTION,
 } from '@linyup/shared'
 import type { PluginManifest, InstalledPlugin, PluginCategory, PluginAccess } from '@linyup/shared'
-import { pluginAccessForPlan } from '@linyup/shared'
-import { installableManifests } from '@/plugins/registry'
+import { pluginAccessForPlan, requirementBlockers } from '@linyup/shared'
+import { installableManifests, manifestById } from '@/plugins/registry'
 import { PluginIcon } from '@/plugins/icons'
 import { pluginSlot } from '@/plugins/slots'
 import { usePlan } from '@/hooks/usePlan'
@@ -40,7 +40,7 @@ import { toast } from 'sonner'
 // Plugin icons resolve through @/plugins/icons; only this page's own chrome
 // icons are imported here.
 import {
-  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, Star,
+  Search, ImageIcon, CheckCircle2, Coins, Lock, Clock, BadgeCheck,
   ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -127,8 +127,15 @@ function PluginBadgeIcons({
   //
   // `tooltip` defaults to `label`. It exists for the one signal whose label is a
   // word rather than a fact: a tooltip reading "Recommended" over an icon that
-  // already means "recommended" explains nothing (UX-65), so the star says who is
+  // already means "recommended" explains nothing (UX-65), so it says who is
   // recommending and on what basis. The aria-label stays the short form.
+  //
+  // NOT A STAR: the star now means "favourite" in the nav, and the settings rail
+  // — which carries that very toggle — renders down the left of THIS page, so a
+  // star here would put both meanings on one screen. Not `Puzzle` either (every
+  // card is a plugin) and not `Sparkles`/`Award` (already the AI and gamification
+  // plugin glyphs in this same grid). `BadgeCheck` reads as endorsed and is
+  // unclaimed here.
   const items: {
     key: string
     icon: LucideIcon
@@ -140,7 +147,7 @@ function PluginBadgeIcons({
   if (manifest.recommended) {
     items.push({
       key: 'recommended',
-      icon: Star,
+      icon: BadgeCheck,
       label: t('recommended'),
       tooltip: t('recommendedWhy'),
       hoverClassName: 'hover:text-amber-500',
@@ -231,7 +238,7 @@ function PluginBadges({
 
       {/* Recommended — the word is meaningless without its basis, so the badge
           carries the explanation on hover here too (UX-65). Same string as the
-          grid's star icon; there is one definition of "recommended", not two. */}
+          grid's signal icon; there is one definition of "recommended", not two. */}
       {manifest.recommended && (
         <TooltipProvider delay={200}>
           <UITooltip>
@@ -811,6 +818,10 @@ export default function PluginsPage() {
         status: 'active',
         config: {},
       }
+      // Requirements are NOT written here: `reconcileRequirements` is the one
+      // writer of a requirement install, because this is only one of five
+      // writers of an install document and the Coach path for finance
+      // (`activatePluginAddon`) never comes through the client at all.
       await setDoc(docRef, payload)
     },
     onMutate: (manifest) => setInstallingId(manifest.id),
@@ -960,6 +971,22 @@ export default function PluginsPage() {
   const removeBodyKey = confirmRemove
     ? (REMOVE_EFFECT_KEY[confirmRemove.id] ?? 'removeConfirmBody')
     : 'removeConfirmBody'
+  // NO CASCADE, AND NO SILENT BREAKAGE: removing a plugin another installed
+  // plugin requires is refused here, naming the requirer. `reconcileRequirements`
+  // would put it straight back anyway — refusing with a reason is the honest
+  // version of that, and it is the only version the tenant can act on.
+  const removeBlockedBy = confirmRemove
+    ? requirementBlockers(
+        confirmRemove.id,
+        installedPlugins.map((e) => e.installation.pluginId)
+      )
+    : []
+  const removeBlockedNames = removeBlockedBy
+    .map((id) => {
+      const m = manifestById(id)
+      return m ? t(m.nameKey as Parameters<typeof t>[0]) : id
+    })
+    .join(', ')
   const removeAccess = confirmRemove ? pluginAccessForPlan(confirmRemove, plan) : null
   // `addonItemId` is written by activatePluginAddon ONLY when it actually added a
   // Stripe subscription item; a trial install carries `addonFreeTrial` instead. So
@@ -1112,12 +1139,17 @@ export default function PluginsPage() {
                 {t('removeConfirmLocked', { name: removeName })}
               </p>
             )}
+            {removeBlockedBy.length > 0 && (
+              <p className="text-sm text-destructive">
+                {t('removeConfirmRequiredBy', { name: removeName, requirers: removeBlockedNames })}
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={removePending}>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={removePending}
+              disabled={removePending || removeBlockedBy.length > 0}
               onClick={() => { if (confirmRemove) performRemove(confirmRemove) }}
             >
               {removePending ? t('removing') : t('remove')}

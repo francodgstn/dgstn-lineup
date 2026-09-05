@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Contact } from '../../types';
+import { useTranslations } from '../../i18n';
 
 interface Props {
   contact?: Contact | null;
@@ -16,6 +17,7 @@ interface Props {
 /** "Book an appointment" promo for the dashboard. */
 export const AppointmentsDashboardCard: React.FC<Props> = ({ contact, onOpenBooking }) => {
   const theme = useTheme();
+  const t = useTranslations('Appointments');
 
   if (!contact?.teamId) return null;
 
@@ -36,10 +38,10 @@ export const AppointmentsDashboardCard: React.FC<Props> = ({ contact, onOpenBook
           </View>
           <View style={{ flex: 1 }}>
             <Text variant="labelLarge" style={{ color: textColor, fontWeight: '800' }}>
-              Book an appointment
+              {t('bookTitle')}
             </Text>
             <Text variant="labelSmall" style={{ color: subtleText, marginTop: 2 }}>
-              Find a time with your coach
+              {t('findTimeSubtitleNoPeriod')}
             </Text>
           </View>
           <Icon source="chevron-right" size={22} color={accentColor} />

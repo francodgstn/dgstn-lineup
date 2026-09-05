@@ -11,6 +11,16 @@ export const TEAM_ACTIVITY_LOG_SUBCOLLECTION = 'activity_log'
 export const TEAM_WEEKLY_REPORTS_SUBCOLLECTION = 'team_weekly_reports'
 export const TEAM_INVITATIONS_SUBCOLLECTION = 'team_invitations'
 export const CONTACT_REQUESTS_SUBCOLLECTION = 'contact_requests'
+/**
+ * @deprecated Superseded by `NOTIFICATIONS_SUBCOLLECTION`
+ * (`teams/{teamId}/notifications`) — see `types/teamNotification.ts`.
+ *
+ * A second, parallel team inbox: two writers, ZERO readers, no `link`, no
+ * `status`, and rules that let a coach read an alert they had no permission to
+ * dismiss. Both writers now create a `TeamNotification` instead. The
+ * collection, its rules and its indexes stay so existing documents are not
+ * stranded — but NOTHING should write it again.
+ */
 export const TEAM_ALERTS_SUBCOLLECTION = 'team_alerts'
 export const ALERT_PRESETS_SUBCOLLECTION = 'alert_presets'
 // Per-team overrides for customizable roles (currently only the Coach role).
@@ -33,6 +43,8 @@ export const GLOBAL_SETTINGS_DOC = 'global_settings'
 // a SEPARATE doc from global_settings so the public read rule never exposes the
 // private operator/SMTP config.
 export const PUBLIC_SETTINGS_DOC = 'public'
+/** app_settings/mobile — the member app's world-readable policy (MobileAppSettings). */
+export const MOBILE_SETTINGS_DOC = 'mobile'
 
 // Signup gating (limited-launch). Both are Admin-SDK only (PII / security).
 // signup_allowlist: emails permitted to create a Linyup account while public
@@ -139,9 +151,20 @@ export const CONTACT_PERFORMANCE_CHECKINS_SUBCOLLECTION = 'performance_checkins'
 export const CONTACT_SUBSCRIPTION_HISTORY_SUBCOLLECTION = 'subscription_history'
 // Lesson-credit grants (pack purchases) — functions-only writes; see CreditGrant.
 export const CONTACT_CREDIT_GRANTS_SUBCOLLECTION = 'credit_grants'
+// Completed purchases of a subscription PRICE — one row per payment, doc id =
+// the payment ref. Functions-only writes; read to enforce
+// `SubscriptionPrice.maxPurchasesPerContact`. See PlanPurchase.
+export const CONTACT_PLAN_PURCHASES_SUBCOLLECTION = 'plan_purchases'
 export const SUBSCRIPTION_TRANSITIONS_SUBCOLLECTION = 'subscription_transitions'
 // Affiliation set — a contact may hold several (club + federation licence + grading).
 export const CONTACT_AFFILIATIONS_SUBCOLLECTION = 'affiliations'
+// Push-notification device registrations, doc id = the token itself. See
+// `PushToken` (types/push.ts) for why. Client writes are self-only
+// (contacts/{id}/push_tokens/{token}, isSelfContact — no staff/admin arm at
+// all); sendPush (packages/functions/src/push/) is the only Admin-SDK writer,
+// and it only ever DELETES a token the vendor reports dead. See the
+// firestore.rules match for the full reasoning.
+export const CONTACT_PUSH_TOKENS_SUBCOLLECTION = 'push_tokens'
 
 export const EVENTS_COLLECTION = 'events'
 export const EVENT_TYPES_SUBCOLLECTION = 'event_types'
@@ -359,3 +382,7 @@ export const ACCOUNTING_PERIOD_SUMMARIES_SUBCOLLECTION = 'accounting_period_summ
 // Entry templates: owner-managed presets for manual entries (+ optional
 // recurring auto-post — see accounting/templates.ts).
 export const ACCOUNTING_ENTRY_TEMPLATES_SUBCOLLECTION = 'accounting_entry_templates'
+// Asset register (finance plugin — see types/asset.ts): the equipment list
+// behind the statement of assets. Owner-written from the client; REGISTER-ONLY
+// in cash mode — no ledger writer reads it until accrual mode lands.
+export const ASSET_REGISTER_SUBCOLLECTION = 'asset_register'

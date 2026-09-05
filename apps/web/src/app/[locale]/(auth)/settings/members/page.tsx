@@ -61,6 +61,7 @@ import {
 } from '@linyup/shared'
 import type { TeamInvitation, TeamRole } from '@linyup/shared'
 import { PlanUpgradeNotice } from '@/components/plan/PlanUpgradeNotice'
+import { Tip } from '@/components/ui/tip'
 
 // ----- types ----------------------------------------------------------------
 
@@ -253,9 +254,29 @@ interface ChangeRoleDialogProps {
   member: MemberDoc | null
   onClose: () => void
   onSuccess: () => void
+  /** Only an owner may grant ownership — the server enforces it, this hides it. */
+  canAssignOwner: boolean
 }
 
-function ChangeRoleDialog({ open, member, onClose, onSuccess }: ChangeRoleDialogProps) {
+/**
+ * OWNER IS ASSIGNABLE, and only by an owner.
+ *
+ * `manageTeamMember` has always accepted it ("Only team owners can manage
+ * owner/manager roles" — the check is on the CALLER, not on the role being
+ * granted); this dialog simply never offered it, so the one way to hand a studio
+ * over was to ask support. An owner who is stepping back, a co-founder pair, a
+ * club handing over at the AGM: all of them are ordinary, and none of them had a
+ * button.
+ *
+ * IT DOES NOT DEMOTE THE CALLER. The server refuses a self-role-change outright
+ * ("You cannot change your own role"), so this promotes rather than transfers,
+ * and the team has two owners afterwards. That is a real state, not a
+ * workaround: `VALID_ROLES` includes owner and the rules are written for it. The
+ * outgoing owner is then demoted BY THE NEW ONE, which is the safe ordering —
+ * the alternative, a single call that swaps both, can leave a studio with no
+ * owner if it half-fails.
+ */
+function ChangeRoleDialog({ open, member, canAssignOwner, onClose, onSuccess }: ChangeRoleDialogProps) {
   const t = useTranslations('TeamMembers')
   const { currentTeamId: teamId } = useAuth()
   const [role, setRole] = useState<TeamRole>(member?.role ?? 'manager')
@@ -294,11 +315,21 @@ function ChangeRoleDialog({ open, member, onClose, onSuccess }: ChangeRoleDialog
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              {canAssignOwner && <SelectItem value="owner">{t('role_owner')}</SelectItem>}
               <SelectItem value="manager">{t('role_manager')}</SelectItem>
               <SelectItem value="coach">{t('role_coach')}</SelectItem>
               <SelectItem value="viewer">{t('role_viewer')}</SelectItem>
             </SelectContent>
           </Select>
+          {/* Said BEFORE the button, not in a confirm step after it. What the
+              reader needs is what "Owner" means and that they keep their own
+              role — a second dialog asking "are you sure" adds a click and
+              answers neither. */}
+          {role === 'owner' && member?.role !== 'owner' && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-muted-foreground">
+              {t('makeOwnerNote')}
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
@@ -330,20 +361,21 @@ function MemberEmail({ email }: { email: string }) {
   return (
     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="truncate">{email}</span>
-      <button
-        type="button"
-        onClick={() => {
-          navigator.clipboard.writeText(email).then(() => {
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          })
-        }}
-        title={copied ? t('copied') : t('copyEmail')}
-        aria-label={t('copyEmail')}
-        className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground"
-      >
-        {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
-      </button>
+      <Tip label={copied ? t('copied') : t('copyEmail')}>
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard.writeText(email).then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            })
+          }}
+          aria-label={t('copyEmail')}
+          className="shrink-0 rounded p-0.5 transition-colors hover:bg-muted hover:text-foreground"
+        >
+          {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+        </button>
+      </Tip>
     </div>
   )
 }
@@ -614,17 +646,31 @@ export default function TeamMembersPage() {
                     {roleIcon(m.role)}
                     {roleLabel[m.role]}
                   </Badge>
-                  {/* Coach-roster toggle — coach-role members are always coaches */}
+                  {/* THE COACH CONTROL, IN WORDS.
+                      It was a dumbbell icon and a bare switch, sitting right
+                      next to the ROLE badge — so the obvious reading was "this
+                      switch changes the role to Coach", which it does not. It is
+                      a separate fact about the person: they teach, so they can
+                      be picked as a session's instructor and assigned to a
+                      contact. Somebody can be a Manager AND a coach, which is
+                      exactly the case an icon cannot express.
+                      The label says it, and a coach-ROLE member reads as locked
+                      on rather than as a switch that ignores clicks. */}
                   {canManage ? (
-                    <div className="flex items-center gap-1.5 shrink-0" title={t('coachToggleHint')}>
-                      <Dumbbell className="h-3.5 w-3.5 text-muted-foreground" />
+                    <label
+                      className={`flex shrink-0 items-center gap-2 ${m.role === 'coach' ? 'cursor-default' : 'cursor-pointer'}`}
+                      title={t('coachToggleHint')}
+                    >
+                      <span className="text-xs text-muted-foreground">
+                        {m.role === 'coach' ? t('coachAlways') : t('coachToggle')}
+                      </span>
                       <Switch
                         checked={m.role === 'coach' || m.isCoach}
                         disabled={m.role === 'coach' || coachSaving === m.userId}
                         onCheckedChange={(v) => setCoach(m, v)}
                         aria-label={t('coachToggle')}
                       />
-                    </div>
+                    </label>
                   ) : (m.role === 'coach' || m.isCoach) ? (
                     <Badge variant="outline" className="shrink-0 flex items-center gap-1">
                       <Dumbbell className="h-3 w-3" />
@@ -632,7 +678,14 @@ export default function TeamMembersPage() {
                     </Badge>
                   ) : null}
                   {/* Actions */}
-                  {canManage && !isSelf && m.role !== 'owner' && (
+                  {/* AN OWNER ROW HAS ACTIONS TOO — for another owner. It was
+                      hidden for every caller, which was right while ownership
+                      could not be granted (there was only ever one owner, and
+                      it was you) and wrong the moment it can: a studio that has
+                      just handed over needs the previous owner demotable, and
+                      the server already allows exactly that. `isSelf` still
+                      guards the caller's own row; the server refuses it anyway. */}
+                  {canManage && !isSelf && (m.role !== 'owner' || isOwner) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent">
                         <MoreHorizontal className="h-4 w-4" />
@@ -702,15 +755,17 @@ export default function TeamMembersPage() {
                       {t('statusPending')}
                     </Badge>
                     {canManage && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setCancelInviteTarget(inv)}
-                        title={t('cancelInvite')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <Tip label={t('cancelInvite')}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setCancelInviteTarget(inv)}
+                          aria-label={t('cancelInvite')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </Tip>
                     )}
                   </div>
                 </li>
@@ -733,6 +788,7 @@ export default function TeamMembersPage() {
       <ChangeRoleDialog
         open={!!changeRoleTarget}
         member={changeRoleTarget}
+        canAssignOwner={isOwner}
         onClose={() => setChangeRoleTarget(null)}
         onSuccess={() => {
           invalidate()

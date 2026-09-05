@@ -92,8 +92,12 @@ import {
   seedEventProgram,
   seedSessionWaitlist,
 } from './lib/fixtures/engagement'
+import { seedPerformanceCheckins } from './lib/fixtures/coaching'
 import { seedTeamFinance } from './lib/fixtures/finance'
+import { seedTeamAssetRegister } from './lib/fixtures/assetRegister'
 import { seedTeamMoney, seedTeamSales } from './lib/fixtures/money'
+import { seedTeamSubscriptionHistory } from './lib/fixtures/subscriptionHistory'
+import { printMemberAppLogin, seedMobileSettings, seedReviewTenant } from './lib/mobile'
 
 const USE_EMULATOR = !!process.env.FIRESTORE_EMULATOR_HOST
 // Emulator convenience: the Auth host is required alongside Firestore — default
@@ -125,7 +129,6 @@ const auth = admin.auth()
 const db = admin.firestore()
 db.settings({ ignoreUndefinedProperties: true })
 
-const STUDENT_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // matches generateAuthToken
 const DEMO_PASSWORD = 'linyup123'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -578,6 +581,8 @@ interface SectorProfile {
     location: string
     description: string
   }[]
+  /** `categories` = GOAL CATEGORY keys (what the goal is about), never
+   *  check-in axis keys — see packages/shared/src/types/goal.ts. */
   goals: { title: string; description: string; categories: string[] }[]
   tasks: string[]
 }
@@ -1807,22 +1812,37 @@ async function seedDemoTeam(profile: SectorProfile) {
   // the ONE member-benefit rule. No access rule — the price is the gate. The
   // availability below only publishes the WHEN.
   const appointmentActId = `${teamId}-act-appointment`
-  // Per-duration BASE pricing (major units, CHF). The member benefit is ONE rule
-  // for the whole activity (`Activity.memberBenefit`, never per duration). The
-  // sandbox demos `kind: 'discount'` (seed-emulator/-staging demo 'included'):
-  // monthly-plan holders get 20% off EVERY priced duration (30 min → 36,
-  // 60 min → 68); every other subscription pays base — the benefit is explicit
-  // data, never implied. Every sandbox profile defines a monthly plan, so the
-  // id below always resolves.
+  // Per-duration BASE pricing (major units, CHF), and ONE MEMBER RULE PER
+  // LENGTH (`Activity.durationBenefits`). The rule is per length because the
+  // price is: a single activity-wide rule could not say "the short one is
+  // included, the long one is cheaper", and could not express a fixed member
+  // price at all (one amount cannot be right for 30 and 60 minutes alike).
+  //
+  // THE SEEDS DEMO DIFFERENT EFFECTS ON PURPOSE, so a click-through meets each
+  // of them: this one gives monthly-plan holders their 30-minute check-in free
+  // and 20% off the 60-minute session (85 → 68). Every sandbox profile defines
+  // a monthly plan, so the id below always resolves.
+  //
+  // The legacy activity-wide
+  // `memberBenefit` is deliberately NOT written anywhere here — its fallback is
+  // covered by a unit test, not by seed data a studio might mistake for the
+  // shape the product writes today.
   const appointmentDurations = [
     { minutes: 30, priceAmount: 45 },
     { minutes: 60, priceAmount: 85 },
   ]
-  const appointmentMemberBenefit = {
-    subscriptionTypeIds: [subIdOf('monthly')],
-    kind: 'discount',
-    discountPercent: 20,
-  }
+  const appointmentMonthly = subIdOf('monthly')
+  const appointmentDurationBenefits = [
+    { minutes: 30, benefit: { subscriptionTypeIds: [appointmentMonthly], effect: 'included' } },
+    {
+      minutes: 60,
+      benefit: {
+        subscriptionTypeIds: [appointmentMonthly],
+        effect: 'percent_off',
+        percent: 20,
+      },
+    },
+  ]
   await db
     .collection('activities')
     .doc(appointmentActId)
@@ -1835,7 +1855,7 @@ async function seedDemoTeam(profile: SectorProfile) {
       providerId: uid,
       providerName: ownerName,
       durations: appointmentDurations,
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
       // A 1:1 slot has no roster-review step — the time is taken the moment it's
       // booked, so the booking is written 'confirmed' on the spot.
       autoConfirm: true,
@@ -1858,14 +1878,15 @@ async function seedDemoTeam(profile: SectorProfile) {
       image_url: null,
       // The doc carries no isFreeTrial; the live sync mirrors `|| false`.
       isFreeTrial: false,
-      // Duration menu ("from CHF 45" on public cards) + the member-benefit rule,
-      // both mirrored verbatim, exactly as syncActivityPublicProfile does
-      // (public-safe: the subscription-type ids are already public in the shop).
+      // Duration menu ("from CHF 45" on public cards) + the per-length member
+      // rules, both mirrored verbatim, exactly as syncActivityPublicProfile
+      // does (public-safe: the subscription-type ids are already public in the
+      // shop).
       durations: appointmentDurations.map((d) => ({
         minutes: d.minutes,
         priceAmount: d.priceAmount ?? null,
       })),
-      memberBenefit: appointmentMemberBenefit,
+      durationBenefits: appointmentDurationBenefits,
     })
 
   // ── availability (the WHEN — publishes free time, generates nothing) ────
@@ -2197,42 +2218,9 @@ async function seedDemoTeam(profile: SectorProfile) {
         .set(affiliationDoc)
     }
 
-    // subscription history
-    if (sub) {
-      const startedAt = daysFromNow(-Math.floor(seededRand(seed + 'sh') * 90) - 30)
-      if (i % 4 === 0) {
-        const prevStartedAt = daysFromNow(-Math.floor(seededRand(seed + 'ph2') * 120) - 90)
-        await db
-          .collection('contacts')
-          .doc(id)
-          .collection('subscription_history')
-          .doc(`${id}-sub-prev`)
-          .set({
-            subscription_type_id: sub.id,
-            subscription_type_name: sub.name,
-            recurrence: sub.recurrence,
-            ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-            start_date: ts(prevStartedAt),
-            end_date: ts(new Date(startedAt.getTime() - 1)),
-            created_at: ts(prevStartedAt),
-          })
-      }
-      await db
-        .collection('contacts')
-        .doc(id)
-        .collection('subscription_history')
-        .doc(`${id}-sub-current`)
-        .set({
-          subscription_type_id: sub.id,
-          subscription_type_name: sub.name,
-          recurrence: sub.recurrence,
-          ...(sub.priceId ? { subscription_price_id: sub.priceId, amount: sub.amount } : {}),
-          start_date: ts(startedAt),
-          end_date: null,
-          created_at: ts(startedAt),
-        })
-    }
-
+    // `subscription_history` is seeded later, by `seedTeamSubscriptionHistory`
+    // (AFTER `seedTeamMoney`, which is what its multi-plan source —
+    // `active_subscriptions` — is read back from). See that call for why.
 
     // weekly reports
     if (c.totalSessions > 0) {
@@ -2269,10 +2257,16 @@ async function seedDemoTeam(profile: SectorProfile) {
   await seedContactAlerts({ teamId, vocabulary: 'generic' })
 
   // ── goals & tasks ──────────────────────────────────────────────────────────
+  // `categories` are GOAL CATEGORIES (technique / attitude / attendance /
+  // physical / mental — see DEFAULT_GOAL_CATEGORIES), never check-in axis keys.
+  // A step created FROM a weak axis carries `from_dimension` instead — seeded
+  // by seedPerformanceCheckins below, which is where the axis comes from.
+  const goalContactIds: string[] = []
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i]
     if (c.type !== 'student' || c.totalSessions < 5) continue
     const id = contactIds[i]
+    goalContactIds.push(id)
     const numGoals = i < 4 ? 2 : 1
     for (let g = 0; g < numGoals; g++) {
       const def = profile.goals[(i + g) % profile.goals.length]
@@ -2336,6 +2330,12 @@ async function seedDemoTeam(profile: SectorProfile) {
         completed_at: taskDone ? ts(daysFromNow(-2)) : null,
       })
   }
+
+  // ── performance check-ins ──────────────────────────────────────────────────
+  // Straight after the goals, because the arcs hang a `from_dimension` step off
+  // one. Capped at six: that is one contact per named profile the heuristic can
+  // report, and a seventh would only repeat a story. See lib/fixtures/coaching.ts.
+  const checkins = await seedPerformanceCheckins({ contactIds: goalContactIds.slice(0, 6) })
 
   // ── past-session participants + bookings ──────────────────────────────────
   const studentIdxs = pool
@@ -2587,20 +2587,6 @@ async function seedDemoTeam(profile: SectorProfile) {
     updated_by: 'seed-sandbox',
   })
 
-  // ── student auth user (contact-session identity matching buildContactSession) ───
-  const studentIdx = studentIdxs.find((i) => pool[i].status === 'active') ?? 0
-  const studentContactId = contactIds[studentIdx]
-  const studentUid = `contact:${teamId}:${studentContactId}`
-  const sessionExpires = Date.now() + STUDENT_SESSION_MS
-  const studentEmail = `${slugEmail(pool[studentIdx])}.${teamId}@example.com`
-  await upsertAuthUser({
-    uid: studentUid,
-    email: studentEmail,
-    displayName: `${pool[studentIdx].firstname} ${pool[studentIdx].lastname}`,
-    password: DEMO_PASSWORD,
-    claims: { contactId: studentContactId, teamId, sessionExpires, email: studentEmail },
-  })
-
   // ── Stripe Connect (TEST) ───────────────────────────────────────────────────
   // Links a REAL onboarded test account when STRIPE_CONNECT_TEST_ACCOUNT names
   // one for this team; silently leaves the team payment-less otherwise. Last, so
@@ -2608,9 +2594,23 @@ async function seedDemoTeam(profile: SectorProfile) {
   // by it. See scripts/lib/connect.ts for the one-time setup.
   await linkSeedConnectAccount({ db, teamId })
 
+  // The profile tally is printed, not asserted: the arcs in lib/fixtures/coaching.ts
+  // are built to land on six DIFFERENT named profiles, and a change to
+  // `detectPerformanceProfile` that collapsed them would otherwise be invisible.
+  const profileTally = Object.entries(checkins.profiles)
+    .map(([k, n]) => (n > 1 ? `${k}×${n}` : k))
+    .sort()
+    .join(', ')
   console.log(
     `   ✓ ${teamName} (${profile.sector}) — ${contactCount} contacts, ${sessionDefs.length} sessions`
   )
+  console.log(
+    `     coaching: ${checkins.checkins} check-ins over ${checkins.contacts} contacts, ` +
+      `${checkins.steps} steps from a weak axis (${profileTally})`
+  )
+  for (const d of checkins.drifted) {
+    console.warn(`     ⚠ check-in arc built for '${d.intended}' now reads '${d.got}'`)
+  }
 }
 
 // ── automations seed (templates + presets + rules + logs) ─────────────────────
@@ -2953,6 +2953,11 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   await seedTeamGiftCards({ teamId, uid })
 
   await seedTeamMoney({ teamId })
+  // `subscription_history` — the ONLY store of a contact's plan PERIODS — is
+  // seeded AFTER the money ledger, because it reads `active_subscriptions` back
+  // (the concurrent-plans membership seeded above lands there via
+  // `applySubscriptionRollups`). See scripts/lib/fixtures/subscriptionHistory.ts.
+  await seedTeamSubscriptionHistory({ teamId })
 
   // Finance: sandbox + lead only (decision 2). Replays the ledger rows above
   // into the journal through the SAME builders the Connect webhook uses.
@@ -2973,6 +2978,8 @@ async function seedTeamPlugins(profile: SectorProfile, teamId: string, uid: stri
   // simply missing from finance.
   await seedTeamSales({ teamId })
   await seedTeamFinance({ teamId, uid })
+  // The asset register is its own Coach+ plugin — seeded beside finance, not by it.
+  await seedTeamAssetRegister({ teamId, uid })
 
   // ── documents plugin: 3 published documents (terms, privacy, house rules) ──
   const docSeeds = [
@@ -3152,9 +3159,8 @@ async function upsertAuthUser(opts: {
   email: string
   displayName: string
   password: string
-  claims?: Record<string, unknown>
 }) {
-  const { uid, email, displayName, password, claims } = opts
+  const { uid, email, displayName, password } = opts
   try {
     await auth.createUser({ uid, email, password, displayName, emailVerified: true })
   } catch (e: unknown) {
@@ -3167,7 +3173,6 @@ async function upsertAuthUser(opts: {
       throw e
     }
   }
-  if (claims) await auth.setCustomUserClaims(uid, claims)
 }
 
 function slugEmail(c: PoolEntry): string {
@@ -3243,6 +3248,12 @@ async function main() {
     await seedDemoTeam(profile)
   }
 
+  // The member app's test login — the same review studio the production
+  // console provisions, with its fixed code (scripts/lib/mobile.ts). The nightly
+  // reseed refreshes its window, so on the sandbox it never lapses.
+  const memberApp = await seedReviewTenant({ db, seededBy: 'seed-sandbox' })
+  await seedMobileSettings({ db, seededBy: 'seed-sandbox' })
+
   console.log('\n✅ Demo playground seeded successfully!\n')
   console.log('   ┌──────────┬──────────────────────────┬────────────────────────┬────────────┐')
   console.log('   │ Sector   │ Team                     │ Login                  │ Password   │')
@@ -3259,6 +3270,7 @@ async function main() {
     console.log(`   ${p.teamName.padEnd(26)} → /public/${p.teamSlug}`)
   }
   reportSeedConnectAccounts()
+  printMemberAppLogin(memberApp)
   console.log('')
 }
 

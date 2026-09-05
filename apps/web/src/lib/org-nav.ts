@@ -85,6 +85,17 @@ export interface OrgNavItem {
  * What is left behind the rail is genuinely configurational, which is why it
  * collapsed from three groups to one.
  */
+/**
+ * THE SIDEBAR ROWS ARE NOT SORTED, and the rail below them is.
+ *
+ * `lib/navSort.ts` puts rows in alphabetical order wherever a list GROWS —
+ * sections and rail groups gain and lose rows constantly, so a considered order
+ * there decays into the order things were written in. These four or five do not
+ * grow: they are the org's whole shape, and their order is load-bearing at both
+ * ends (Studios is home; Manage is the way into the rail, and a settings row
+ * that sorted into the middle would read as a destination rather than a door).
+ * Ranking five fixed things once is the case the rule explicitly leaves alone.
+ */
 export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { id: 'org-teams', path: 'teams', labelKey: 'navStudios', icon: Building2 },
   { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
@@ -95,6 +106,14 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
     icon: ListTodo,
   },
   {
+    // A CORE ORG FEATURE, not a setting (Franco, 2026-09-05).
+    //
+    // It sat in the rail's "standards you set" group, beside Ranking, on the
+    // reading that an organisation DEFINES its affiliation types. But the page
+    // is a ROSTER — who holds the federation's licence, badge or membership,
+    // and whether it is current — which is something an organiser opens during
+    // a working day, not something they configure once. Filing it behind a rail
+    // of settings is what made it hard to find.
     id: 'org-affiliations',
     path: 'affiliations',
     labelKey: 'tabAffiliations',

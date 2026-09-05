@@ -128,17 +128,16 @@ function stripeSecret(): string | null {
 
 // Shared Stripe client from the test key (env or functions/.env.local). Returns
 // null (with a warning) when the key or SDK can't be loaded.
+// THE TYPE IS DERIVED FROM THE LOADER, not written out. `stripe` uses
+// `export =`, so `typeof import('stripe').default` is not a type this tsconfig
+// can resolve, while the same `.default` on the VALUE side is synthesised by
+// esModuleInterop and works at runtime. Writing the shape a second time is what
+// let the two disagree; deriving it from the expression the runtime actually
+// evaluates means they cannot.
 //
-// THE TYPE IS DERIVED FROM THE LOADER, not written out. `stripe` uses `export =`,
-// so `typeof import('stripe').default` — which is what stood here — is not a type
-// this tsconfig can resolve, while the same `.default` on the VALUE side is
-// synthesised by esModuleInterop and works at runtime. Writing the shape a second
-// time is what let the two disagree; deriving it from the expression the runtime
-// actually evaluates means they cannot.
-//
-// It went unnoticed because `scripts/` was typechecked by a hand-maintained list
-// that did not name this file (fixed in the same change: tsconfig.seedcheck.json
-// now globs).
+// It went unnoticed because `scripts/` was typechecked against a hand-maintained
+// list that did not name this file — fixed in the same change (tsconfig.seedcheck
+// .json now globs).
 async function loadStripeCtor() {
   return (await import('stripe')).default
 }

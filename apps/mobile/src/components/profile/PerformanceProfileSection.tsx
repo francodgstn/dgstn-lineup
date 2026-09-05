@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Button,
   Chip,
-  Icon,
   Modal,
   Portal,
   Surface,
@@ -17,79 +16,78 @@ import Svg, { Circle, Line, Polygon, Polyline, Text as SvgText } from 'react-nat
 import { FirestoreService } from '../../services/firestore';
 import { PerformanceIndicator, PerformanceCheckin, ProfileKey } from '../../types';
 import { Timestamp } from 'firebase/firestore';
+import { useTranslations } from '../../i18n';
 
 interface Props {
   contactId: string;
   teamId: string;
 }
 
+/** What the axis-copy and profile-copy builders need from
+ *  `useTranslations('Performance')` — built once per render and threaded
+ *  through, since this module's helpers live outside the component. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 // ─── Axis question copy ───────────────────────────────────────────────────────
+//
+// A FIXED set of five axis ids Linyup ships with (not tenant data — a studio's
+// own coaching axes come from `PerformanceIndicator.label`, read verbatim,
+// never translated here). These are only the default question prompts and
+// fallback display labels for THOSE five ids.
 
-const AXIS_QUESTIONS: Record<string, string> = {
-  consistency: 'How consistently did I show up to my sessions, relative to what I intended?',
-  effort: 'How much of my capacity did I genuinely invest during sessions?',
-  focus: 'How mentally present and attentive was I during sessions?',
-  recharge: 'How well did I recharge between sessions — sleep, rest, and taking care of my body?',
-  sense_of_progress:
-    'When I look back at this period, does my practice feel like it moved me forward in a way that mattered to me?',
-};
+const axisQuestions = (t: Translate): Record<string, string> => ({
+  consistency: t('axisQuestionConsistency'),
+  effort: t('axisQuestionEffort'),
+  focus: t('axisQuestionFocus'),
+  recharge: t('axisQuestionRecharge'),
+  sense_of_progress: t('axisQuestionSenseOfProgress'),
+});
 
-const AXIS_LABELS: Record<string, string> = {
-  consistency: 'Consistency',
-  effort: 'Effort',
-  focus: 'Focus',
-  recharge: 'Recharge',
-  sense_of_progress: 'Sense of progress',
-};
+const axisLabels = (t: Translate): Record<string, string> => ({
+  consistency: t('axisLabelConsistency'),
+  effort: t('axisLabelEffort'),
+  focus: t('axisLabelFocus'),
+  recharge: t('axisLabelRecharge'),
+  sense_of_progress: t('axisLabelSenseOfProgress'),
+});
 
 // ─── Profile display metadata ─────────────────────────────────────────────────
+//
+// The most sensitive copy in the app — it tells a member how their training is
+// going. Wording is aligned with the web Space's `SpaceCoaching` namespace
+// (the member-facing equivalent) so the two surfaces agree; translate with the
+// same care, not word-for-word literalism.
 
 type ProfileDisplay = {
   label: string;
   color: string;
-  message: (lever?: string, anchor?: string) => string;
+  message: string;
 };
 
-const PROFILE_DISPLAY: Record<ProfileKey, ProfileDisplay> = {
-  burnout_risk: {
-    label: 'Burnout Risk',
-    color: '#EF4444',
-    message: () => "You're showing up but disengaging across key dimensions. Talk to your coach.",
-  },
-  overreaching: {
-    label: 'Overreaching',
-    color: '#F97316',
-    message: () => 'High effort but poor recovery. Make sure to rest and take care of your body.',
-  },
-  stuck: {
-    label: 'Stuck',
-    color: '#EAB308',
-    message: () => "You're engaged but not feeling forward movement. Ask your coach for new challenges or recognition.",
-  },
-  coasting: {
-    label: 'Coasting',
-    color: '#8B5CF6',
-    message: () =>
-      'Physically present, mentally elsewhere. Try setting a clear focus intention before your next session.',
-  },
-  inconsistent: {
-    label: 'Inconsistent',
-    color: '#06B6D4',
-    message: () => "Great quality when you show up — consistency is the bottleneck right now.",
-  },
-  balanced: {
-    label: 'Balanced',
-    color: '#22C55E',
-    message: () => 'Healthy profile across all dimensions. Keep it up!',
-  },
-  default: {
-    label: 'Profile',
-    color: '#6B7280',
-    message: (lever, anchor) =>
-      anchor && lever
-        ? `Your ${AXIS_LABELS[anchor] ?? anchor} is strong — build from there. Your ${AXIS_LABELS[lever] ?? lever} is where the most room for improvement is right now.`
-        : '',
-  },
+const profileDisplay = (t: Translate, key: ProfileKey, lever?: string, anchor?: string): ProfileDisplay => {
+  const labels = axisLabels(t);
+  switch (key) {
+    case 'burnout_risk':
+      return { label: t('profileBurnoutRiskLabel'), color: '#EF4444', message: t('profileBurnoutRiskMessage') };
+    case 'overreaching':
+      return { label: t('profileOverreachingLabel'), color: '#F97316', message: t('profileOverreachingMessage') };
+    case 'stuck':
+      return { label: t('profileStuckLabel'), color: '#EAB308', message: t('profileStuckMessage') };
+    case 'coasting':
+      return { label: t('profileCoastingLabel'), color: '#8B5CF6', message: t('profileCoastingMessage') };
+    case 'inconsistent':
+      return { label: t('profileInconsistentLabel'), color: '#06B6D4', message: t('profileInconsistentMessage') };
+    case 'balanced':
+      return { label: t('profileBalancedLabel'), color: '#22C55E', message: t('profileBalancedMessage') };
+    default:
+      return {
+        label: t('profileDefaultLabel'),
+        color: '#6B7280',
+        message: anchor && lever
+          ? t('profileDefaultMessage', { anchor: labels[anchor] ?? anchor, lever: labels[lever] ?? lever })
+          : '',
+      };
+  }
 };
 
 // ─── Radar Chart ──────────────────────────────────────────────────────────────
@@ -219,7 +217,8 @@ const ScoreRow: React.FC<{
   onChange: (v: number) => void;
 }> = ({ indicator, value, onChange }) => {
   const theme = useTheme();
-  const question = AXIS_QUESTIONS[indicator.key];
+  const t = useTranslations('Performance');
+  const question = axisQuestions(t)[indicator.key];
   return (
     <View style={{ paddingVertical: 8 }}>
       <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, fontWeight: '600', marginBottom: question ? 2 : 8 }}>
@@ -263,9 +262,8 @@ const CheckinHistoryRow: React.FC<{
   indicators: PerformanceIndicator[];
 }> = ({ checkin, indicators }) => {
   const theme = useTheme();
-  const date = checkin.taken_at?.toDate
-    ? checkin.taken_at.toDate()
-    : new Date(checkin.taken_at);
+  const t = useTranslations('Performance');
+  const date = checkin.taken_at.toDate();
   const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
   const abbreviated = indicators
@@ -294,19 +292,22 @@ const CheckinHistoryRow: React.FC<{
           {abbreviated}
         </Text>
       </View>
-      {checkin.profile_key && checkin.profile_key !== 'default' && (
-        <Chip
-          compact
-          style={{
-            backgroundColor: PROFILE_DISPLAY[checkin.profile_key].color + '20',
-            height: 24,
-            marginRight: 6,
-          }}
-          textStyle={{ fontSize: 10, color: PROFILE_DISPLAY[checkin.profile_key].color, marginVertical: 0 }}
-        >
-          {PROFILE_DISPLAY[checkin.profile_key].label}
-        </Chip>
-      )}
+      {checkin.profile_key && checkin.profile_key !== 'default' && (() => {
+        const display = profileDisplay(t, checkin.profile_key);
+        return (
+          <Chip
+            compact
+            style={{
+              backgroundColor: display.color + '20',
+              height: 24,
+              marginRight: 6,
+            }}
+            textStyle={{ fontSize: 10, color: display.color, marginVertical: 0 }}
+          >
+            {display.label}
+          </Chip>
+        );
+      })()}
       <Chip
         compact
         style={{
@@ -319,7 +320,7 @@ const CheckinHistoryRow: React.FC<{
           marginVertical: 0,
         }}
       >
-        {checkin.filled_by === 'coach' ? 'Coach' : 'Self'}
+        {checkin.filled_by === 'coach' ? t('filledByCoach') : t('filledBySelf')}
       </Chip>
     </View>
   );
@@ -338,6 +339,7 @@ interface CheckinModalProps {
 
 const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicators, onDismiss, onSubmit }) => {
   const theme = useTheme();
+  const t = useTranslations('Performance');
   // Unset until the member actually taps a value for every axis — defaulting
   // every axis to 3 let a check-in save with zero interaction.
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -380,7 +382,7 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
       >
         <ScrollView showsVerticalScrollIndicator={false}>
           <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: 16 }}>
-            Rate my performance
+            {t('rateMyPerformanceTitle')}
           </Text>
 
           {indicators.map(ind => (
@@ -393,7 +395,7 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
           ))}
 
           <TextInput
-            label="Notes (optional)"
+            label={t('notesOptional')}
             value={notes}
             onChangeText={setNotes}
             multiline
@@ -404,22 +406,22 @@ const PerformanceCheckinModal: React.FC<CheckinModalProps> = ({ visible, indicat
 
           <View style={{ marginTop: 12 }}>
             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-              Context
+              {t('context')}
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Chip selected={context === 'self'} onPress={() => setContext('self')}>
-                Self check
+                {t('selfCheck')}
               </Chip>
               <Chip selected={context === '1to1'} onPress={() => setContext('1to1')}>
-                1-to-1 with coach
+                {t('oneToOneWithCoach')}
               </Chip>
             </View>
           </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <Button onPress={onDismiss} disabled={submitting}>Cancel</Button>
+            <Button onPress={onDismiss} disabled={submitting}>{t('cancel')}</Button>
             <Button mode="contained" onPress={handleSubmit} loading={submitting} disabled={submitting || !allRated}>
-              Save
+              {t('save')}
             </Button>
           </View>
         </ScrollView>
@@ -437,13 +439,14 @@ const TrendChart: React.FC<{ checkins: PerformanceCheckin[]; indicators: Perform
   indicators,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Performance');
   const data = [...checkins].filter(c => c.filled_by === 'student').reverse();
 
   if (data.length < 2) {
     return (
       <View style={{ alignItems: 'center', paddingVertical: 32 }}>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-          Rate yourself at least twice to see trends.
+          {t('rateAtLeastTwice')}
         </Text>
       </View>
     );
@@ -507,7 +510,7 @@ const TrendChart: React.FC<{ checkins: PerformanceCheckin[]; indicators: Perform
         {data.map((c, i) => {
           const show = data.length <= 5 || i === 0 || i === data.length - 1 || i === Math.floor((data.length - 1) / 2);
           if (!show) return null;
-          const date = c.taken_at?.toDate ? c.taken_at.toDate() : new Date(c.taken_at);
+          const date = c.taken_at.toDate();
           const label = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
           const anchor: 'start' | 'middle' | 'end' = i === 0 ? 'start' : i === data.length - 1 ? 'end' : 'middle';
           return (
@@ -534,6 +537,7 @@ const TrendChart: React.FC<{ checkins: PerformanceCheckin[]; indicators: Perform
 
 export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }) => {
   const theme = useTheme();
+  const t = useTranslations('Performance');
   const { width: screenWidth } = useWindowDimensions();
   // Fill card width: screenWidth minus 20px outer scroll padding each side, then bleed through the 16px card padding
   const chartSize = screenWidth - 40;
@@ -579,12 +583,14 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const latestCoachCheckin = checkins.find(s => {
     if (s.filled_by !== 'coach') return false;
-    const d = s.taken_at?.toDate ? s.taken_at.toDate() : new Date(s.taken_at);
+    const d = s.taken_at.toDate();
     return d >= sevenDaysAgo;
   });
 
   const profileKey = latestStudentCheckin?.profile_key;
-  const profileDisplay = profileKey ? PROFILE_DISPLAY[profileKey] : null;
+  const display = profileKey
+    ? profileDisplay(t, profileKey, latestStudentCheckin?.primary_lever ?? undefined, latestStudentCheckin?.anchor ?? undefined)
+    : null;
 
   const tabStyle = (active: boolean) => ({
     paddingHorizontal: 16 as const,
@@ -607,17 +613,17 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
       {/* Section heading with tab switcher */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 4 }}>
         <Text variant="titleLarge" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
-          Performance Profile
+          {t('performanceProfileTitle')}
         </Text>
         <View style={{ flexDirection: 'row', backgroundColor: theme.colors.surfaceVariant, borderRadius: 12, padding: 4 }}>
           <TouchableOpacity onPress={() => setActiveTab('profile')} style={tabStyle(activeTab === 'profile')}>
             <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.5, color: activeTab === 'profile' ? theme.colors.primary : theme.colors.onSurfaceVariant }}>
-              PROFILE
+              {t('tabProfile').toUpperCase()}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setActiveTab('history')} style={tabStyle(activeTab === 'history')}>
             <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.5, color: activeTab === 'history' ? theme.colors.primary : theme.colors.onSurfaceVariant }}>
-              HISTORY
+              {t('tabHistory').toUpperCase()}
             </Text>
           </TouchableOpacity>
         </View>
@@ -642,30 +648,30 @@ export const PerformanceProfileSection: React.FC<Props> = ({ contactId, teamId }
               ) : (
                 <View style={{ alignItems: 'center', paddingVertical: 28, gap: 6 }}>
                   <Text variant="titleMedium" style={{ color: theme.colors.onSurface, fontWeight: '700', textAlign: 'center' }}>
-                    How is your performance going?
+                    {t('howIsPerformanceGoing')}
                   </Text>
                   <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
-                    Rate yourself across five dimensions and start building your profile.
+                    {t('rateAcrossFiveDimensions')}
                   </Text>
                 </View>
               )}
 
-              {profileDisplay && profileKey && (
-                <View style={{ borderRadius: 10, padding: 12, backgroundColor: profileDisplay.color + '18', marginBottom: 12 }}>
+              {display && profileKey && (
+                <View style={{ borderRadius: 10, padding: 12, backgroundColor: display.color + '18', marginBottom: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: profileDisplay.color }} />
-                    <Text variant="labelMedium" style={{ color: profileDisplay.color, fontWeight: '700' }}>
-                      {profileDisplay.label}
+                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: display.color }} />
+                    <Text variant="labelMedium" style={{ color: display.color, fontWeight: '700' }}>
+                      {display.label}
                     </Text>
                   </View>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {profileDisplay.message(latestStudentCheckin?.primary_lever ?? undefined, latestStudentCheckin?.anchor ?? undefined)}
+                    {display.message}
                   </Text>
                 </View>
               )}
 
               <Button mode="contained-tonal" icon="plus" compact onPress={() => setShowModal(true)} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
-                Rate myself
+                {t('rateMyselfButton')}
               </Button>
             </>
           ) : (

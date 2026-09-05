@@ -1,5 +1,5 @@
 // Shared catalogue of "settings" destinations. Consumed by the sidebar (which shows
-// the subset the user always shows, under Shortcuts) and by the settings rail
+// the subset the user always shows, under Favourites) and by the settings rail
 // (/settings/* — which lists them all, grouped, with an "always show" toggle on
 // each). Keeping it in one place means the sidebar and rail never drift.
 // Vocabulary: see THE NAV-MEMORY CENSUS in contexts/NavPinsContext.tsx.
@@ -18,14 +18,17 @@ import {
   Puzzle,
   Settings,
   ShieldCheck,
-  ShoppingBag,
   Target,
   UserCog,
   Wallet,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-export type SettingsGroupKey = 'scheduling' | 'studio' | 'account'
+export type SettingsGroupKey =
+  | 'account'
+  | 'studio'
+  | 'scheduling'
+  | 'communication'
 
 // Runtime visibility gate for items that only apply on certain plans/plugins/roles.
 // The rail resolves these (plugin via useInstalledPlugins, role via
@@ -38,11 +41,7 @@ export type SettingsGroupKey = 'scheduling' | 'studio' | 'account'
 // only look at is not worth a row. The controls behind them are still disabled +
 // annotated for an owner-less arrival by deep link — hiding the row is
 // navigation, never enforcement.
-//
-// `shop` — the storefront only means anything once there is something to sell or
-// a way to charge (the products or online-courses plugin, or a payment channel).
-// Same condition the main nav used while the row lived there.
-export type SettingsGate = 'ownerOnly' | 'customFields' | 'shop'
+export type SettingsGate = 'ownerOnly' | 'customFields'
 
 export interface SettingsNavItem {
   id: string // stable id used in the pin set + as React key
@@ -52,28 +51,89 @@ export interface SettingsNavItem {
   group: SettingsGroupKey
   exact?: boolean // active only on exact path match (hub routes like /settings/plugins)
   gate?: SettingsGate // hidden unless the runtime condition holds
+  /** Pin to the head of its group, ahead of the alphabetical run. Read
+   *  `lib/navSort.ts` before adding one. */
+  lead?: boolean
 }
 
-// Order here drives the rail (within each group) and the pinned sidebar list.
+// ORDER WITHIN A GROUP IS ALPHABETICAL BY TRANSLATED LABEL, except for rows
+// marked `lead` — the rule lives in `lib/navSort.ts` and the rail applies it.
+// DECLARATION ORDER BELOW MEANS NOTHING: it groups related rows together for
+// whoever is reading this file, and nothing else. Put a new row wherever it
+// reads best here.
+//
+// (The PINNED sidebar list is a different thing and is not sorted: those are in
+// the order the studio itself dragged them into — census item 3 in
+// contexts/NavPinsContext.tsx.)
+//
 // Activities + Subscriptions live in the main nav's "Offer" section now. Most items
 // render under a shared /settings/* layout (the master-detail rail + detail pane);
 // legacy paths (/team/settings, /billing, …) resolve via redirect stubs.
 export const SETTINGS_ITEMS: SettingsNavItem[] = [
-  // Scheduling — how sessions and bookings work.
+  // ── Account — workspace admin: who is here, what we pay, what we opted into.
+  { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
+  { id: 'roles', href: '/settings/roles', labelKey: 'roles', icon: ShieldCheck, group: 'account' },
+  { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account', gate: 'ownerOnly' },
+  // Experimental features — the studio's opt-in for surfaces that are built and
+  // working but not yet settled. Account, not Studio: it is a workspace-wide
+  // "what have we turned on". Owner-only because the switch is a team-doc write
+  // (firestore.rules), so a manager who reached it could only look at it. NOT a
+  // plugin, deliberately — see the registry header in
+  // packages/shared/src/types/experimental.ts.
+  { id: 'experimental', href: '/settings/experimental', labelKey: 'experimentalFeatures', icon: FlaskConical, group: 'account', gate: 'ownerOnly' },
+
+  // ── Studio — the studio's own configuration: who it is, how it takes money,
+  // how it ranks and describes people, what it has installed. Each team
+  // sub-section is its own rail item (selected by ?tab= on /settings/team).
   //
-  // TWO ROWS, AND IT STAYS A GROUP (UX-67 follow-up). Places leaving for
-  // /schedule/places left this at two, which invites folding it into Studio;
-  // that is the wrong trade. Studio is already the long group (eight rows, and
-  // it is where every "where do I configure X?" hunt ends up), so merging makes
-  // the one list that is actually hard to scan longer in order to spare a
-  // two-row one nobody has to scan at all. The label is also the word a studio
-  // arrives with — someone looking for the booking window looks for
-  // "Scheduling", not for "Studio" — so the group is doing search work, not
-  // just visual grouping. Revisit if it drops to one row: a group of one is a
-  // header with nothing to head.
+  // It used to hold the email and public-surface rows too, which made it long
+  // enough that a reader arrived here by elimination. Those became their own
+  // groups — see the note on SETTINGS_GROUPS below.
+  // LEAD of Studio: it is the studio's identity — name, logo, branding — and the
+  // most-opened settings page there is. Alphabetically "General" would land
+  // mid-group in English and elsewhere again in German ("Allgemein" first,
+  // "Générale" mid-list in French), so the one page a studio comes here for
+  // would move depending on the language it reads in.
+  { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true, lead: true },
+  { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio', gate: 'ownerOnly' },
+  { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
+  // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
+  { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
+  { id: 'teamCoaching', href: '/settings/coaching', labelKey: 'teamCoaching', icon: Target, group: 'studio' },
+  // The plugins marketplace renders in the detail pane; its per-plugin editor
+  // sub-routes open full-screen at /plugins/*.
+  { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
+  // The public-surface overview hub — the map of everything the world can see
+  // (public URL, default landing, per-surface live status). Individual surfaces
+  // are reachable from their own sections (Space → Grow); this ties them
+  // together.
+  //
+  // The route stays at /public-page — it is bookmarked, and its sibling
+  // /public-page/space is linked from the main nav — but it RENDERS inside the
+  // settings shell (rail + detail pane) via a route-group layout at
+  // (auth)/public-page/layout.tsx, so it reads like every other settings section
+  // instead of dumping the reader onto a bare full page (UX-61). That shell also
+  // covers /public-page/space. It is ALSO listed in the main nav's Grow section
+  // under the same id, so the map is reachable from where public surfaces are
+  // worked on (UX-28) — one destination, one shortcut star, listed twice.
+  //
+  // IN STUDIO, AND NOT A GROUP OF ITS OWN (2026-09-01). It used to lead a
+  // "Public pages" group whose only other row was the Shop settings page; when
+  // that page was deleted the group was a header with nothing to head — the
+  // exact failure the Scheduling note below warns about. It carries no `lead`
+  // either: it led that group only because Shop was a part of its whole.
+  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
+
+  // ── Scheduling — how sessions and bookings work.
+  //
+  // IT STAYS ITS OWN GROUP even when short (UX-67 follow-up). The label is the
+  // word a studio arrives with — someone looking for the booking window looks
+  // for "Scheduling", not for "Studio" — so the group is doing search work, not
+  // just visual grouping. Revisit only if it drops to one row: a group of one is
+  // a header with nothing to head.
   { id: 'eventTypes', href: '/settings/event-types', labelKey: 'eventTypes', icon: CalendarRange, group: 'scheduling' },
   // Reusable event programmes. Renders inside the /settings shell, so it stays a
-  // rail row (unlike Places below).
+  // rail row (unlike Places, below).
   { id: 'programTemplates', href: '/settings/program-templates', labelKey: 'programTemplates', icon: ListTodo, group: 'scheduling' },
   // Places is NOT here any more: it moved to /schedule/places, beside the calendar
   // that reads it, and is listed in the main nav's Run section (UX-67). It is not
@@ -83,71 +143,65 @@ export const SETTINGS_ITEMS: SettingsNavItem[] = [
   // the shell; `publicPages` below is the one that reaches it via a route group
   // rather than a /settings/* path.
   { id: 'bookingPage', href: '/settings/booking', labelKey: 'bookingPage', icon: CalendarCheck, group: 'scheduling' },
-  // Studio — the studio's own configuration. Each team sub-section is its own rail
-  // item (selected by ?tab= on /settings/team); affiliations + custom-fields are
-  // plan/plugin-gated. The plugins marketplace lives here too (renders in the detail
-  // pane; its per-plugin editor sub-routes open full-screen at /plugins/*).
-  { id: 'teamGeneral', href: '/settings/team', labelKey: 'teamGeneral', icon: Settings, group: 'studio', exact: true },
-  { id: 'teamPayments', href: '/settings/team?tab=payments', labelKey: 'teamPayments', icon: Wallet, group: 'studio', gate: 'ownerOnly' },
+
+  // ── Communication — what the studio sends, and how it reads.
+  //
   // Outreach folded into Emails (2026-08-25): sender identity, placeholders,
   // templates and the system toggles are one subject, and were already sharing
   // the `EmailSettings` i18n namespace. `?tab=outreach` redirects to /settings/emails,
   // so a pinned `teamOutreach` id resolves to nothing and simply drops out of the
   // pin list (the catalogue is a Map lookup) rather than breaking it.
-  { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'studio' },
+  { id: 'teamEmails', href: '/settings/emails', labelKey: 'teamEmails', icon: Mail, group: 'communication' },
   // Split out of teamEmails (2026-08-27): the templates list + placeholder
   // reference is AUTHORING copy, while teamEmails above is CONFIGURATION
   // (sender identity, system-email toggles, booking instructions, SMS). The
   // templates list was pushing the config cards below the fold, so it earned
   // its own row rather than a tab or a disclosure on the same page.
-  { id: 'teamEmailTemplates', href: '/settings/email-templates', labelKey: 'teamEmailTemplates', icon: FileText, group: 'studio' },
-  { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'studio', gate: 'ownerOnly' },
-  { id: 'teamRanking', href: '/settings/team?tab=ranking', labelKey: 'teamRanking', icon: Award, group: 'studio', gate: 'ownerOnly' },
-  // Affiliations moved to the main nav's "Offer" section (/offer/affiliations).
-  { id: 'teamCustomFields', href: '/settings/team?tab=custom-fields', labelKey: 'teamCustomFields', icon: ListChecks, group: 'studio', gate: 'customFields' },
-  { id: 'teamCoaching', href: '/settings/coaching', labelKey: 'teamCoaching', icon: Target, group: 'studio' },
-  // The public-surface overview hub — the map of everything the world can see
-  // (public URL, default landing, per-surface live status). Individual surfaces
-  // are reachable from their own sections (Space → Grow, Shop → just below); this is
-  // the settings/overview that ties them together.
-  //
-  // The route stays at /public-page — it is bookmarked, and its sibling
-  // /public-page/space is linked from the main nav (Shop sits in this rail, just
-  // below) — but it
-  // now RENDERS inside the settings shell (rail + detail pane) via a route-group
-  // layout at (auth)/public-page/layout.tsx, so it reads like every other
-  // settings section instead of dumping the reader onto a bare full page (UX-61).
-  // That shell now covers /public-page/shop and /public-page/space too — they are
-  // sections of this one, and drawn full-width they read as unfinished pages. It is ALSO listed in the main nav's Grow section under
-  // the same id, so the map is reachable from where public surfaces are worked on
-  // (UX-28) — one destination, one shortcut star, listed twice.
-  { id: 'publicPages', href: '/public-page', labelKey: 'publicPage', icon: LayoutTemplate, group: 'studio', exact: true },
-  // The public storefront that aggregates subscriptions, products and courses.
-  // It renders in this shell and is a SECTION of the public-page hub above, so
-  // the row belongs beside it — it spent a while in the main nav's Offer section
-  // instead, which put a settings destination in the middle of the things a
-  // studio actually sells.
-  { id: 'shop', href: '/public-page/shop', labelKey: 'shop', icon: ShoppingBag, group: 'studio', gate: 'shop' },
-  { id: 'plugins', href: '/settings/plugins', labelKey: 'plugins', icon: Puzzle, group: 'studio', exact: true },
-  // Account — workspace admin.
-  { id: 'managers', href: '/settings/members', labelKey: 'managers', icon: UserCog, group: 'account' },
-  { id: 'roles', href: '/settings/roles', labelKey: 'roles', icon: ShieldCheck, group: 'account' },
-  { id: 'billing', href: '/settings/billing', labelKey: 'billing', icon: CreditCard, group: 'account', gate: 'ownerOnly' },
-  // Experimental features — the studio's opt-in for surfaces that are built and
-  // working but not yet settled. Account, not Studio: it is a workspace-wide
-  // "what have we turned on", and Studio is already the long group. Owner-only
-  // because the switch is a team-doc write (firestore.rules), so a manager who
-  // reached it could only look at it. NOT a plugin, deliberately — see the
-  // registry header in packages/shared/src/types/experimental.ts.
-  { id: 'experimental', href: '/settings/experimental', labelKey: 'experimentalFeatures', icon: FlaskConical, group: 'account', gate: 'ownerOnly' },
+  { id: 'teamEmailTemplates', href: '/settings/email-templates', labelKey: 'teamEmailTemplates', icon: FileText, group: 'communication' },
+  // Alerts are the OTHER outbound channel — what the studio sends ITSELF (and
+  // its coaches) when something happens. Same subject as the two above: a
+  // message goes out and somebody reads it.
+  { id: 'teamAlerts', href: '/settings/team?tab=alerts', labelKey: 'teamAlerts', icon: Bell, group: 'communication', gate: 'ownerOnly' },
+
 ]
 
-// Group order + their `Nav` namespace label keys (rendered in the rail). Account on
-// top per product direction.
+/**
+ * Group order + their `Nav` namespace label keys (rendered in the rail). Account
+ * on top per product direction.
+ *
+ * ── WHY FOUR GROUPS (2026-08-31, revised 2026-09-01) ────────────────────────
+ * "Studio" had eleven rows and every other group had two or three, which made
+ * it the place a reader ended up by elimination rather than by expectation —
+ * and eleven rows is past the point where a group heading helps you skip past
+ * what you do not want. One coherent subject came out of it:
+ *
+ *  • COMMUNICATION — Emails, Email templates, Alerts. One subject already: two
+ *    of them share the `EmailSettings` i18n namespace, and all three answer
+ *    "what do we send, and how does it read". Somebody hunting for a reminder's
+ *    wording looks for that word, not for "Studio".
+ *
+ * A PUBLIC PAGES group briefly held the public-surface hub and the Shop settings
+ * page. Shop was deleted on 2026-09-01 — it wrote nothing, and every destination
+ * on it was already reachable from /offer/* and the payment settings — which
+ * left a group of one, a header with nothing to head. The hub moved back into
+ * Studio (see its row above).
+ *
+ * What is in Studio is what is genuinely the studio's own configuration:
+ * identity, how it takes money, ranks, custom fields, coaching axes, plugins,
+ * and the map of what the world sees.
+ *
+ * GROUP ORDER is by how often a settings visit lands there: Account, then Studio
+ * — General is the single most-opened settings page — then the two topic
+ * groups. That is a ranking of FOUR things that changes once a year, which is
+ * exactly the case where a considered order is worth keeping; the rows INSIDE
+ * each group are the case where it is not, and they sort alphabetically
+ * (`lib/navSort.ts`).
+ */
 export const SETTINGS_GROUPS: { key: SettingsGroupKey; labelKey: string }[] = [
   { key: 'account', labelKey: 'groupAccount' },
-  { key: 'scheduling', labelKey: 'groupScheduling' },
   { key: 'studio', labelKey: 'groupStudio' },
+  { key: 'scheduling', labelKey: 'groupScheduling' },
+  { key: 'communication', labelKey: 'groupCommunication' },
 ]
 
 /**

@@ -64,6 +64,7 @@ import {
   setWaiverRequirement,
   waiverCallableError,
 } from '@/plugins/documents/hooks'
+import { Tip } from '@/components/ui/tip'
 
 const STATUS_BADGE: Record<DocumentStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -235,16 +236,17 @@ export function DocumentsList({
                   </div>
                 </div>
                 {canDuplicate && (
-                  <button
-                    type="button"
-                    onClick={() => onDuplicate(d)}
-                    disabled={duplicating}
-                    title={tCommon('duplicate')}
-                    aria-label={`${tCommon('duplicate')} — ${d.title}`}
-                    className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </button>
+                  <Tip label={tCommon('duplicate')}>
+                    <button
+                      type="button"
+                      onClick={() => onDuplicate(d)}
+                      disabled={duplicating}
+                      aria-label={`${tCommon('duplicate')} — ${d.title}`}
+                      className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </Tip>
                 )}
               </div>
 

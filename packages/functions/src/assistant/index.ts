@@ -9,7 +9,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { to } from '../utils/async'
 import { isTeamMember } from '../utils/teams'
-import { getAssistantModel } from '../utils/vertexClient'
+import { getGenAI, ASSISTANT_MODEL } from '../utils/vertexClient'
 import { pluginIsActive } from '../utils/plugins'
 
 const MAX_MESSAGES = 20
@@ -21,15 +21,27 @@ const RATE_WINDOW_MS = 60 * 60 * 1000
 // Static app-capability index the model is grounded on. Keep concise; a richer,
 // generated index (from NAV_SECTIONS/settings-nav/PLUGIN_REGISTRY) is a Phase-B
 // improvement. Menu paths mirror the sidebar.
+//
+// IT GOES STALE SILENTLY, and did: this still said "Offer › Activities" and
+// "Offer › Catalogue" after both were renamed, so the assistant was confidently
+// directing studios to a menu that no longer existed — wrong answers with no
+// error anywhere (Franco, 2026-09-02). Nothing checks this against the real
+// nav, which is exactly what the generated index above would fix. Until then:
+// rename a nav row, grep here.
 const APP_MAP = `Linyup dashboard map (menu path → what it's for):
 - Dashboard — overview.
 - Run › Schedule — calendar of sessions. Run › Bookings — booking requests.
   Run › Contacts — your people (profiles, notes, follow-ups, appointments).
   Run › Payments — money in (needs Stripe Connect). Run › Automations — rules that act on contacts/bookings.
-- Offer › Activities — class/service types. Offer › Plans & affiliations — subscriptions + affiliations.
-  Offer › Online courses — course library (Space). Offer › Products — sellable products. Offer › Documents — public docs.
-- Grow › All public pages — hub of every public surface (bio-link, website, shop, space, booking, signup, forms, documents) with a default-landing picker; Shop settings and Space settings live under it. Grow › Bio link — the link-in-bio editor. Grow › Website, Forms, Gamification — plugin surfaces.
-- Settings › Team (general, payments/currency, branding), Booking, Event types, Places, Members, Roles (capabilities per role), Plugins (marketplace), Billing (plan & invoices).
+  Run › Day sheet — the printable list a coach carries to the door. Run › Coaches — staff (Studio+).
+  Run › Groups (plugin) — manual and rule-based contact groups.
+- Manage › Offerings — the one place activities (classes and appointments) and plans
+  (subscriptions) are created, priced and linked to each other; also lists courses and products.
+  Manage › Pricing — read-only view of what everything costs. Manage › Places — locations and rooms.
+  Manage › Promo codes, Online courses, Products, Documents, Affiliation.
+  Manage › Finance and Assets (plugins) — the books and the asset register.
+- Grow › All public pages — hub of every public surface (bio-link, website, shop, space, booking, signup, forms, documents) with a default-landing picker; Space settings lives under it, and what the shop sells is Manage › Offerings. Grow › Bio link — the link-in-bio editor. Grow › Website, Forms, Gamification — plugin surfaces.
+- Settings › Team (general, payments/currency, branding), Booking, Event types, Members, Roles (capabilities per role), Plugins (marketplace), Billing (plan & invoices).
 Contact detail tabs: Profile, Appointments, Stats, Bookings, Plans & Affiliation, Payments, Activity, Follow-ups (alerts + outreach), Gamification.`
 
 const SYSTEM_PROMPT = `You are Linyup's in-app assistant for studio staff (coaches, managers, owners).
@@ -91,14 +103,18 @@ export const assistantChat = onCall(async (request) => {
   }
 
   try {
-    const model = getAssistantModel()
-    const result = await model.generateContent({
+    const response = await getGenAI().models.generateContent({
+      model: ASSISTANT_MODEL,
       contents: trimmed,
-      systemInstruction: { role: 'system', parts: [{ text: SYSTEM_PROMPT }] },
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        maxOutputTokens: 1024,
+        temperature: 0.3,
+      },
     })
-    const reply =
-      result.response?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim() || ''
+    // `response.text` rather than walking candidates[0].content.parts — four
+    // optional steps that each return undefined silently. See vertexClient.
+    const reply = (response.text ?? '').trim()
     if (!reply) throw new HttpsError('internal', 'The assistant returned an empty response.')
     return { reply }
   } catch (err) {

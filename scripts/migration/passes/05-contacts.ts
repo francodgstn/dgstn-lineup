@@ -21,6 +21,36 @@ const CONTACT_SUBCOLLECTIONS: Array<string | { from: string; to: string }> = [
   { from: 'training_checkins', to: 'performance_checkins' },
 ]
 
+/**
+ * A weekly report recording that somebody did not turn up. DO NOT MIGRATE IT.
+ *
+ * hmd-lineup's `weeklyReports` cron looped EVERY active contact of EVERY team
+ * once a week and wrote a row whether they attended or not — and its own
+ * `// TODO: - delete if older than 3 years` was never done. Measured on the
+ * three-club sample: 93,587 rows for 804 contacts, of which 92,439 (98.8%)
+ * carry `sessions_count: 0`. Across all sixteen clubs that is roughly 190,000
+ * documents, ~188,000 of them recording an absence.
+ *
+ * Dropping them loses NOTHING, because Linyup's own writer is already sparse —
+ * `weeklyReports` in functions/src/analytics builds its map from session
+ * participants, so a contact who did not attend gets no document — and both
+ * readers now treat a missing week as a zero (`densifyWeeklyCounts` in
+ * @linyup/shared). A stored zero and an absent week are the same fact; only one
+ * of them costs a document.
+ *
+ * Filtering on ATTENDANCE rather than on age is deliberate. The obvious
+ * alternative — the cutoff hmd-lineup meant to write — would throw away real
+ * attendance history, which is exactly what the belt progression engine reads
+ * to answer whether a qualifying year was qualifying.
+ */
+function isEmptyWeeklyReport(sub: string, data: Record<string, unknown>): boolean {
+  if (sub !== 'contact_weekly_reports') return false
+  const n = data.sessions_count
+  // Absent counts as empty too: a row that never recorded a number is not a
+  // record of attendance, and the readers coalesce both to zero anyway.
+  return typeof n !== 'number' || n <= 0
+}
+
 export async function pass05Contacts(
   cfg: MigrationConfig,
   teamIds: string[],
@@ -49,12 +79,13 @@ export async function pass05Contacts(
     // to validate the name-based matching against the real source data.
     let subMatched   = 0
     let subUnmatched = 0
+    let emptyWeeklyReports = 0
 
     for (const d of snap.docs) {
       const tgtRef = tgt.collection('contacts').doc(d.id)
       if (!cfg.dryRun) {
         const existing = await tgtRef.get()
-        if (existing.exists) { bw.skip(); continue }
+        if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
       }
 
       // Track subscription match rate before transforming (transform logs nothing)
@@ -87,10 +118,14 @@ export async function pass05Contacts(
         const toName = typeof sub === 'string' ? sub : sub.to
         const subSnap = await src.collection('contacts').doc(d.id).collection(fromName).get()
         for (const sd of subSnap.docs) {
+          if (isEmptyWeeklyReport(fromName, sd.data() as Record<string, unknown>)) {
+            emptyWeeklyReports++
+            continue
+          }
           const subRef = tgt.collection('contacts').doc(d.id).collection(toName).doc(sd.id)
           if (!cfg.dryRun) {
             const existing = await subRef.get()
-            if (existing.exists) { bw.skip(); continue }
+            if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
           }
           const data = transformSubcollectionDoc(fromName, sd.id, sd.data() as Record<string, unknown>)
           bw.set(subRef, data)
@@ -105,11 +140,15 @@ export async function pass05Contacts(
           const evRef = tgt.collection('contacts').doc(d.id).collection('goals').doc(gd.id).collection('evaluations').doc(ev.id)
           if (!cfg.dryRun) {
             const existing = await evRef.get()
-            if (existing.exists) { bw.skip(); continue }
+            if (existing.exists && !cfg.overwrite) { bw.skip(); continue }
           }
           bw.set(evRef, ev.data())
         }
       }
+    }
+
+    if (emptyWeeklyReports > 0) {
+      console.log(`    skipped ${emptyWeeklyReports} empty weekly reports (no attendance)`)
     }
 
     // Log subscription matching stats for this team (HEURISTIC — needs review)

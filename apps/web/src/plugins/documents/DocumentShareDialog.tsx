@@ -6,6 +6,7 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { Copy, Download, Check, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Tip } from '@/components/ui/tip'
 
 // Share dialog for a published + public document — QR code + copy/open/download,
 // cloned from components/layout/QRDialog.tsx mechanics (single URL, no tabs).
@@ -164,27 +165,31 @@ export function DocumentShareDialog({
             <span className="min-w-0 flex-1 truncate text-xs font-mono text-muted-foreground">
               {url}
             </span>
-            <button
-              type="button"
-              onClick={copyUrl}
-              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              title={t('copyUrl')}
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-green-600" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </button>
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              title={t('openInNewTab')}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <Tip label={t('copyUrl')}>
+              <button
+                type="button"
+                onClick={copyUrl}
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t('copyUrl')}
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </Tip>
+            <Tip label={t('openInNewTab')}>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t('openInNewTab')}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Tip>
           </div>
 
           <div className="flex gap-2">

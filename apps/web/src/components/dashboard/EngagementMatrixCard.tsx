@@ -14,8 +14,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, FlaskConical } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { buildWeekKeys } from '@/lib/isoWeek'
 import { formatTooltipWeek } from '@/lib/isoWeek'
 import type { WeeklyReport } from '@/hooks/useDashboardData'
@@ -33,20 +32,13 @@ const QUADRANT_COLORS = {
 
 type Quadrant = keyof typeof QUADRANT_COLORS
 
-/** Marks the card as experimental — the quadrant model is still being tuned, so
- *  readers should weigh it accordingly next to the settled trend cards. */
-function ExperimentalBadge() {
-  const t = useTranslations('EngagementMatrix')
-  return (
-    <Badge
-      variant="secondary"
-      className="gap-1 border-blue-200 bg-blue-50 text-[10px] font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300"
-    >
-      <FlaskConical className="h-3 w-3" />
-      {t('experimentalBadge')}
-    </Badge>
-  )
-}
+// NO "EXPERIMENTAL" CHIP (2026-08-31). It wore one back when the card was on the
+// dashboard beside settled trend cards and the chip was the only thing saying it
+// was not one of them. The card's only mount now is the extra shelf, which is
+// experimental in its entirety — the heading says so and Settings → Experimental
+// says so again — so the chip was marking one card as less settled than the
+// equally unsettled cards next to it. The caveat it carried is not lost: it is in
+// the shelf's own copy.
 
 function getQuadrant(x: number, y: number, midX: number, midY: number): Quadrant {
   if (x >= midX && y >= midY) return 'top_right'
@@ -157,10 +149,7 @@ export function EngagementMatrixCard({
     return (
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
-            <CardTitle>{t('cardTitle')}</CardTitle>
-            <ExperimentalBadge />
-          </div>
+          <CardTitle>{t('cardTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
@@ -175,10 +164,7 @@ export function EngagementMatrixCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <CardTitle>{t('cardTitle')}</CardTitle>
-            <ExperimentalBadge />
-          </div>
+          <CardTitle>{t('cardTitle')}</CardTitle>
           <button
             onClick={() => setShowTrajectory((v) => !v)}
             className={`text-xs px-2 py-1 rounded-md border transition-colors ${

@@ -103,6 +103,35 @@ export async function setTenantComped(
 }
 
 /**
+ * MARK a tenant INTERNAL — Linyup's own (a demo, a test tenant, the review
+ * studio), excluded from platform metrics and exempt from the trial sweep.
+ *
+ * `TenantFlags.internal` was read by metrics, the sweep and the org wind-down
+ * and written only by `provisionDemoTenant` — a tenant created by hand for a
+ * test had no way off the numbers short of a Firestore edit. Same nested-path
+ * write as the comp above, for the same reason: the three flags are
+ * independent and overwriting the map would clear the others.
+ */
+export async function setTenantInternal(
+  kind: 'team' | 'org',
+  entityId: string,
+  internal: boolean
+): Promise<ActionResult> {
+  await requireOperator()
+  const collection = kind === 'org' ? ORGANIZATIONS_COLLECTION : TEAMS_COLLECTION
+  const ref = adminDb.collection(collection).doc(entityId)
+  if (!(await ref.get()).exists) {
+    return { ok: false, error: `No such ${kind}: ${entityId}` }
+  }
+  await ref.update({
+    'flags.internal': internal,
+    updated_at: FieldValue.serverTimestamp(),
+  })
+  revalidatePath(`/accounts/${kind}/${entityId}`)
+  return { ok: true }
+}
+
+/**
  * DETACH a team's Stripe connected account.
  *
  * `setConnectEnabled(false)` above stops charges but leaves the account LINKED —

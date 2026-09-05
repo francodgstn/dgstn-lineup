@@ -21,6 +21,7 @@
 // the automation scan tests the contact already in hand.
 
 import type { Contact, ContactGroup } from '../types/contact'
+import { planGrantIsCurrent } from '../types/activity'
 import type { EngagementBand, EngagementThresholds } from '../types/engagement'
 import { computeEngagementBand } from '../types/engagement'
 import { waiverAcceptanceState, type WaiverAcceptanceState, type WaiverSignerFacts } from '../types/waiver'
@@ -442,6 +443,9 @@ export interface ContactFilterSubject {
   source?: string
   affiliation_summary?: { has_active?: boolean }
   subscription_type_id?: string
+  /** End of a one-off plan grant ("2 months included"), compared rather than
+   *  trusted — see `planGrantIsCurrent`. */
+  subscription_expires_at?: { toMillis(): number } | null
   /** `cancelling` is read by the attention reasons: a member who has asked
    *  Stripe to stop is still live, still training, and is the one the studio has
    *  the shortest window to talk to. */
@@ -907,7 +911,14 @@ export function matchesFilter(
   // subscriptions live only in that array used to be misfiltered as "none".
   if (f.subscriptions.length > 0) {
     const held = new Set<string>()
-    if (subject.subscription_type_id) held.add(subject.subscription_type_id)
+    // The flat grant is honoured only while it is CURRENT — the same
+    // `planGrantIsCurrent` comparison the booking gate makes, so "on the intro
+    // plan" stops meaning her the moment it stops covering her. Without this the
+    // list, and every dynamic group built on it, would keep chasing a lapsed
+    // member with plan-holder messaging that the gate itself refuses.
+    if (subject.subscription_type_id && planGrantIsCurrent(subject, nowMs)) {
+      held.add(subject.subscription_type_id)
+    }
     for (const s of subject.active_subscriptions ?? []) {
       if (s?.subscription_type_id) held.add(s.subscription_type_id)
     }

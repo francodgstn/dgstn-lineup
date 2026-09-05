@@ -224,14 +224,22 @@ describe('SPACE CAN RESOLVE THE REFUSAL IT IS NOMINATED FOR', () => {
 describe('MOBILE STOPS TELLING A MEMBER TO RETRY A WAIVER', () => {
   // The phase gates `bookSession` and wrote the refusal mapper, and then wired
   // it to the scanner only. Both mobile booking rails collapsed every refusal
-  // into "Failed to book session. Please try again." — an instruction that can
-  // never work, offered forever, over a document the member was never shown.
+  // into what is now `Agenda.bookFailed` / `Attendance.bookFailed` ("Failed to
+  // book session. Please try again.") — an instruction that can never work,
+  // offered forever, over a document the member was never shown.
   const RAILS = [
     'components/profile/SessionAgendaCard.tsx',
     'components/AttendanceCalendar.tsx',
   ] as const
 
-  const GENERIC = "'Failed to book session. Please try again.'"
+  // A KEY, NOT THE SENTENCE. This pinned the English literal until the member
+  // app gained i18n, at which point the string moved into the catalogue and this
+  // guard broke — correctly, but for a reason that had nothing to do with what
+  // it protects. What it protects is the ORDER: a waiver refusal must be mapped
+  // before the rail falls back to "try again". The key is the stable name of
+  // that fallback; `pnpm i18n:check` is what proves the key still resolves to
+  // real copy in all four locales, which is not this test's job.
+  const GENERIC = "t('bookFailed')"
 
   it('every rail that calls bookSession maps the refusal FIRST', () => {
     for (const rel of RAILS) {
@@ -260,11 +268,16 @@ describe('MOBILE STOPS TELLING A MEMBER TO RETRY A WAIVER', () => {
   it('the verb matches the rail — "check in" on a Book button is the wrong sentence', () => {
     const util = mobile('utils/waiverRefusal.ts')
     assert.match(util, /context: WaiverRefusalContext = 'checkin'/)
-    assert.match(util, /const verb = context === 'booking' \? 'book' : 'check in'/)
+    // Two DIFFERENT keys, chosen by context — the point survived translation
+    // even though the words moved into the catalogue. Asserting the words here
+    // would only re-pin English, which is the mistake this file already made
+    // once; `pnpm i18n:check` owns whether the keys resolve.
+    assert.match(util, /const verb = context === 'booking' \? t\('verbBooking'\) : t\('verbCheckin'\)/)
     for (const rel of RAILS) {
-      assert.match(mobile(rel), /waiverRefusal\(error, 'booking'\)/, rel)
+      assert.match(mobile(rel), /waiverRefusal\(tWaiver, error, 'booking'\)/, rel)
     }
-    // …and the scanner, which really is a check-in, keeps its own wording.
-    assert.match(mobile('screens/ProfileScreen.tsx'), /waiverRefusal\(err\)/)
+    // …and the scanner, which really is a check-in, still passes no context and
+    // so takes the default.
+    assert.match(mobile('screens/ProfileScreen.tsx'), /waiverRefusal\(tWaiver, err\)/)
   })
 })

@@ -95,7 +95,7 @@ process.env.FUNCTIONS_EMULATOR = 'true'
     it('takes a one-off direct charge with the platform fee, then refunds it (fee reversed)', async () => {
       const stripe = new Stripe(TEST_KEY)
       const amount = 2500 // CHF 25.00
-      const applicationFeeAmount = computePlatformFee({ tier: 'studio', amount }) // 2% = 50
+      const applicationFeeAmount = computePlatformFee({ tier: 'studio', amount }) // 0.8% = 20
 
       // Confirm a PaymentIntent server-side with a test card (no browser needed).
       const pi = await stripe.paymentIntents.create(

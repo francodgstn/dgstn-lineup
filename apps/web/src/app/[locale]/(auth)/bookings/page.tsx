@@ -1,44 +1,14 @@
 'use client'
 
 import { Fragment, useState, useMemo, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import {
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  doc,
-  getDoc,
-  writeBatch,
-  serverTimestamp,
-  increment,
-  deleteField,
-  collection,
-} from 'firebase/firestore'
-import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -49,12 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  bookingContactId,
-  confirmClearedHoldFields,
-  buildParticipantDoc,
-  type Booking,
-} from '@linyup/shared'
+import type { Booking } from '@linyup/shared'
 import { QueryErrorState } from '@/components/ui/query-error'
 import {
   MAX_RANGE_DAYS,
@@ -66,80 +31,28 @@ import {
   type BookingDateAxis,
   type SessionInfo,
 } from '@/hooks/useBookingsWindow'
+import { useBookingAction, useRebookAction, type BookingAction } from '@/hooks/useBookingActions'
 import {
-  Search,
-  MoreHorizontal,
-  Check,
-  X,
-  UserX,
-  Undo,
-  Repeat,
-  ExternalLink,
-  User,
-  Hash,
-  AlertTriangle,
-} from 'lucide-react'
-import { Link, useRouter } from '@/i18n/navigation'
+  BookingRow,
+  buildBookingStatusLabels,
+  tsToDate,
+  type BookingStatus,
+} from '@/components/bookings/BookingRow'
+import { RebookDialog, useFutureSessions, EMPTY_SESSION_IDS } from '@/components/bookings/RebookDialog'
+import { Search, Hash, AlertTriangle } from 'lucide-react'
 import { QuickLinks } from '@/components/layout/QuickLinks'
 import type { Route } from 'next'
 import { PublicSurfaceLink } from '@/components/layout/PublicSurfaceLink'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-function tsToDate(ts: unknown): Date | null {
-  if (!ts) return null
-  if (typeof (ts as { toDate?: unknown }).toDate === 'function')
-    return (ts as { toDate(): Date }).toDate()
-  if (typeof (ts as { seconds?: unknown }).seconds === 'number')
-    return new Date((ts as { seconds: number }).seconds * 1000)
-  return null
-}
-
-function formatDate(ts: unknown): string {
-  const d = tsToDate(ts)
-  if (!d) return '—'
-  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function formatTime(ts: unknown): string {
-  const d = tsToDate(ts)
-  if (!d) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function formatIso(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return (
-    d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) +
-    ' · ' +
-    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  )
-}
-
-function initials(b: Booking) {
-  return `${b.firstname?.[0] ?? ''}${b.lastname?.[0] ?? ''}`.toUpperCase() || '?'
-}
+// `tsToDate`/`formatDate`/`formatTime`/`formatIso`/`initials`/`avatarColor`,
+// `STATUS_VARIANT` + `BookingStatus`, `BookingRow`, the booking-action hooks
+// and `RebookDialog` all now live in `@/components/bookings/` and
+// `@/hooks/useBookingActions` — shared with the per-contact Bookings tab.
 
 function errorMessage(err: unknown): string | null {
   if (err instanceof Error && err.message) return err.message
   return null
-}
-
-const AVATAR_COLORS = [
-  'bg-blue-500',
-  'bg-purple-500',
-  'bg-green-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-teal-500',
-  'bg-red-500',
-  'bg-indigo-500',
-]
-function avatarColor(id: string) {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
 // ─── quick date ranges ──────────────────────────────────────────────────────────
@@ -299,20 +212,11 @@ function rangeForPreset(preset: Exclude<QuickRange, 'custom'>): { from: string; 
   return { from: ymd(from), to: ymd(to) }
 }
 
-type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'no_show' | 'rebooked'
-
-const STATUS_VARIANT: Record<BookingStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  pending: 'outline',
-  confirmed: 'default',
-  cancelled: 'destructive',
-  no_show: 'secondary',
-  rebooked: 'secondary',
-}
-
 // ─── data hooks ───────────────────────────────────────────────────────────────
 // The list itself is `useBookingsWindow` (@/hooks/useBookingsWindow), which owns
-// both date axes. What is left here is what only this page needs: the sessions
-// behind an already-loaded page of bookings, and the rebook picker's shortlist.
+// both date axes; the rebook picker's shortlist is `useFutureSessions`
+// (@/components/bookings/RebookDialog). What is left here is what only this
+// page needs: the sessions behind an already-loaded page of bookings.
 
 // Sessions for bookings loaded on the BOOKING-date axis. The class-date axis
 // queries the sessions first, so it hands its own map back and this stays idle.
@@ -345,472 +249,12 @@ function useSessionMap(bookings: Booking[]) {
   })
 }
 
-// Future sessions available for rebooking — read only once the rebook dialog is
-// actually open, since nothing else on the page looks at them.
-function useFutureSessions(teamId: string | null, enabled: boolean) {
-  return useQuery<{ id: string; activityName?: string; start?: string; end?: string }[]>({
-    queryKey: ['future-sessions', teamId],
-    enabled: !!teamId && enabled,
-    staleTime: 2 * 60 * 1000,
-    queryFn: async () => {
-      if (!teamId) return []
-      const now = new Date()
-      const q = query(
-        collection(db, 'sessions'),
-        where('teamId', '==', teamId),
-        where('allowBooking', '==', true),
-        orderBy('start', 'asc'),
-        limit(50)
-      )
-      const snap = await getDocs(q)
-      return snap.docs
-        .map((d) => {
-          const data = d.data()
-          const start = tsToDate(data.start)
-          return {
-            id: d.id,
-            activityName: data.activityName as string | undefined,
-            start: start?.toISOString(),
-            end: tsToDate(data.end)?.toISOString(),
-          }
-        })
-        .filter((s) => s.start && new Date(s.start) > now)
-    },
-  })
-}
-
-// ─── booking actions ──────────────────────────────────────────────────────────
-
-type BookingAction = 'confirm' | 'no_show' | 'cancel' | 'revert'
-
-// The windowed list, the reference band and the rebook picker's exclusion set
-// all read the same booking documents, so an action taken on any of them has to
-// refresh the others — a cancelled seat that stays in the exclusion set keeps a
-// class out of the picker it is now free for.
-function invalidateBookings(qc: QueryClient, teamId: string | null) {
-  qc.invalidateQueries({ queryKey: ['bookings', 'window', teamId] })
-  qc.invalidateQueries({ queryKey: ['bookings', 'reference', teamId] })
-  qc.invalidateQueries({ queryKey: ['bookings', 'contact-sessions', teamId] })
-}
-
-function useBookingAction(teamId: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ booking, action }: { booking: Booking; action: BookingAction }) => {
-      if (!booking.session) throw new Error('Missing session ID on booking')
-      const bookingRef = doc(db, 'sessions', booking.session, 'bookings', booking.id)
-      const sessionRef = doc(db, 'sessions', booking.session)
-      const batch = writeBatch(db)
-
-      if (action === 'confirm') {
-        // Mark booking confirmed. The hold markers go with the same write: a
-        // confirmed seat is an ordinary booking, and a leftover `waitlist_claim`
-        // would keep this person out of `sendBookingReminders` forever. For a
-        // claim that was mid-payment the drop-in hold's own markers have to go
-        // too, or the confirmed booking loses its seat at `expires_at` and
-        // `releaseExpiredBookingHolds` deletes it at 02:00 — see
-        // `confirmClearedHoldFields`, which all four confirm surfaces share.
-        batch.update(bookingRef, {
-          status: 'confirmed',
-          confirmed_at: serverTimestamp(),
-          ...confirmClearedHoldFields(booking, deleteField()),
-        })
-        // The attendance row — ONE builder, shared with session detail and the
-        // two check-in callables. This page used to key the row by the BOOKING
-        // id, spell `fullname` "firstname lastname" against everyone else's
-        // "lastname firstname", and write neither `checkedInAt` nor
-        // `checkedInBy` — so the same act produced a different document here
-        // than it did one click away on the session.
-        const contactId = bookingContactId(booking)
-        const participantRef = doc(db, 'sessions', booking.session, 'participants', contactId)
-        batch.set(
-          participantRef,
-          buildParticipantDoc({
-            contactId,
-            sessionId: booking.session,
-            who: booking,
-            checkedInBy: 'booking-confirm',
-            checkedInAt: serverTimestamp(),
-            fromBooking: true,
-          })
-        )
-        // Conversion only. `bookings_count` is never written from a client:
-        // it has one writing style (an absolute value from a server read set,
-        // or trackBookings' recount, which this status flip fires) and a blind
-        // increment from here would fight the booking transactions for it.
-        batch.update(sessionRef, {
-          conversions_count: increment(1),
-        })
-        if (booking.contact) {
-          batch.update(doc(db, 'contacts', booking.contact), {
-            pending_bookings_count: increment(-1),
-          })
-        }
-      } else if (action === 'revert') {
-        // Revert confirmed → pending
-        batch.update(bookingRef, {
-          status: 'pending',
-          confirmed_at: null,
-        })
-        // Remove participant doc — same id the confirm above wrote it under.
-        const participantRef = doc(
-          db,
-          'sessions',
-          booking.session,
-          'participants',
-          bookingContactId(booking)
-        )
-        batch.delete(participantRef)
-        // Undo the conversion only — see the note above.
-        batch.update(sessionRef, {
-          conversions_count: increment(-1),
-        })
-        if (booking.contact) {
-          batch.update(doc(db, 'contacts', booking.contact), {
-            pending_bookings_count: increment(1),
-          })
-        }
-      } else if (action === 'no_show') {
-        batch.update(bookingRef, { status: 'no_show', no_show_at: serverTimestamp() })
-        const wasPending = !booking.status || booking.status === 'pending'
-        if (wasPending) {
-          // The freed seat is trackBookings' recount to write — see above.
-          if (booking.contact) {
-            batch.update(doc(db, 'contacts', booking.contact), {
-              pending_bookings_count: increment(-1),
-            })
-          }
-        }
-      } else if (action === 'cancel') {
-        batch.update(bookingRef, {
-          status: 'cancelled',
-          cancelled_at: serverTimestamp(),
-          cancelled_by: 'admin',
-        })
-        const wasPending = !booking.status || booking.status === 'pending'
-        if (wasPending) {
-          // The freed seat is trackBookings' recount to write — see above.
-          if (booking.contact) {
-            batch.update(doc(db, 'contacts', booking.contact), {
-              pending_bookings_count: increment(-1),
-            })
-          }
-        }
-      }
-
-      await batch.commit()
-    },
-    onSuccess: () => invalidateBookings(qc, teamId),
-  })
-}
-
-function useRebookAction(teamId: string | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ token, newSessionId }: { token: string; newSessionId: string }) => {
-      const fn = httpsCallable(functions, 'rebookSession')
-      await fn({ token, newSessionId })
-    },
-    onSuccess: () => invalidateBookings(qc, teamId),
-  })
-}
-
-// ─── rebook dialog ────────────────────────────────────────────────────────────
-
-function RebookDialog({
-  booking,
-  futureSessions,
-  bookedSessionIds,
-  loadingOptions,
-  onConfirm,
-  onClose,
-  loading,
-}: {
-  booking: Booking
-  futureSessions: { id: string; activityName?: string; start?: string; end?: string }[]
-  bookedSessionIds: ReadonlySet<string>
-  /** The picker's two queries are fired by this dialog OPENING, so it draws
-   *  first with nothing. Without this it announces "no other bookable sessions"
-   *  for the length of a round trip and then silently repopulates under the
-   *  manager — a false negative on the one screen that has to be trusted. */
-  loadingOptions: boolean
-  onConfirm: (newSessionId: string) => void
-  onClose: () => void
-  loading: boolean
-}) {
-  const t = useTranslations('Bookings')
-  const [selectedId, setSelectedId] = useState('')
-
-  const options = futureSessions.filter(
-    (s) => s.start && new Date(s.start) > new Date() && !bookedSessionIds.has(s.id)
-  )
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('rebookTitle')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          {t('rebookDesc', { name: `${booking.firstname} ${booking.lastname}` })}
-        </p>
-        {loadingOptions ? (
-          <Skeleton className="h-9 w-full rounded-md" />
-        ) : options.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('rebookNoSessions')}</p>
-        ) : (
-          <Select value={selectedId} onValueChange={(v) => setSelectedId(v ?? '')}>
-            <SelectTrigger>
-              <span className="flex flex-1 text-left text-sm truncate">
-                {(() => {
-                  const selected = options.find((s) => s.id === selectedId)
-                  if (!selected)
-                    return <span className="text-muted-foreground">{t('rebookPickSession')}</span>
-                  const start = selected.start ? new Date(selected.start) : null
-                  return start
-                    ? `${selected.activityName ?? '—'} · ${start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : (selected.activityName ?? selected.id)
-                })()}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((s) => {
-                const start = s.start ? new Date(s.start) : null
-                const end = s.end ? new Date(s.end) : null
-                const label = start
-                  ? start.toLocaleDateString([], {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    }) +
-                    ' ' +
-                    start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-                    (end
-                      ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : '')
-                  : s.id
-                return (
-                  <SelectItem key={s.id} value={s.id} label={s.activityName ?? '—'}>
-                    {label}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
-        )}
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={loading}>
-            {t('rebookCancel')}
-          </Button>
-          <Button
-            onClick={() => selectedId && onConfirm(selectedId)}
-            disabled={loading || !selectedId}
-          >
-            {loading ? t('rebookInProgress') : t('rebookConfirm')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ─── booking row ──────────────────────────────────────────────────────────────
-
-function BookingRow({
-  booking,
-  sessionInfo,
-  statusLabel,
-  onAction,
-  onRebook,
-}: {
-  booking: Booking
-  sessionInfo?: SessionInfo
-  statusLabel: Record<BookingStatus, string>
-  onAction: (booking: Booking, action: BookingAction) => void
-  onRebook: (booking: Booking) => void
-}) {
-  const t = useTranslations('Bookings')
-  const router = useRouter()
-  const status: BookingStatus = (booking.status as BookingStatus) ?? 'pending'
-  // `formatIso` already renders the day AND the start time. A second
-  // `formatTime` call sat here casting the ISO string to a Timestamp shape it
-  // never had, so it returned '' and printed nothing; spelled honestly it would
-  // print the time twice.
-  const sessionDate = sessionInfo?.start ? formatIso(sessionInfo.start) : null
-  const activityName = sessionInfo?.activityName
-
-  const isPending = status === 'pending'
-  const isConfirmed = status === 'confirmed'
-  const isNoShow = status === 'no_show'
-  const isActive = isPending || isConfirmed || isNoShow
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b last:border-0 group">
-      <div
-        className={`h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-semibold ${avatarColor(booking.id)}`}
-      >
-        {initials(booking)}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        {/* The two entities a booking row is ABOUT are its contact and its
-            session, and both used to be reachable only through the row's action
-            menu — so the most common thing to do with a row cost a menu open.
-            They are links now; the menu keeps the actions. */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {booking.contact ? (
-            <Link
-              href={`/contacts/${booking.contact}` as Route}
-              className="font-medium text-sm truncate hover:underline"
-            >
-              {booking.firstname} {booking.lastname}
-            </Link>
-          ) : (
-            <p className="font-medium text-sm truncate">
-              {booking.firstname} {booking.lastname}
-            </p>
-          )}
-          {booking.is_new_contact && (
-            <Badge variant="outline" className="text-xs shrink-0">
-              {t('trialBadge')}
-            </Badge>
-          )}
-        </div>
-        {/* The reference rides with the email because it is the other thing a
-            caller can read out. Until now it was minted, mailed to the contact
-            and never shown to the studio, so a phone call about "booking
-            BK-7F3K9Q" had nowhere to land. */}
-        <p className="text-xs text-muted-foreground truncate">
-          {booking.email ?? '—'}
-          {booking.booking_reference && (
-            <span className="ml-1.5">
-              · {t('labelReference')} <span className="font-mono">{booking.booking_reference}</span>
-            </span>
-          )}
-        </p>
-        {(activityName || sessionDate) &&
-          (() => {
-            const sessionLine = (
-              <>
-                <span className="text-muted-foreground font-normal">{t('labelClassDate')} </span>
-                {activityName && <span>{activityName}</span>}
-                {activityName && sessionDate && (
-                  <span className="text-muted-foreground font-normal"> · </span>
-                )}
-                {sessionDate && <span>{sessionDate}</span>}
-              </>
-            )
-            return booking.session ? (
-              <Link
-                href={`/sessions/${booking.session}` as Route}
-                className="block text-sm text-foreground/80 truncate mt-0.5 font-medium hover:underline"
-              >
-                {sessionLine}
-              </Link>
-            ) : (
-              <p className="text-sm text-foreground/80 truncate mt-0.5 font-medium">
-                {sessionLine}
-              </p>
-            )
-          })()}
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="hidden sm:flex flex-col items-end gap-1">
-          <Badge variant={STATUS_VARIANT[status]} className="text-xs">
-            {statusLabel[status]}
-          </Badge>
-          {/* Two dates show on a row and only one of them is the one the filter
-              is ranging on, so both say which they are. */}
-          <p className="text-xs text-muted-foreground">
-            {t('labelBookedOn')} {formatDate(booking.joinedAt as Parameters<typeof formatDate>[0])}
-            {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0]) && (
-              <> · {formatTime(booking.joinedAt as Parameters<typeof formatTime>[0])}</>
-            )}
-          </p>
-        </div>
-        <div className="flex sm:hidden">
-          <Badge variant={STATUS_VARIANT[status]} className="text-xs">
-            {statusLabel[status]}
-          </Badge>
-        </div>
-
-        {isActive && (
-          <DropdownMenu>
-            <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent">
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {isPending && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'confirm')} className="gap-2">
-                  <Check className="h-3.5 w-3.5 text-green-600" />
-                  {t('actionConfirm')}
-                </DropdownMenuItem>
-              )}
-              {isConfirmed && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'revert')} className="gap-2">
-                  <Undo className="h-3.5 w-3.5 text-orange-500" />
-                  {t('actionRevert')}
-                </DropdownMenuItem>
-              )}
-              {(isPending || isNoShow) && (
-                <DropdownMenuItem onClick={() => onAction(booking, 'no_show')} className="gap-2">
-                  <UserX className="h-3.5 w-3.5 text-orange-500" />
-                  {t('actionNoShow')}
-                </DropdownMenuItem>
-              )}
-              {isPending && booking.booking_token && (
-                <DropdownMenuItem onClick={() => onRebook(booking)} className="gap-2">
-                  <Repeat className="h-3.5 w-3.5" />
-                  {t('actionRebook')}
-                </DropdownMenuItem>
-              )}
-              {(isPending || isNoShow) && <DropdownMenuSeparator />}
-              {(isPending || isNoShow) && (
-                <DropdownMenuItem
-                  onClick={() => onAction(booking, 'cancel')}
-                  className="gap-2 text-destructive focus:text-destructive"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  {t('actionCancel')}
-                </DropdownMenuItem>
-              )}
-              {(booking.session || booking.contact) && <DropdownMenuSeparator />}
-              {booking.session && (
-                <DropdownMenuItem
-                  onClick={() => router.push(`/sessions/${booking.session}` as Route)}
-                  className="gap-2"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {t('viewSession')}
-                </DropdownMenuItem>
-              )}
-              {booking.contact && (
-                <DropdownMenuItem
-                  onClick={() => router.push(`/contacts/${booking.contact}` as Route)}
-                  className="gap-2"
-                >
-                  <User className="h-3.5 w-3.5" />
-                  {t('viewContact')}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type StatusFilter = BookingStatus | 'all'
 
 /** Stable identity for the idle branch of `useSessionMap`. */
 const NO_BOOKINGS: Booking[] = []
-
-/** Stable identity for the rebook picker before its exclusion set has loaded. */
-const EMPTY_SESSION_IDS: ReadonlySet<string> = new Set<string>()
 
 export default function BookingsPage() {
   const { currentTeamId } = useAuth()
@@ -949,13 +393,7 @@ export default function BookingsPage() {
     return !!from && !!to && daysBetween(from, to) >= MAX_RANGE_DAYS
   }, [dateFrom, dateTo])
 
-  const statusLabel: Record<BookingStatus, string> = {
-    pending: t('statusPending'),
-    confirmed: t('statusConfirmed'),
-    cancelled: t('statusCancelled'),
-    no_show: t('statusNoShow'),
-    rebooked: t('statusRebooked'),
-  }
+  const statusLabel = buildBookingStatusLabels(t)
 
   const handleAction = useCallback(
     (booking: Booking, action: BookingAction) => doAction({ booking, action }),

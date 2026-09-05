@@ -8,6 +8,7 @@ import { sendEmail, buildEmailTemplate } from '../utils/email'
 import { bucketRateLimit } from '../utils/rateLimit'
 import { APP_CHECK_ENFORCE_MOBILE, monitorAppCheck } from '../utils/appCheck'
 import { reviewAccessCodeFor } from '../ops/reviewAccess'
+import { distinctTeamIds, summarizeCodeRequest, toMatchedContactSummary } from './codeRequestSummary'
 
 
 const CODE_EXPIRY_MS = 15 * 60 * 1000 // 15 minutes
@@ -87,21 +88,12 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
   // picker needs them, and the contactId is no longer a takeover vector once
   // switchActiveContact requires a live session and requestContactUpdate binds the
   // code), but nothing sensitive is disclosed before the code is verified.
-  const matchedContacts = contactsSnap.docs.map((doc) => ({
-    id: doc.id,
-    firstname: doc.get('firstname') || '',
-    lastname: doc.get('lastname') || '',
-    teamId: doc.get('teamId') || null,
-  }))
+  // The projection is `toMatchedContactSummary` (./codeRequestSummary.ts), whose
+  // test pins that nothing else leaves — never widen it inline here.
+  const matchedContacts = contactsSnap.docs.map((doc) => toMatchedContactSummary(doc.id, doc.data()))
 
   // Resolve team names for all matched teams
-  const matchedTeamIds = [...new Set(
-    matchedContacts
-      .map((c) => c.teamId)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0)
-  )]
-
-  const allTeamIds = [...new Set([...matchedTeamIds, ...(requestedTeamId ? [requestedTeamId] : [])])]
+  const { allTeamIds } = distinctTeamIds(matchedContacts, requestedTeamId)
 
   const teamNameMap: Record<string, string> = {}
   if (requestedTeamId && teamData) {
@@ -120,24 +112,11 @@ export const sendContactVerificationCode = onCall({ enforceAppCheck: APP_CHECK_E
     })
   }
 
-  const contactsWithTeamName = matchedContacts.map((c) => ({
-    ...c,
-    teamName: c.teamId ? teamNameMap[c.teamId] || null : null,
-  }))
-
-  const teamSummaries = allTeamIds.length
-    ? allTeamIds
-        .filter((id) => teamNameMap[id])
-        .map((id) => ({ id, name: teamNameMap[id] }))
-    : null
-
-  // Determine team name for the email
-  let teamName = 'Linyup'
-  if (requestedTeamId && teamData) {
-    teamName = (teamData as any).name || teamName
-  } else if (matchedTeamIds.length === 1) {
-    teamName = teamNameMap[matchedTeamIds[0]] || teamName
-  }
+  const { contactsWithTeamName, teamSummaries, teamName } = summarizeCodeRequest({
+    matched: matchedContacts,
+    requestedTeamId,
+    teamNames: teamNameMap,
+  })
 
   // Generate code and store. The review account's code is FIXED and comes from
   // `app_settings/review_access`; everyone else gets a fresh random one.

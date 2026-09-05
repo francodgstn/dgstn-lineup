@@ -8,8 +8,7 @@ import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { CONTACTS_COLLECTION, type Contact } from '@linyup/shared'
 import { useCapabilities } from '@/hooks/useCapabilities'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Check } from 'lucide-react'
 
 // Multi-coach assignment for a contact. Owners/managers (members.manage) pick one or
 // more coaches; a coach-role member then sees the contact in their own book (own
@@ -70,29 +69,50 @@ export function CoachAssignment({ contact, teamId }: { contact: Contact; teamId:
     }
   }
 
+  // TOGGLE CHIPS, NOT A STACK OF SWITCH ROWS.
+  //
+  // This was one full-width row per coach — a name on the left, a switch on the
+  // right, and a lot of nothing between them. A studio with eight coaches got
+  // eight rows of mostly empty space at the top of the Coaching tab, pushing the
+  // work below it down, to express what is simply a multi-select of short names.
+  //
+  // Chips wrap, so the height is proportional to the number of coaches rather
+  // than linear in it, and assignment reads at a glance from fill instead of
+  // from eight switch positions. The whole control is still one tap per coach.
+  //
+  // A chip is a real toggle button, not a decoration: `aria-pressed` carries the
+  // state a `Switch` used to, so this stays operable and announced without the
+  // visible label/switch pairing.
   return (
-    <div className="space-y-3 rounded-lg border p-4">
-      <div>
+    <div className="space-y-2 rounded-lg border p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <h3 className="text-sm font-semibold">{t('coachesTitle')}</h3>
         <p className="text-xs text-muted-foreground">{t('coachesHint')}</p>
       </div>
       {coaches.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('coachesNone')}</p>
       ) : (
-        <div className="space-y-2">
-          {coaches.map((c) => (
-            <div key={c.uid} className="flex items-center justify-between gap-4">
-              <Label htmlFor={`coach-${c.uid}`} className="text-sm font-normal">
-                {c.name}
-              </Label>
-              <Switch
-                id={`coach-${c.uid}`}
-                checked={assigned.has(c.uid)}
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {coaches.map((c) => {
+            const on = assigned.has(c.uid)
+            return (
+              <button
+                key={c.uid}
+                type="button"
+                aria-pressed={on}
                 disabled={saving === c.uid}
-                onCheckedChange={(v) => toggle(c.uid, v)}
-              />
-            </div>
-          ))}
+                onClick={() => toggle(c.uid, !on)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-50 ${
+                  on
+                    ? 'border-primary bg-primary/10 font-medium text-primary'
+                    : 'border-dashed text-muted-foreground hover:border-solid hover:text-foreground'
+                }`}
+              >
+                {on && <Check className="h-3 w-3 shrink-0" />}
+                {c.name}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

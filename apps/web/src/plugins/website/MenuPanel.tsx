@@ -72,6 +72,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { SortableList, SortableItem } from '@/components/ui/sortable'
+import { Tip } from '@/components/ui/tip'
 
 export function MenuPanel({
   menu,
@@ -162,16 +163,17 @@ export function MenuPanel({
                     {/* The handle carries the drag listeners, not the row: the
                         label is a text input, and a row-wide drag would fight
                         every attempt to select what is written in it. */}
-                    <button
-                      type="button"
-                      {...attributes}
-                      {...listeners}
-                      aria-label={t('menuReorder')}
-                      title={t('menuReorder')}
-                      className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
-                    >
-                      <GripVertical className="h-3.5 w-3.5" />
-                    </button>
+                    <Tip label={t('menuReorder')}>
+                      <button
+                        type="button"
+                        {...attributes}
+                        {...listeners}
+                        aria-label={t('menuReorder')}
+                        className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </Tip>
                     <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <Input
                       value={item.label ?? ''}
@@ -186,27 +188,28 @@ export function MenuPanel({
                           [IndentDecrease, t('menuOutdent'), () => onChange(outdentSiteMenuItem(menu, item.id)), level > 1],
                         ] as const
                       ).map(([Ico, label, run, enabled], i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={run}
-                          disabled={!enabled}
-                          title={label}
-                          aria-label={label}
-                          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                        >
-                          <Ico className="h-3.5 w-3.5" />
-                        </button>
+                        <Tip key={i} label={label}>
+                          <button
+                            type="button"
+                            onClick={run}
+                            disabled={!enabled}
+                            aria-label={label}
+                            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                          >
+                            <Ico className="h-3.5 w-3.5" />
+                          </button>
+                        </Tip>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => onChange(removeSiteMenuItem(menu, item.id))}
-                        title={t('menuRemove')}
-                        aria-label={t('menuRemove')}
-                        className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <Tip label={t('menuRemove')}>
+                        <button
+                          type="button"
+                          onClick={() => onChange(removeSiteMenuItem(menu, item.id))}
+                          aria-label={t('menuRemove')}
+                          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </Tip>
                     </div>
                   </div>
                   {item.children?.length ? (

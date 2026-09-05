@@ -42,6 +42,7 @@ import {
   planGiftCardRedemption,
   type CheckoutContactMode,
   type ActivityAccessRule,
+  type ActivityDurationBenefit,
   type ActivityMemberBenefit,
   type Benefit,
   type CourseAccessRule,
@@ -163,6 +164,9 @@ interface PayPerVisitEntry {
   dropIn?: { enabled: boolean; priceAmount?: number }
   durations?: Array<{ minutes: number; priceAmount: number | null; benefitOnly?: boolean }>
   memberBenefit?: ActivityMemberBenefit | Benefit
+  /** Read WITH `memberBenefit` through `resolveDurationBenefit` — the pair is
+   *  what tells "no rule for this length" from a tenant that predates them. */
+  durationBenefits?: ActivityDurationBenefit[]
   accessRule?: ActivityAccessRule
   order?: number
 }
@@ -341,6 +345,9 @@ export default function ShopHome({
               dropIn: (data.dropIn as PayPerVisitEntry['dropIn']) ?? undefined,
               durations: Array.isArray(data.durations) ? (data.durations as PayPerVisitEntry['durations']) : undefined,
               memberBenefit: (data.memberBenefit as ActivityMemberBenefit | Benefit | undefined) ?? undefined,
+              durationBenefits: Array.isArray(data.durationBenefits)
+                ? (data.durationBenefits as ActivityDurationBenefit[])
+                : undefined,
               accessRule: (data.accessRule as ActivityAccessRule | undefined) ?? undefined,
               order: typeof data.order === 'number' ? (data.order as number) : undefined,
             }
@@ -1301,6 +1308,7 @@ export default function ShopHome({
                       dropIn: a.dropIn,
                       durations: a.durations,
                       memberBenefit: a.memberBenefit,
+                      durationBenefits: a.durationBenefits,
                       accessRule: a.accessRule,
                     })
                       .filter((term) => term.kind !== 'gate' && term.kind !== 'trial')

@@ -500,8 +500,13 @@ export default function PaymentsDashboardPage() {
           page that sits beside two that already agree. The Finance pointer is
           exactly what `quickLinks` is for: the page that CONFIRMS what this one
           records, phrased as why you would open it rather than as its name. */}
+      {/* "Payments", matching the nav row that opens it. The heading used to
+          spell out "Payments & Subscriptions" to explain that the two had been
+          merged into one destination; the nav stopped doing that, and a sidebar
+          and the page it opens must not call the same place two different
+          things. Subscriptions are still here — they are a tab. */}
       <PageHeader
-        title={t('titleWithSubscriptions')}
+        title={t('title')}
         quickLinks={[
           {
             // The destination's NAME, like every other row in this line — the

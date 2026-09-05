@@ -20,6 +20,6 @@ export const financeManifest: PluginManifest = {
   status: 'beta',
   iconName: 'Calculator',
   navContributions: [
-    { href: '/plugins/finance', labelKey: 'financeNavLabel', icon: 'Calculator', section: 'operations' },
+    { href: '/plugins/finance', labelKey: 'financeNavLabel', icon: 'Calculator', section: 'manage' },
   ],
 }

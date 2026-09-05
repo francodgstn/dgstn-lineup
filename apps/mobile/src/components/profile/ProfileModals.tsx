@@ -7,6 +7,7 @@ import {
   getAffiliationLabel,
   getAffiliationColors,
 } from '../../utils/profileUtils';
+import { useTranslations } from '../../i18n';
 
 interface ProfileModalsProps {
   contact: Contact;
@@ -43,9 +44,11 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
   matchedContacts,
   onSelectContact,
   isSwitchingContact,
-  affiliationTerm = 'Affiliation',
+  affiliationTerm,
 }) => {
   const theme = useTheme();
+  const t = useTranslations('Profile');
+  const resolvedAffiliationTerm = affiliationTerm ?? t('affiliationFallback');
 
   return (
     <>
@@ -60,7 +63,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-                Check-in QR Code
+                {t('checkinQrTitle')}
               </Text>
               <IconButton icon="close" size={24} onPress={onCloseQR} />
             </View>
@@ -79,7 +82,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
             </View>
 
             <Text variant="bodyMedium" style={[styles.qrInstructions, { color: theme.colors.onSurfaceVariant }]}>
-              Show this QR code to your instructor for session check-in
+              {t('qrInstructions')}
             </Text>
 
             <View style={styles.qrContactInfo}>
@@ -87,12 +90,12 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                 {contact?.firstname} {contact?.lastname}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {teamProfile?.name || 'Member'}
+                {teamProfile?.name || t('memberFallback')}
               </Text>
             </View>
 
             <Button mode="contained" onPress={onCloseQR} style={styles.closeButton}>
-              Close
+              {t('close')}
             </Button>
           </View>
         </View>
@@ -109,19 +112,19 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-                {affiliationTerm} Status
+                {t('statusTitleTemplate', { term: resolvedAffiliationTerm })}
               </Text>
               <IconButton icon="close" size={24} onPress={onCloseStatus} />
             </View>
 
             <View style={[styles.currentStatusContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
               <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                Your current status
+                {t('yourCurrentStatus')}
               </Text>
               {(() => {
                 const summary = contact.affiliation_summary;
                 const colors = getAffiliationColors(summary, theme.colors);
-                const label = getAffiliationLabel(summary);
+                const label = getAffiliationLabel(t, summary);
                 return (
                   <>
                     <View style={[styles.statusBadgeLarge, { backgroundColor: colors.bg }]}>
@@ -132,7 +135,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                     {summary?.has_active && summary.types.length > 0 && (
                       <View style={styles.statusFlowContainer}>
                         <Text variant="titleSmall" style={{ color: theme.colors.onSurface, marginBottom: 8 }}>
-                          Active affiliations
+                          {t('activeAffiliations')}
                         </Text>
                         {summary.types.map((type) => (
                           <View key={type} style={styles.statusFlowItem}>
@@ -150,7 +153,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                     )}
                     {!summary?.has_active && (
                       <Text variant="bodyMedium" style={[styles.statusDescriptionText, { color: theme.colors.onSurface }]}>
-                        No active affiliations recorded. Contact your team if you think this is a mistake.
+                        {t('noActiveAffiliations')}
                       </Text>
                     )}
                   </>
@@ -159,7 +162,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
             </View>
 
             <Button mode="contained" onPress={onCloseStatus} style={styles.closeButton}>
-              Close
+              {t('close')}
             </Button>
           </View>
         </View>
@@ -176,15 +179,15 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-                Gender
+                {t('gender')}
               </Text>
               <IconButton icon="close" size={24} onPress={onCloseGenderInfo} />
             </View>
             <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}>
-              This field is required for registration to kickboxing federations, tournaments, and other events. It does not define or classify gender identity within our community.
+              {t('genderInfoBody')}
             </Text>
             <Button mode="contained" onPress={onCloseGenderInfo} style={styles.closeButton}>
-              Close
+              {t('close')}
             </Button>
           </View>
         </View>
@@ -201,7 +204,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface, maxHeight: '80%' }]}>
             <View style={styles.modalHeader}>
               <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>
-                Switch Account
+                {t('switchAccount')}
               </Text>
               <IconButton icon="close" size={24} onPress={onCloseContactModal} disabled={isSwitchingContact} />
             </View>
@@ -209,7 +212,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
             {isSwitchingContact ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>Switching account...</Text>
+                <Text style={{ marginTop: 16, color: theme.colors.onSurfaceVariant }}>{t('switchingAccount')}</Text>
               </View>
             ) : (
               <ScrollView
@@ -218,7 +221,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                 contentContainerStyle={{ paddingBottom: 12 }}
               >
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16, textAlign: 'center' }}>
-                  Select the account you want to switch to:
+                  {t('selectAccountPrompt')}
                 </Text>
 
                 {matchedContacts?.map((c) => {
@@ -256,7 +259,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                               {c.firstname} {c.lastname}
                             </Text>
                             <Text variant="bodySmall" style={{ color: isCurrent ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant, opacity: 0.8 }}>
-                              {c.teamName || 'Member'}
+                              {t('memberFallback')}
                             </Text>
                           </View>
                           {isCurrent && (

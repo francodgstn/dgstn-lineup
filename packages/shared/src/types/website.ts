@@ -1,4 +1,5 @@
 import type { Timestamp } from './common'
+import type { SurfaceThemePresetId } from './themePreset'
 import type { PublicSurface, SocialLink } from './team'
 import type { UiLanguage } from '../utils/regional'
 
@@ -60,8 +61,78 @@ export interface HeroSection extends SectionBase {
   bgImageUrl?: string
   /** Dark overlay strength over the background image, 0–100. */
   overlay?: number
+  /**
+   * A solid background colour used WHEN THERE IS NO IMAGE. Absent ⇒ the theme's
+   * page colour, today's behaviour. Ignored while `bgImageUrl` is set — an image
+   * is its own background.
+   */
+  bgColor?: string
+  /**
+   * How the hero content sits on the background:
+   *  - 'full' (default): text directly on the background, edge to edge.
+   *  - 'card': the text in a surface card floating on the background — the same
+   *    "comes out of the page" idea the theme applies to cards, for a hero over
+   *    a busy image or a strong colour.
+   *
+   * Absent ⇒ 'full', so existing heroes are unaffected.
+   */
+  layout?: 'full' | 'card'
   align: SectionAlign
   cta?: SiteCta
+}
+
+/** A row of highlight cards — icon, title, a short line, an optional link. For
+ *  "why us" / feature callouts. Deliberately simple: no rich text, no images. */
+export interface FeaturesSection extends SectionBase {
+  type: 'features'
+  heading?: string
+  subheading?: string
+  columns: 2 | 3 | 4
+  items: FeatureItem[]
+}
+
+export interface FeatureItem {
+  /** A lucide icon name (validated against a small allow-list at render). */
+  icon?: string
+  title: string
+  text?: string
+  linkLabel?: string
+  linkUrl?: string
+}
+
+/** One centred card, spaced above and below, with a heading, a line and a wide
+ *  button — an offer or a single call to action mid-page. */
+export interface CtaBannerSection extends SectionBase {
+  type: 'cta_banner'
+  heading: string
+  text?: string
+  cta?: SiteCta
+}
+
+/** A list of question/answer pairs, rendered as an accordion. */
+export interface FaqSection extends SectionBase {
+  type: 'faq'
+  heading?: string
+  items: FaqItem[]
+}
+
+export interface FaqItem {
+  question: string
+  answer: string
+}
+
+/** One testimonial at a time in a card, stepped through with chevrons. */
+export interface TestimonialsSection extends SectionBase {
+  type: 'testimonials'
+  heading?: string
+  items: Testimonial[]
+}
+
+export interface Testimonial {
+  name: string
+  /** What they do / their role — "Member since 2021", "Competitor". */
+  activity?: string
+  feedback: string
 }
 
 /** Generic free-form content block: a rich-text body (HTML, produced by the
@@ -206,6 +277,10 @@ export type WebsiteSection =
   | ScheduleSection
   | ContactSection
   | PlacesSection
+  | FeaturesSection
+  | CtaBannerSection
+  | FaqSection
+  | TestimonialsSection
 
 export type WebsiteSectionType = WebsiteSection['type']
 
@@ -382,6 +457,51 @@ export interface SiteFooter {
 
 export interface SiteMeta {
   title: string
+  /**
+   * ONE choice carrying both a light and a dark palette — see
+   * `types/themePreset.ts`. When set it WINS over `theme` and `background`
+   * below, which stay only so a site authored before presets keeps its look
+   * until the studio picks one (no backfill, no deploy ordering).
+   */
+  themePreset?: SurfaceThemePresetId
+  /**
+   * The studio's own colour, read ONLY when `themePreset` is 'custom'. Both
+   * halves of the page are derived from it — see `types/themeDerive.ts`.
+   *
+   * NOT the accent. `accentColor` is what must be noticed (a button, a link);
+   * this is what everything else is made of. Keeping them apart is what lets a
+   * deep-green studio have a green PAGE with an orange call to action, which
+   * the fixed presets could not express at all.
+   */
+  /**
+   * Custom theme — the studio's own colours. Read only when `themePreset` is
+   * 'custom'; the colour you pick IS the page background (see themeDerive.ts).
+   */
+  /** The light-page colour, and the whole site when `themeSingle`. */
+  themeLight?: string
+  /** The dark-page colour. Absent ⇒ a correlate of `themeLight`. */
+  themeDark?: string
+  /** One colour, one look for everyone — no separate dark version. */
+  themeSingle?: boolean
+  /** A soft gradient instead of a flat background. */
+  themeLighting?: boolean
+  /**
+   * Show visitors a light/dark switch in the site header.
+   *
+   * OFF BY DEFAULT, and absent means off. A studio that has chosen how its site
+   * looks has not asked for a control that lets every visitor choose again, and
+   * a toggle appearing on a live site because a field was added is a change
+   * nobody made.
+   *
+   * It renders only on an ADAPTIVE theme — see `WebsiteRenderer`. On a theme
+   * that is deliberately one look ('ink', or any fixed preset) there is no
+   * second half to switch to, so the control would be a button that does
+   * nothing.
+   */
+  themeToggle?: boolean
+  /** LEGACY, and only read while `themePreset` is absent. It crosses with
+   *  `background`: "auto" with a fixed background follows the viewer for the
+   *  text and not for the page. That is the bug presets exist to remove. */
   theme: SiteTheme
   accentColor: string
   font: SiteFont
