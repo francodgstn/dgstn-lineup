@@ -1386,7 +1386,8 @@
     "invitation_free": "Kostenlos",
     "detail_tabProgram": "Programm",
     "detail_tabRsvps": "Rückmeldungen",
-    "detail_rsvpsEmpty": "Noch hat niemand zugesagt."
+    "detail_rsvpsEmpty": "Noch hat niemand zugesagt.",
+    "detail_tabCategories": "Kategorien"
   },
   "EventProgram": {
     "emptyTitle": "Noch kein Programm",
@@ -5738,7 +5739,9 @@
     "statusPending": "Ausstehend",
     "titleUnconfirm": "Bestätigung aufheben",
     "titleConfirm": "Bestätigen",
-    "emptyCheckins": "Noch keine Check-ins."
+    "emptyCheckins": "Noch keine Check-ins.",
+    "eventDetail_rsvpsHint": "Wer zugesagt hat, über alle Mitgliedsschulen hinweg. Namen sind keine Links — die Kontakte einer Schule gehören ihr allein.",
+    "eventDetail_invitationsHint": "Alle zu dieser Veranstaltung eingeladenen Personen. Beim erneuten Senden werden bereits eingeladene Personen übersprungen, sofern du nicht erneut senden wählst."
   },
   "OrgRanking": {
     "title": "Rangsysteme",

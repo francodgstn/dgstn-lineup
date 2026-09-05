@@ -42,6 +42,7 @@ import { useEventTypes } from '@/hooks/useEventTypes'
 import { eventTypeLabel, prettyEventType } from '@/lib/eventTypeLabel'
 import { CheckinPanel } from '@/components/events/CheckinPanel'
 import { ProgramTab } from '@/components/events/program/ProgramTab'
+import { EventRsvpList, EventInvitationList } from '@/components/events/EventPeopleLists'
 import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
 import { EventPublishCard } from '@/components/events/EventPublishCard'
 import { useOrg } from '@/contexts/OrgContext'
@@ -50,28 +51,6 @@ import type { Route } from 'next'
 import { Tip } from '@/components/ui/tip'
 
 // ─── subcollection types ──────────────────────────────────────────────────────
-
-interface EventAttendee {
-  id: string
-  contactId: string
-  firstname?: string
-  lastname?: string
-  email?: string
-  notes?: string | null
-  respondedAt?: Timestamp
-}
-
-interface EventInvitation {
-  id: string
-  contactId: string
-  firstname?: string
-  lastname?: string
-  email?: string
-  status?: 'sent' | 'opened' | 'responded' | 'declined'
-  sentAt?: Timestamp
-  firstOpenedAt?: Timestamp
-  respondedAt?: Timestamp
-}
 
 /**
  * An attendee / invitee name, linked to the person's record — the same fix
@@ -447,27 +426,6 @@ export default function EventDetailPage() {
     },
   })
 
-  const attendeesQ = useQuery<EventAttendee[]>({
-    queryKey: ['event-attendees', id],
-    enabled: !!id && tab === 'attendees',
-    queryFn: async () => {
-      const snap = await getDocs(collection(db, EVENTS_COLLECTION, id, 'attendees'))
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventAttendee)
-    },
-  })
-
-  const invitationsQ = useQuery<EventInvitation[]>({
-    queryKey: ['event-invitations', id],
-    enabled: !!id && tab === 'invitations',
-    queryFn: async () => {
-      const q = query(
-        collection(db, EVENTS_COLLECTION, id, 'invitations'),
-        orderBy('sentAt', 'desc'),
-      )
-      const snap = await getDocs(q)
-      return snap.docs.map((d) => ({ ...d.data(), id: d.id }) as EventInvitation)
-    },
-  })
 
   const event = eventQ.data
 
@@ -594,7 +552,7 @@ export default function EventDetailPage() {
     // is the discovery affordance.
     { key: 'program',     label: t('detail_tabProgram') },
     { key: 'checkins',    label: checkinLabel },
-    ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: 'Categories' }] : []),
+    ...(showCategoriesTab ? [{ key: 'categories' as DetailTab, label: t('detail_tabCategories') }] : []),
     ...(canSeeAttendees ? [{ key: 'attendees' as DetailTab, label: `${t('detail_tabRsvps')}${event.attendees_count ? ` (${event.attendees_count})` : ''}` }] : []),
     { key: 'invitations', label: `${t('detail_tabInvitations')}${event.invitations_sent_count ? ` (${event.invitations_sent_count})` : ''}` },
   ]
@@ -791,107 +749,21 @@ export default function EventDetailPage() {
         <CategoryManager eventId={id} />
       )}
 
-      {/* ── RSVPs tab ────────────────────────────────────────────────────────
-           WHO ACCEPTED, not who came. The rows carry `respondedAt` and the
-           invitee's reply note, and a DECLINE deletes its row outright
-           (`handleEventInvitationResponse`) — so this list is the yeses, and
-           the empty state says so rather than saying "no attendees".
+      {/* ── RSVPs and Invitations ─────────────────────────────────────────────
+           Both lists moved to `components/events/EventPeopleLists` so the ORG
+           event page can show them too — see that file's header. `linkContacts`
+           is on here and off there: a studio can open its own contact, an org
+           admin cannot open a member studio's.
 
-           Presence is the separate `checkins` collection, shown by the
-           Check-ins tab and counted by `participants_count`. Both were called
-           "attendees" while the stat tile above already said RSVPs, so a single
-           page named one thing two ways. The URL key stays `attendees` — it
-           matches the subcollection, which is a data migration rather than a
-           label. */}
-      {tab === 'attendees' && canSeeAttendees && (
-        <div className="rounded-xl border overflow-hidden bg-card">
-          {attendeesQ.isLoading && (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex gap-3 p-4 border-b last:border-0">
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-56" />
-                </div>
-                <Skeleton className="h-3 w-20 shrink-0" />
-              </div>
-            ))
-          )}
+           RSVPs are WHO ACCEPTED, not who came. A decline deletes its row
+           (`handleEventInvitationResponse`), so the list is the yeses; presence
+           is the separate `checkins` collection under the Check-ins tab. The URL
+           key stays `attendees` — it matches the subcollection, which is a data
+           migration rather than a label. */}
+      {tab === 'attendees' && canSeeAttendees && <EventRsvpList eventId={id} linkContacts />}
 
-          {!attendeesQ.isLoading && (attendeesQ.data?.length ?? 0) === 0 && (
-            <div className="py-14 text-center text-muted-foreground text-sm">
-              {t('detail_rsvpsEmpty')}
-            </div>
-          )}
+      {tab === 'invitations' && <EventInvitationList eventId={id} linkContacts />}
 
-          {!attendeesQ.isLoading && attendeesQ.data?.map((a) => (
-            <div key={a.id} className="flex items-start gap-3 p-4 border-b last:border-0">
-              <div className="flex-1 min-w-0">
-                <EventPersonName contactId={a.contactId}>
-                  {[a.firstname, a.lastname].filter(Boolean).join(' ') || a.contactId}
-                </EventPersonName>
-                {a.email && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{a.email}</p>
-                )}
-                {a.notes && (
-                  <p className="text-xs text-muted-foreground/70 italic mt-0.5">&quot;{a.notes}&quot;</p>
-                )}
-              </div>
-              {a.respondedAt && (
-                <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                  {formatDateTime(a.respondedAt)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Invitations tab ──────────────────────────────────────────────────── */}
-      {tab === 'invitations' && (
-        <div className="rounded-xl border overflow-hidden bg-card">
-          {invitationsQ.isLoading && (
-            Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex gap-3 p-4 border-b last:border-0">
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-56" />
-                </div>
-                <div className="space-y-1.5 shrink-0">
-                  <Skeleton className="h-5 w-20" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              </div>
-            ))
-          )}
-
-          {!invitationsQ.isLoading && (invitationsQ.data?.length ?? 0) === 0 && (
-            <div className="py-14 text-center text-muted-foreground text-sm">
-              {t('detail_invitationsEmpty')}
-            </div>
-          )}
-
-          {!invitationsQ.isLoading && invitationsQ.data?.map((inv) => (
-            <div key={inv.id} className="flex items-center gap-3 p-4 border-b last:border-0">
-              <div className="flex-1 min-w-0">
-                <EventPersonName contactId={inv.contactId}>
-                  {[inv.firstname, inv.lastname].filter(Boolean).join(' ') || inv.contactId}
-                </EventPersonName>
-                {inv.email && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{inv.email}</p>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-0.5 shrink-0">
-                <Badge variant={invStatusVariant(inv.status)} className="text-xs">
-                  {t(`detail_invStatus_${inv.status ?? 'sent'}` as Parameters<typeof t>[0])}
-                </Badge>
-                {inv.sentAt && (
-                  <span className="text-xs text-muted-foreground">{formatDateTime(inv.sentAt)}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── Dialogs ──────────────────────────────────────────────────────────── */}
       {editOpen && event && (

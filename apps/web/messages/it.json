@@ -1386,7 +1386,8 @@
     "invitation_free": "Gratuito",
     "detail_tabProgram": "Programma",
     "detail_tabRsvps": "RSVP",
-    "detail_rsvpsEmpty": "Nessuno ha ancora accettato."
+    "detail_rsvpsEmpty": "Nessuno ha ancora accettato.",
+    "detail_tabCategories": "Categorie"
   },
   "EventProgram": {
     "emptyTitle": "Nessun programma",
@@ -5738,7 +5739,9 @@
     "statusPending": "In attesa",
     "titleUnconfirm": "Annulla conferma",
     "titleConfirm": "Conferma",
-    "emptyCheckins": "Ancora nessun check-in."
+    "emptyCheckins": "Ancora nessun check-in.",
+    "eventDetail_rsvpsHint": "Chi ha accettato, in tutti i club membri. I nomi non sono link — i contatti di un club appartengono al club.",
+    "eventDetail_invitationsHint": "Tutte le persone invitate a questo evento. Un nuovo invio salta chi ha già un invito, a meno che tu non scelga di reinviare."
   },
   "OrgRanking": {
     "title": "Sistemi di graduazione",

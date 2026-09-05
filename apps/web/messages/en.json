@@ -1386,7 +1386,8 @@
     "invitation_free": "Free",
     "detail_tabProgram": "Program",
     "detail_tabRsvps": "RSVPs",
-    "detail_rsvpsEmpty": "No one has accepted yet."
+    "detail_rsvpsEmpty": "No one has accepted yet.",
+    "detail_tabCategories": "Categories"
   },
   "EventProgram": {
     "emptyTitle": "No programme yet",
@@ -5738,7 +5739,9 @@
     "statusPending": "Pending",
     "titleUnconfirm": "Unconfirm",
     "titleConfirm": "Confirm",
-    "emptyCheckins": "No check-ins yet."
+    "emptyCheckins": "No check-ins yet.",
+    "eventDetail_rsvpsHint": "Who accepted, across every member studio. Names are not links — a studio's contacts are its own.",
+    "eventDetail_invitationsHint": "Everyone invited to this event. Sending again skips people who already have an invitation unless you choose to resend."
   },
   "OrgRanking": {
     "title": "Ranking systems",

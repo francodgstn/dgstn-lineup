@@ -1386,7 +1386,8 @@
     "invitation_free": "Gratuit",
     "detail_tabProgram": "Programme",
     "detail_tabRsvps": "RSVP",
-    "detail_rsvpsEmpty": "Personne n'a encore accepté."
+    "detail_rsvpsEmpty": "Personne n'a encore accepté.",
+    "detail_tabCategories": "Catégories"
   },
   "EventProgram": {
     "emptyTitle": "Pas encore de programme",
@@ -5738,7 +5739,9 @@
     "statusPending": "En attente",
     "titleUnconfirm": "Annuler la confirmation",
     "titleConfirm": "Confirmer",
-    "emptyCheckins": "Aucun check-in pour l'instant."
+    "emptyCheckins": "Aucun check-in pour l'instant.",
+    "eventDetail_rsvpsHint": "Qui a accepté, dans tous les clubs membres. Les noms ne sont pas des liens — les contacts d'un club lui appartiennent.",
+    "eventDetail_invitationsHint": "Toutes les personnes invitées à cet événement. Un nouvel envoi ignore celles qui ont déjà une invitation, sauf si vous choisissez de renvoyer."
   },
   "OrgRanking": {
     "title": "Systèmes de classement",
