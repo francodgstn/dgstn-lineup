@@ -59,6 +59,7 @@
     "backfill:booking-joined-at": "tsx scripts/backfill-booking-joined-at.ts",
     "backfill:partner-apps": "tsx scripts/backfill-partner-apps.ts",
     "backfill:contact-notes-count": "tsx scripts/backfill-contact-notes-count.ts",
+    "backfill:activity-type-mirrors": "tsx scripts/backfill-activity-type-mirrors.ts",
     "backfill:site-translations": "tsx scripts/backfill-site-translations.ts",
     "backfill:team-public-profile": "tsx scripts/backfill-team-public-profile.ts",
     "typecheck:seeds": "tsc -p tsconfig.seedcheck.json",

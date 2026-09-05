@@ -289,7 +289,9 @@ export const syncTeamPublicProfile = onDocumentWritten('teams/{teamId}', async (
   // `ActivePublicSurfaces.appointments` for why the studio's own
   // `bookingSettings.appointmentsEnabled` toggle is deliberately NOT folded in
   // here, and `appointmentPickerLive` for the one place the two are combined.
-  const appointmentsActive = await appointmentContentExists(db, teamId, paymentsEnabled)
+  // (The toggle is enforced against VISITORS in `listAvailability`, which is a
+  // different question from whether there is content behind the door.)
+  const appointmentsActive = await appointmentContentExists(db, teamId)
 
   // The partner apps this studio accepts, by name — see
   // TeamPublicProfile.partner_apps and resolveTeamPartnerApps below.
@@ -607,8 +609,7 @@ const APPOINTMENT_ACTIVITY_SCAN_LIMIT = 25
 
 async function appointmentContentExists(
   db: admin.firestore.Firestore,
-  teamId: string,
-  canCharge: boolean
+  teamId: string
 ): Promise<boolean> {
   const windows = await db
     .collection(AVAILABILITY_COLLECTION)
@@ -635,11 +636,12 @@ async function appointmentContentExists(
     if (!doc.exists) continue
     const a = doc.data() as Activity
     if (a.type !== 'appointment' || a.teamId !== teamId) continue
-    // 'priced' is the only mode that needs Stripe; a benefit-only or unpriced
-    // length survives an unfinished Connect account. Same filter, same reason.
-    const offerable = canCharge
-      ? resolveAppointmentDurations(a)
-      : resolveAppointmentDurations(a).filter((d) => resolveDurationSale(d).mode !== 'priced')
+    // NO CHARGEABILITY FILTER — it would under-report now. A priced duration
+    // used to be dropped when the studio had no Connect account, and this probe
+    // mirrored that; since 2026-08-28 those lengths are booked and SETTLED AT
+    // THE STUDIO, so a studio whose only durations are priced still has a live
+    // picker. Filtering here would mark the surface dead over a page that works.
+    const offerable = resolveAppointmentDurations(a)
     if (offerable.length === 0) continue
     bookable.add(doc.id)
   }

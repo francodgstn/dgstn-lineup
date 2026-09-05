@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -30,6 +31,10 @@ import {
 import {  } from 'lucide-react'
 import { renewAffiliationCall } from '@/components/affiliations/renew'
 import { AffiliationBulkBar, RenewConfirmDialog } from '@/components/affiliations/RenewUI'
+import {
+  MembershipStatusesCard,
+  OrgAffiliationTypesCard,
+} from '@/components/org/AffiliationVocabularyCards'
 
 // ─── colour map ───────────────────────────────────────────────────────────────
 
@@ -516,17 +521,12 @@ export default function OrgAffiliationsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{affiliationTerm}</h2>
-          {contacts && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('subtitle', { total: contacts.length, active: totalActive })}
-            </p>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={affiliationTerm}
+        subtitle={
+          contacts ? t('subtitle', { total: contacts.length, active: totalActive }) : undefined
+        }
+      />
 
       {/* Type selector */}
       {affiliationTypes.length > 0 && (
@@ -733,6 +733,15 @@ export default function OrgAffiliationsPage() {
           {toast}
         </div>
       )}
+      {/* THE VOCABULARY, beneath the roster it describes.
+          It used to live three screens down the org Settings page, so the
+          statuses were configured in one place and read in another. An
+          administrator now adds "Suspended" on the screen that shows who is
+          suspended. Each card applies the `isAdmin` gate itself. */}
+      <div className="space-y-4 border-t pt-6">
+        <MembershipStatusesCard orgId={orgId} isAdmin={isAdmin} />
+        <OrgAffiliationTypesCard orgId={orgId} isAdmin={isAdmin} />
+      </div>
     </div>
   )
 }

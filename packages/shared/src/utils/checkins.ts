@@ -9,9 +9,12 @@
  *   exam:    requires at least one ranking-system entry in checkin_data.disciplines
  *            (an entry whose level is 0 IS a result — see the arm below)
  *   camp:    requires checkin_data.join_as
- *   others:  auto-confirmed unless checkin_data.categories exists (plugin types
- *            like fighting_cup use a categories array that must be non-empty)
+ *   others:  a plugin rule from PLUGIN_CHECKIN_COMPLETION if the event type has
+ *            one (fighting_cup requires a non-empty categories array);
+ *            auto-confirmed otherwise
  */
+import { PLUGIN_CHECKIN_COMPLETION } from '../types/plugin-checkins'
+
 export function isCheckinCompleted(
   eventType: string,
   checkinData?: Record<string, unknown>,
@@ -35,12 +38,23 @@ export function isCheckinCompleted(
     }
     case 'camp':
       return typeof checkinData?.join_as === 'string' && checkinData.join_as.length > 0
-    default:
-      // Plugin/custom types that rely on a categories array (e.g. fighting_cup)
-      if (Array.isArray(checkinData?.categories)) {
-        return (checkinData!.categories as unknown[]).length > 0
-      }
+    default: {
+      // A PLUGIN'S RULE, FROM THE PLUGIN'S OWN LIST — not from here.
+      //
+      // This branch used to read `Array.isArray(checkinData.categories)`, which
+      // is the `hmd-fighting-cup` payload shape: core knew one tenant-specific
+      // plugin's data model, and a second plugin needing completion logic had
+      // nowhere to put it but this same `if`, beside a rule that was not its
+      // own. The rules live in `PLUGIN_CHECKIN_COMPLETION` now.
+      //
+      // It also narrowed a real over-reach: the old test applied the cup's rule
+      // to ANY event type that happened to carry a `categories` array. Keyed
+      // lookup asks the question the switch is already asking — what KIND of
+      // event is this.
+      const rule = PLUGIN_CHECKIN_COMPLETION[eventType]
+      if (rule) return rule(checkinData)
       // competition, seminar, workshop, and any other type: auto-confirm
       return true
+    }
   }
 }

@@ -244,7 +244,7 @@ sandbox, staging or production.**
 
 ---
 
-### Trial booking hides a failed read as "no trial sessions"
+### Trial booking hides a failed read as "no trial sessions" — CLOSED 2026-08-28
 
 `apps/web/src/app/[locale]/(public)/public/[slug]/trial-booking/TrialBookingForm.tsx`
 logs its failed session read (2026-08-16), but still renders the failure as an
@@ -261,7 +261,15 @@ query intact, and nothing imports `TrialBookingForm`. So the exception above is
 currently an exception to nothing — which makes deleting the file the cheapest
 close, not threading the error state. Verify the redirect before acting on that.
 
-### A priced appointment at a studio without Stripe Connect says the slot is gone
+**Closed 2026-08-28 by deleting the file.** The redirect was verified first: the
+route is an unconditional `redirect()` to `publicPath(slug, 'booking')` carrying
+the query, with no branch that renders anything. The only remaining references
+were two comments — the rule in `lib/publicQueryError.ts` that carried this as
+its one admitted exception (it now has none) and a descriptive note in the
+kiosk's `WalkIn.tsx` — and both were rewritten rather than left pointing at a
+deleted path.
+
+### A priced appointment at a studio without Stripe Connect says the slot is gone — FIXED 2026-08-28
 
 `AppointmentPicker.tsx` — a paying visitor at a studio whose Connect account is
 not onboarded is told **"This slot is no longer available."** The slot is fine;
@@ -272,6 +280,30 @@ Pre-existing, and deliberately out of scope for that change: the honest fix need
 a decision about what a visitor should be offered when a studio cannot charge —
 book anyway and settle at the door, or say plainly that online payment is not set
 up. That is Franco's call, not a mechanical repair.
+
+**Franco chose: book anyway, settle at the door** (2026-08-28).
+
+So appointments become the one deliberate exception to UX-33's hiding.
+`listAvailability` no longer drops priced durations a studio cannot charge for —
+it returns `settleAtStudio`, and the picker books through the FREE door and says
+"Pay at the studio when you arrive" beside the figure. Hiding the length cost the
+studio a booking it could have taken in cash; the false sentence cost it the
+visitor as well.
+
+The booking lands as `payment_status: 'required'` + `amount_due` +
+`settle_at_studio`, which is the state the staff 'link' rail already produces
+while a payment is outstanding — so `markAppointmentPaid` closes it with no new
+branch and no second ledger. This is the only place a public caller can create an
+unpaid-but-confirmed appointment, and it is gated on a fact the caller cannot
+influence: whether the studio finished onboarding.
+
+The rest of UX-33 is untouched. The shop, the drop-in price and the priced trial
+still fail closed, because each of those IS a purchase with nothing to hand over
+at a door; an appointment is a time, and the time is real either way.
+
+`paymentsAreChargeable` in `connect/access.ts` is now the ONE predicate both the
+listing and the booking ask, pinned by a test — computing it twice is how a
+visitor ends up shown a price nothing can take.
 
 ## Feature requests, queued (not defects)
 
@@ -314,7 +346,7 @@ shape indefinitely.
 Run: `pnpm backfill:gateway-data --project <id>` (dry-run), then `--apply`.
 Verified end-to-end against the emulator; never run against staging or prod.
 
-### The pinned document-version read path is only half-verified
+### The pinned document-version read path is only half-verified — VERIFIED 2026-08-28
 
 `getPublicDocumentVersion` is wired: the public document page reads `?v=`, calls
 it with the right arguments, reports a failure rather than swallowing it, and
@@ -330,7 +362,26 @@ only been read, not run.
 Verify by restarting the emulator with a fresh functions build (export the data
 first if you want to keep it) and following a pinned link to an older version.
 
-### Stripe webhook handler params are typed `any`
+**Done, and it passes.** A worktree emulator running a fresh functions build has
+`getPublicDocumentVersion` initialized, which is the condition that was missing.
+The seed contains no documents, so four fixtures were written through the
+emulator's REST API (owner token — the REST path enforces rules) and removed
+afterwards. All six checks pass:
+
+1. a published, public, non-waiver document returns the **frozen v1 text**, and
+   the live `bodyHtml` on the parent — deliberately seeded with different
+   content — does **not** appear in the response
+2. a `kind: 'waiver'` document is refused
+3. an unpublished document is refused, and so is a published-but-not-`isPublic`
+   one
+4. a version number that has no document is refused
+5. `version: 0` is rejected as invalid argument
+
+Every refusal returns the same `not-found` / "Document not available", so the
+answer carries no signal about which documents exist — which is what the
+callable's own comment promises.
+
+### Stripe webhook handler params are typed `any` — FIXED 2026-08-28
 
 Carried over rather than newly found — recorded here because it is the root cause
 of a class, not one bug. Three shipped defects came from Stripe moving fields
@@ -341,7 +392,36 @@ but the handler signatures themselves are still `any`, so the next moved field
 fails the same silent way. Retyping them is the durable fix; the blast radius is
 why it has not been done.
 
-### A new owner cannot upload an activity cover image, and the activity is created anyway
+**Done 2026-08-28, and the blast radius was two errors.** Every handler in
+`connect/webhook.ts` (fifteen parameters) and every subscription/invoice reader
+in `utils/gateway/stripe.ts` now takes a derived SDK type. Both errors it
+surfaced were real:
+
+- `handleAppointmentCheckout` passed `paymentIntentId: piId` into
+  `refundDirectCharge` where `piId` is `string | undefined` —
+  `session.payment_intent` is null whenever Stripe created no PaymentIntent. The
+  duplicate-charge branch could have called the refund with `undefined` and an
+  idempotency key of `apt-dup:undefined`. It now skips, and LOGS, because a
+  duplicate detected and not refunded must not pass in silence.
+- `scripts/connect-test-account.ts`'s Stripe client type (see the `scripts/`
+  entry above) — found in the same pass.
+
+Two shapes had to be modelled properly to get there. `StripeWebhookPayload<T>` is
+`Omit<T, 'lastResponse'>`: every alias is derived from a `retrieve()`, so each
+carries the HTTP envelope the SDK staples onto an API response, and
+`event.data.object` has none — typing a handler with the bare alias demands a
+field that is never there. And the LIST responses are not `{ data: T[] }`; a
+listed item has no `lastResponse` and the envelope has `has_more`, so those are
+derived from `list()` rather than hand-written.
+
+**One `any` is left, deliberately**: the `event` in the dispatch. `event.data.object`
+is a union of eighty-odd resources that TS cannot narrow from `event.type`,
+because the verifier returns the general `Event`; typing it buys eighty `as`
+casts at the router and a cast is an assertion exactly like the `any`, only
+louder. The value lives in the handler BODIES, which is where all three
+motivating defects were. It carries an eslint-disable and that reasoning.
+
+### A new owner cannot upload an activity cover image, and the activity is created anyway — MECHANISM FALSIFIED 2026-08-28
 
 Found by manual exploration on **2026-08-17**, on a freshly created account.
 Creating an activity **with a cover image** fails the Storage upload with
@@ -374,6 +454,34 @@ upload failure (offline, size, content-type) reaches the same silent path.
 
 ---
 
+**Re-read 2026-08-28: the stated mechanism no longer exists, and the rule must
+not be touched on the strength of it.**
+
+This entry rests on "that document is written by the client during signup
+self-provisioning … so the upload is denied whenever it runs before that write
+has landed". That was true when it was observed on 2026-08-17. It stopped being
+true nine days later: the **#106 team-takeover fix moved provisioning
+server-side**, and `firestore.rules` now says in as many words that there is
+"deliberately NO client self-provision branch anymore". `createStudioTeam` writes
+the team, the owner membership and the user profile in ONE atomic batch, and
+`provisionTeam` awaits that callable before the browser goes anywhere — so by the
+time an owner can open the activities dialog, `teams/{id}/team_members/{uid}`
+exists.
+
+There is therefore no known race left to fix, and the warning in part 1 stands
+with more force than before: **do not loosen
+`match /teams/{teamId}/{allPaths=**}`** to chase a mechanism that has already
+been removed. If the denial recurs, it has a different cause and needs a fresh
+reproduction naming it.
+
+**Part 2 is closed.** UX-24's fix was rebuilt after exactly this reproduction —
+the create path's `addDoc`-then-upload ordering means a denied upload leaves a
+real imageless activity, so the branches are now distinct and a generic toast
+can no longer send a manager into a duplicate-creating retry (the edit path
+uploads first and was always all-or-nothing).
+
+---
+
 ## Newly recorded, 2026-08-25 — events + ranking
 
 Found while reading the events and ranking code end to end before building the
@@ -382,7 +490,7 @@ inferred from a symptom. The ranking-system org-awareness bugs, the duplicate
 `RankLevel.value` bug and the mobile scalar-rank bug found in the same pass are
 **not** here — they shipped in PR#105.
 
-### `attendees` is an RSVP list wearing the word "attendance"
+### `attendees` is an RSVP list wearing the word "attendance" — LABELS FIXED 2026-08-28
 
 `events/{id}/attendees/{contactId}` is written by `handleEventInvitationResponse`
 on `action: 'attend'` and deleted on `'decline'`. Nothing ever reconciles it
@@ -398,8 +506,29 @@ The two vocabularies have crossed: **`trackEventAttendees` is a trigger on
 hmd-lineup/functions/src/trackEventAttendees", so the name arrived with the code
 and the meaning drifted underneath it.
 
-Renaming the function is free. Renaming the subcollection is a data migration, so
-the cheap honest fix is the UI label plus the function name.
+Renaming the subcollection is a data migration, so the fix is the UI label.
+
+**Resolved for the labels.** The event detail page named one thing two ways on a
+single screen: the stat tile already read "RSVPs" while the tab beside it read
+"Attendees" (Franco, 2026-08-28 — "I still see attendees instead of RSVPs"). The
+tab, its empty state and the duplicate-event copy now say RSVPs in all four
+locales, and the message keys were renamed with them (`detail_tabRsvps`,
+`detail_rsvpsEmpty`) so the old word cannot come back by autocomplete.
+
+The empty state says "No one has accepted yet" rather than "No RSVPs yet",
+because a DECLINE deletes its row — the list is the yeses, not every reply.
+
+`EventPeekSheet` carried a second crossing, found while fixing the first: it read
+`attendees_count ?? participants_count` and labelled whichever it got with the
+same word, so an event with no acceptances and twelve people through the door
+reported twelve RSVPs. It reads the RSVP count alone now.
+
+**The FUNCTION name deliberately stays.** `trackEventAttendees` is the deployed
+Cloud Function name, so renaming the export deletes one Firestore trigger and
+creates another — and in the window between them every check-in write goes
+uncounted, drifting the counters on a live event with nothing to announce it.
+Its header carries the correction instead. What remains here is the
+subcollection itself, which is a data migration.
 
 ### A manager can send event invitations but cannot see who accepted — FIXED 2026-08-27 (#120)
 
@@ -408,13 +537,35 @@ the cheap honest fix is the UI label plus the function name.
 ungated. So a team manager invites people and then cannot see the responses —
 `reports.view` is an odd capability to govern "who is coming to my event".
 
-### One plugin's check-in payload lives in core
+### One plugin's check-in payload lives in core — FIXED 2026-08-28
 
 `isCheckinCompleted` (`packages/shared/src/utils/checkins.ts`) is a switch on
 event type with no plugin hook, and its `default` branch reads
 `Array.isArray(checkinData.categories)` — the fighting-cup shape. Core therefore
 knows one tenant-specific plugin's payload, and a second plugin needing custom
 completion logic has nowhere to put it but that same branch.
+
+**Fixed with a keyed registry**, `PLUGIN_CHECKIN_COMPLETION` in
+`packages/shared/src/types/plugin-checkins.ts`. It sits in `shared` rather than
+the plugin folder for the reason `PLUGIN_BUNDLES` and `PLUGIN_ADDONS` do: the
+predicate runs on the client AND in `addEventCheckin`, and the plugin registry
+lives in `apps/web`. A rule is a PURE predicate over the payload — it is asked
+on every roster row, on both sides of the wire.
+
+Two things worth knowing:
+
+- **The semantics are byte-identical**, including the odd one. A cup check-in
+  with NO `categories` key auto-confirms, and only an EMPTY array means "nobody
+  assigned"; `checkinCompletion.test.ts` pins that with a comment saying it is
+  there "so the exam fix cannot be read as licence to change it". The first
+  version of this change did read it as licence and broke that test — the
+  registry now reproduces the old expression exactly.
+- **One deliberate narrowing.** The old branch applied the cup's rule to ANY
+  event type carrying a `categories` array; keyed lookup reaches only the types
+  that registered. Nothing outside the cup's own form writes that key, so it is
+  unreachable in practice — pinned by a new case so it is a decision rather than
+  something that quietly stopped happening. A second new test reads
+  `checkins.ts` and fails if `categories` ever reappears in it.
 
 ### `EventTypeConfig.contact_requirements` is declared and read by nothing — DELETED 2026-08-27
 
@@ -561,7 +712,7 @@ were checked in a browser against computed styles.
 
 ## Newly recorded, 2026-08-27 — left open by the org-scope build
 
-### `useAffiliationTerm` resolves the wrong organisation in org scope
+### `useAffiliationTerm` resolves the wrong organisation in org scope — FIXED 2026-08-28
 
 `hooks/useAffiliationTerm.ts` calls `useOrg()`, and the studio sidebar is a
 SIBLING of the org route's children — so `OrgProvider` does not wrap it and the
@@ -574,6 +725,12 @@ scope a place people spend time, so it is worth fixing.
 The fix is not to widen `OrgProvider` — the scope is already resolved from the
 URL in `ScopeContext`, so the hook should read the ROUTE's org id from there
 rather than the team's.
+
+**Fixed 2026-08-28, as described.** The hook now reads `orgIdFromPath(pathname)`
+and falls back to the team's `org_id` only when the URL names no organisation at
+all — the route is the more specific fact, and the team's org is a default for
+pages that are not about an organisation. `useOrg()` still wins where it has an
+org, because there it has already resolved and cached the document.
 
 ### The sidebar quick-search does not index org destinations — FIXED 2026-08-27
 
@@ -624,7 +781,7 @@ its appointments — the day picker only knows class sessions. Rendering the
 appointment cards above the day picker is the likely answer, but it is a design
 call about what that page is, not a patch.
 
-### Still open: the appointments toggle is read by nothing on the public web
+### The appointments toggle is read by nothing on the public web — FIXED 2026-08-28
 
 `bookingSettings.appointmentsEnabled` and `appointmentPickerLive` have exactly
 one web reader, `usePublicSurfaces`, and that hook is imported only by `(auth)`
@@ -632,6 +789,19 @@ routes. So the toggle governs what the STUDIO is shown about its own surfaces,
 not what a visitor can reach. Switching it off does not hide anything public.
 Worth deciding deliberately: either the public routes should honour it, or it
 should be described as what it is.
+
+**Franco chose: honour it publicly** (2026-08-28).
+
+Enforced in `listAvailability`, not on the page. That callable is the one door
+every client goes through, so the web picker, the mobile app and anything added
+later are covered by construction — where a page-level gate would leave the
+callable answering a direct call anyway. Off ⇒ no coaches, and the picker's
+existing empty state does the rest. Absent still means ON, matching
+`appointmentPickerLive`.
+
+`appointmentPickerLive` stays exactly as it was: it answers the STUDIO-facing
+question ("should I tell them this surface is live"), which is a different
+question from whether a visitor may reach it.
 
 ### The website + kiosk appointment probe had no index — FIXED 2026-08-27
 
@@ -753,13 +923,24 @@ The same top-level → `checkin_data` drift the exam pass fixed, for
 `categories` / `weight`. New pass `09-cup-checkins`, run before the category
 reconstruction so the ids are in their final home first.
 
-### Still open here: `scripts/` is typechecked in exactly one place
+### `scripts/` is typechecked in exactly one place — FIXED 2026-08-28
 
 `turbo run typecheck` does not see `scripts/`; only
 `tsconfig.seedcheck.json` does, and only what its `include` names. Anything
 added there and not listed is checked by nobody. `scripts/migrate-hmd.ts` — the
 entry point registering every migration pass — was in that blind spot until
 2026-08-27. Worth a lint rule or a glob rather than a list.
+
+**Fixed with the glob.** The list named seven paths against a directory of
+twenty-seven files, so twenty were unchecked — every backfill, `purge-team`,
+`reset-sandbox-db`, `reset-staging-db`, `promote-team`, `stripe-sync`.
+
+It found a live one immediately: `scripts/connect-test-account.ts` declared
+`type StripeClient = InstanceType<typeof import('stripe').default>`, which this
+tsconfig cannot resolve because `stripe` uses `export =` — while the same
+`.default` on the VALUE side is synthesised by esModuleInterop and runs fine.
+The type is now DERIVED from the loader expression the runtime evaluates, so the
+two cannot disagree again.
 
 ---
 
@@ -885,12 +1066,45 @@ table above implies because the pieces were already tenant-agnostic:
   they were "aligned" — at English. Twelve shared keys, one placeholder each.
 - `SurfaceLinksEditor.tsx` deleted (exported, imported by nothing).
 
-STILL OPEN, and now the whole of what is left: the duplicated
-`SectionEditor`/`defaults`/`hooks` pairs and the one-model-or-two decision — the
-authoring SHELL, which is pure React and the only part that was never converged.
-The render layer, the type layer and the sanitiser layer were shared already.
-Embed widgets for orgs stay descoped: they need a new public collection and an
-`/embed/org/...` route, which is a feature rather than a convergence.
+**CONVERGED 2026-08-28** — Franco chose one model with a tenant discriminator,
+the same shape that fixed the divergence between the two ranking editors.
+
+`components/website/SiteSectionFields.tsx` now owns the four section types both
+builders share (hero, content, gallery, contact) plus `Field` and `ImageField`.
+`SiteEditorTenant` carries `kind` and `id` — and, crucially, the tenant's own
+`uploadImage`, because WHERE AN IMAGE GOES is the only thing that actually
+differed. Carrying the behaviour rather than switching on the enum also keeps a
+shared component from importing out of an app route.
+
+What stays per-tenant is what the tenants genuinely CAN do differently: the
+studio keeps Activities/Pricing/Schedule/Places and a CTA that can point at its
+booking page or signup form; the org keeps Clubs/Locations/Coaches and a
+URL-only CTA, because it has neither of those surfaces. The hero's CTA is a
+SLOT for exactly that reason.
+
+Three pieces of drift died with the copy, none of which was visible until the
+two files were read side by side:
+
+- `Center`, `Left`, `Right`, `Overlay (40%)` and "Call-to-action button" were
+  hardcoded English in the org editor — a file whose every other label went
+  through `useTranslations`. Verified live: the German org editor now reads
+  Ausrichtung / Zentriert / Abdunklung (40 %) / Call-to-Action-Button.
+- Its image-size limit was a bare `const MAX_IMAGE_SIZE_MB = 5` where the team's
+  goes through `getWebsiteLimits()`, the seam that exists so an operator can
+  raise it. Same number, one of them unreachable.
+- `ContactFields` was identical in behaviour and different only in whitespace —
+  the state a copy reaches just before somebody edits one of them.
+
+Two more untranslated strings in the org-only sections ("Show address on each
+card", "Extra venues") were found in the same pass and translated.
+
+Both editors were exercised in a browser afterwards, in German, including that
+the team's richer CTA (action selector, "Buchung öffnen") still renders and the
+org's does not offer it.
+
+Embed widgets for orgs stay descoped.
+(Embed widgets for orgs need a new public collection and an `/embed/org/...`
+route, which is a feature rather than a convergence.)
 
 ---
 

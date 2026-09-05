@@ -1,5 +1,6 @@
 'use client'
 
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useCallback, useMemo, useState } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -316,19 +317,17 @@ export default function OrgEventsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">{t('title')}</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t('subtitle')}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true) }}>
-            <Plus className="h-4 w-4 mr-1.5" />{t('newEvent')}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={t('title')}
+        subtitle={t('subtitle')}
+        action={
+          isAdmin ? (
+            <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true) }}>
+              <Plus className="h-4 w-4 mr-1.5" />{t('newEvent')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Tab */}
       <div className="flex gap-1 border-b text-sm">

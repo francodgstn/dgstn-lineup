@@ -138,14 +138,90 @@ describe('priced doors follow the ability to be paid (UX-33)', () => {
     )
   })
 
-  it('the availability listing drops priced durations the studio cannot charge for', () => {
+  // APPOINTMENTS ARE THE ONE EXCEPTION TO UX-33's HIDING, on purpose.
+  //
+  // This used to assert that `listAvailability` DROPS priced durations a studio
+  // cannot charge for. That produced the wrong sentence at the worst moment: a
+  // visitor who reached one anyway was told "This slot is no longer available",
+  // which is false — the slot was fine, the studio simply had no Stripe account.
+  //
+  // Franco chose to let them book it and settle at the studio (2026-08-28), so
+  // the length stays on the menu and the money moves in person. The rest of
+  // UX-33 is untouched: the shop, the drop-in price and the priced trial still
+  // fail closed, because each of those IS a purchase with nothing to hand over
+  // at a door.
+  it('an unchargeable studio still offers its priced lengths, marked for the door', () => {
     const window = read('appointments/window.ts')
-    assert.ok(window.includes('const canCharge ='))
     assert.ok(
-      window.includes("info.durations.filter((d) => resolveDurationSale(d).mode !== 'priced')"),
-      'listAvailability must keep every NON-PRICED duration and drop only the priced ones — ' +
-        'being unable to take money is not the same as being free, and a benefit_only ' +
-        'length (UX-70) is paid for by a plan the contact already holds'
+      window.includes('const settleAtStudio = !paymentsAreChargeable('),
+      'the listing must resolve settle-at-studio through the shared predicate'
+    )
+    assert.ok(
+      !window.includes("resolveDurationSale(d).mode !== 'priced'"),
+      'the listing drops priced durations again — an unchargeable studio loses the booking'
+    )
+    assert.ok(
+      window.includes('return { coaches, settleAtStudio }'),
+      'the client cannot label the door without the flag'
+    )
+  })
+
+  it('the booking door is settled in person, in the state the desk already clears', () => {
+    const window = read('appointments/window.ts')
+    // The refusal must be conditional now — unconditional means the picker's
+    // false dead end is back.
+    assert.ok(
+      window.includes("if (priceOption?.type === 'pay' && !settleAtStudio)"),
+      'a payable caller at an unchargeable studio must not be refused'
+    )
+    // And it must land in the SAME shape the staff link rail leaves behind, so
+    // markAppointmentPaid closes it with no new branch.
+    assert.ok(
+      window.includes("payment_status: 'required' as const") && window.includes('settle_at_studio: true'),
+      'an owed booking must carry what is owed, in the state the desk already settles'
+    )
+  })
+
+  it('the toggle reaches VISITORS, not just the settings screen', () => {
+    // `bookingSettings.appointmentsEnabled` had exactly one web reader, imported
+    // only by `(auth)` routes, so switching it off hid nothing public. It is
+    // enforced at the callable rather than on the page because that is the one
+    // door every client goes through — web, mobile, and anything added later.
+    const window = read('appointments/window.ts')
+    assert.ok(
+      window.includes('if (!appointmentsEnabled) return { coaches: [], settleAtStudio }'),
+      'listAvailability must refuse to list when the studio turned bookable hours off'
+    )
+    assert.ok(
+      window.includes("?.appointmentsEnabled !== false"),
+      'absent must mean ON, matching appointmentPickerLive — a studio that never ' +
+        'touched the switch still has bookable hours'
+    )
+  })
+
+  it('the content probe does not re-apply the filter listAvailability dropped', () => {
+    // The probe mirrored "priced durations drop out without Connect". Now that
+    // those are settled at the studio instead, keeping the filter here would
+    // mark the surface dead over a picker that works.
+    const sync = read('sync/syncTeamPublicProfile.ts')
+    assert.ok(
+      !sync.includes("resolveDurationSale(d).mode !== 'priced'"),
+      'the appointment content probe filters priced durations again — a studio ' +
+        'whose only lengths are priced would be reported as having no picker'
+    )
+  })
+
+  it('ONE predicate answers "can this studio take money"', () => {
+    // The listing decides what to offer and the booking decides which door the
+    // offer opens; if they compute it separately they will eventually disagree,
+    // and the visible form of that is a price nothing can take.
+    const access = read('connect/access.ts')
+    assert.ok(access.includes('export function paymentsAreChargeable('))
+    const window = read('appointments/window.ts')
+    assert.equal(
+      (window.match(/paymentsAreChargeable\(/g) ?? []).length,
+      2,
+      'both the listing and the booking must go through the shared predicate'
     )
   })
 

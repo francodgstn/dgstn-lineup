@@ -1,130 +1,41 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { toast } from 'sonner'
-import { ImageIcon, X, Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { IconPicker } from '@/components/ui/icon-picker'
+import { Plus, Trash2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { ColorPicker } from '@/components/ui/color-picker'
-import { IconPicker } from '@/components/ui/icon-picker'
-import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
 import type {
-  WebsiteSection, HeroSection, ContentSection, GallerySection,
-  ActivitiesSection, PricingSection, ScheduleSection, ContactSection, PlacesSection, SiteCta,
+  WebsiteSection, ActivitiesSection, PricingSection, ScheduleSection, PlacesSection, SiteCta,
   FeaturesSection, CtaBannerSection, FaqSection, TestimonialsSection,
 } from '@linyup/shared'
-import { RichTextEditor } from '@/components/RichTextEditor'
 import { uploadSiteImage } from './hooks'
-import { getWebsiteLimits } from './limits'
 import { usePlaces } from '@/hooks/usePlaces'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  ContactFields,
+  ContentFields,
+  Field,
+  GalleryFields,
+  HeroFields,
+  type SiteEditorTenant,
+} from '@/components/website/SiteSectionFields'
 
-const limits = getWebsiteLimits()
+// ─── the team's own CTA, and the sections only a studio has ─────────────────
+//
+// The four section types both builders share — hero, content, gallery, contact —
+// and their field helpers now live in `components/website/SiteSectionFields`.
+// What stays here is what a STUDIO can do and an organisation cannot: a CTA that
+// can point at the booking page or the signup form, and the four commerce
+// sections (activities, pricing, schedule, places) an org has no equivalent of.
 
-// ─── small field helper ─────────────────────────────────────────────────────
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
-  )
-}
-
-// ─── image field ────────────────────────────────────────────────────────────
-
-/**
- * The image box, filled or empty — ONE definition, so the form does not move
- * when a picture arrives.
- *
- * TWO THINGS WERE WRONG. The wide variant was `h-28 w-full`: a fixed 112px tall
- * band stretched across whatever the column happened to be, which after the
- * preview pane moved into an overlay is roughly 5:1 — a letterbox that shows
- * almost nothing of a photograph and looks broken beside the fields around it.
- * And the empty state was `h-20` against the filled `h-28`, so uploading an
- * image shifted every field below it down by 32px.
- *
- * `aspect-video` because that is what these images ARE — a hero background and a
- * section side image both publish wide — and a width cap so the box sits inline
- * with the inputs above it rather than spanning the panel.
- */
-const BOX = {
-  wide: 'aspect-video w-full max-w-xs',
-  square: 'aspect-square w-20',
-} as const
-
-function ImageField({
-  label, url, teamId, sectionId, onChange, aspect = 'wide',
-}: {
-  label: string
-  url?: string
-  teamId: string
-  sectionId: string
-  onChange: (url: string | undefined) => void
-  aspect?: 'wide' | 'square'
-}) {
-  const t = useTranslations('Website')
-  const ref = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-
-  async function handle(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
-      toast.error(t('editorImageTooLarge', { mb: limits.maxImageSizeMB }))
-      return
-    }
-    setUploading(true)
-    try {
-      const u = await uploadSiteImage(teamId, sectionId, file)
-      onChange(u)
-    } catch {
-      toast.error(t('editorUploadFailed'))
-    } finally {
-      setUploading(false)
-      if (ref.current) ref.current.value = ''
-    }
-  }
-
-  return (
-    <Field label={label}>
-      {url ? (
-        <div className={`relative overflow-hidden rounded-lg border bg-muted ${BOX[aspect]}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt="" className="h-full w-full object-cover" />
-          <button
-            type="button"
-            onClick={() => onChange(undefined)}
-            className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5 hover:bg-background"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => ref.current?.click()}
-          disabled={uploading}
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground disabled:opacity-50 ${BOX[aspect]}`}
-        >
-          <ImageIcon className="h-4 w-4" />
-          {uploading ? t('editorUploading') : t('editorUpload')}
-        </button>
-      )}
-      <input ref={ref} type="file" accept="image/*" onChange={handle} className="hidden" />
-    </Field>
-  )
-}
-
-// ─── CTA editor ──────────────────────────────────────────────────────────────
+type Patch = Record<string, unknown>
 
 function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta | undefined) => void }) {
   const t = useTranslations('Website')
@@ -154,194 +65,6 @@ function CtaEditor({ cta, onChange }: { cta?: SiteCta; onChange: (cta: SiteCta |
           <Input value={value.url ?? ''} onChange={(e) => set({ url: e.target.value })} placeholder="https://" className="h-9 font-mono text-xs" />
         </Field>
       )}
-    </div>
-  )
-}
-
-// ─── per-type editors ─────────────────────────────────────────────────────────
-
-type Patch = Record<string, unknown>
-
-function HeroFields({ s, teamId, onChange }: { s: HeroSection; teamId: string; onChange: (p: Patch) => void }) {
-  const t = useTranslations('Website')
-  return (
-    <div className="space-y-3">
-      <Field label={t('editorHeadline')}>
-        <Input value={s.headline} onChange={(e) => onChange({ headline: e.target.value })} className="h-9" />
-      </Field>
-      <Field label={t('editorSubheadline')}>
-        <Textarea value={s.subheadline ?? ''} onChange={(e) => onChange({ subheadline: e.target.value })} rows={2} />
-      </Field>
-      <ImageField label={t('editorBackgroundImage')} url={s.bgImageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ bgImageUrl: u })} />
-      {/* A solid background colour, used only when there is no image. Hidden
-          while an image is set, because it does nothing then. */}
-      {!s.bgImageUrl && (
-        <Field label={t('editorHeroBgColor')}>
-          <div className="flex items-center gap-2">
-            <ColorPicker
-              value={s.bgColor ?? ''}
-              className="h-8 w-8"
-              aria-label={t('editorHeroBgColor')}
-              onChange={(hex) => onChange({ bgColor: hex })}
-            />
-            {s.bgColor && (
-              <button
-                type="button"
-                onClick={() => onChange({ bgColor: undefined })}
-                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              >
-                {t('editorHeroBgColorClear')}
-              </button>
-            )}
-          </div>
-        </Field>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={t('editorAlignment')}>
-          <Select value={s.align} onValueChange={(v) => onChange({ align: v })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="center">{t('editorCenter')}</SelectItem>
-              <SelectItem value="left">{t('editorLeft')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label={t('editorHeroLayout')}>
-          <Select value={s.layout ?? 'full'} onValueChange={(v) => onChange({ layout: v })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="full">{t('editorHeroLayoutFull')}</SelectItem>
-              <SelectItem value="card">{t('editorHeroLayoutCard')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
-      {/* The image overlay only applies when there is an image. */}
-      {s.bgImageUrl && (
-        <Field label={t('editorOverlay', { percent: s.overlay ?? 40 })}>
-          <input
-            type="range" min={0} max={100} value={s.overlay ?? 40}
-            onChange={(e) => onChange({ overlay: Number(e.target.value) })}
-            className="mt-3 w-full accent-primary"
-          />
-        </Field>
-      )}
-      <CtaEditor cta={s.cta} onChange={(cta) => onChange({ cta })} />
-    </div>
-  )
-}
-
-function ContentFields({ s, teamId, onChange }: { s: ContentSection; teamId: string; onChange: (p: Patch) => void }) {
-  // RichTextEditor is uncontrolled after mount and memoized: pass STABLE
-  // callbacks (latest onChange via a ref) so typing never re-mounts it, and key
-  // it by section id so switching sections loads the right body.
-  const t = useTranslations('Website')
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-  const handleBody = useCallback((html: string) => onChangeRef.current({ body: html }), [])
-  const handleUpload = useCallback((file: File) => uploadSiteImage(teamId, s.id, file), [teamId, s.id])
-
-  return (
-    <div className="space-y-3">
-      <Field label={t('editorTitleOptional')}>
-        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
-      </Field>
-      <Field label={t('editorContent')}>
-        <RichTextEditor
-          key={s.id}
-          value={s.body}
-          onChange={handleBody}
-          onUploadImage={handleUpload}
-          minHeight={240}
-          placeholder={t('editorContentPlaceholder')}
-        />
-      </Field>
-      <ImageField label={t('editorImageOptional')} url={s.imageUrl} teamId={teamId} sectionId={s.id} onChange={(u) => onChange({ imageUrl: u })} />
-      {s.imageUrl && (
-        <Field label={t('editorImageSide')}>
-          <Select value={s.imageSide} onValueChange={(v) => onChange({ imageSide: v })}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="left">{t('editorLeft')}</SelectItem>
-              <SelectItem value="right">{t('editorRight')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-      )}
-    </div>
-  )
-}
-
-function GalleryFields({ s, teamId, onChange }: { s: GallerySection; teamId: string; onChange: (p: Patch) => void }) {
-  const t = useTranslations('Website')
-  const addRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-
-  async function addImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (s.images.length >= limits.maxGalleryImages) {
-      toast.error(t('editorGalleryLimit', { count: limits.maxGalleryImages }))
-      return
-    }
-    if (file.size > limits.maxImageSizeMB * 1024 * 1024) {
-      toast.error(t('editorImageTooLarge', { mb: limits.maxImageSizeMB }))
-      return
-    }
-    setUploading(true)
-    try {
-      const url = await uploadSiteImage(teamId, s.id, file)
-      onChange({ images: [...s.images, { url }] })
-    } catch {
-      toast.error(t('editorUploadFailed'))
-    } finally {
-      setUploading(false)
-      if (addRef.current) addRef.current.value = ''
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <Field label={t('editorHeadingOptional')}>
-        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
-      </Field>
-      <Field label={t('editorColumns')}>
-        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
-          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="4">4</SelectItem>
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label={t('editorPhotos', { count: s.images.length, max: limits.maxGalleryImages })}>
-        <div className="grid grid-cols-3 gap-2">
-          {s.images.map((img, i) => (
-            <div key={i} className="relative aspect-square overflow-hidden rounded-md border bg-muted">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" className="h-full w-full object-cover" />
-              <button
-                type="button"
-                onClick={() => onChange({ images: s.images.filter((_, j) => j !== i) })}
-                className="absolute right-1 top-1 rounded-full bg-background/80 p-0.5 hover:bg-background"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => addRef.current?.click()}
-            disabled={uploading}
-            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-input text-xs text-muted-foreground hover:border-primary/50 disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            {uploading ? '…' : t('editorAdd')}
-          </button>
-        </div>
-        <input ref={addRef} type="file" accept="image/*" onChange={addImage} className="hidden" />
-      </Field>
     </div>
   )
 }
@@ -491,29 +214,6 @@ function ScheduleFields({ s, onChange }: { s: ScheduleSection; onChange: (p: Pat
   )
 }
 
-function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p: Patch) => void }) {
-  const t = useTranslations('Website')
-  return (
-    <div className="space-y-3">
-      <Field label={t('editorHeading')}><Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} placeholder={t('editorContactHeadingPlaceholder')} className="h-9" /></Field>
-      <Field label={t('editorAddress')}><Textarea value={s.address ?? ''} onChange={(e) => onChange({ address: e.target.value })} rows={2} /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={t('editorPhone')}><Input value={s.phone ?? ''} onChange={(e) => onChange({ phone: e.target.value })} className="h-9" /></Field>
-        <Field label={t('editorEmail')}><Input value={s.email ?? ''} onChange={(e) => onChange({ email: e.target.value })} className="h-9" /></Field>
-      </div>
-      <Field label={t('editorHours')}><Textarea value={s.hours ?? ''} onChange={(e) => onChange({ hours: e.target.value })} rows={2} placeholder={t('editorHoursPlaceholder')} /></Field>
-      {/* The map placeholder stays a REAL Swiss address rather than becoming
-          "Street 1, City": it is an example of the format the lookup wants, and a
-          translated abstraction stops showing that. */}
-      <Field label={t('editorMapLocation')}><Input value={s.mapQuery ?? ''} onChange={(e) => onChange({ mapQuery: e.target.value })} className="h-9" placeholder={t('editorMapPlaceholder')} /></Field>
-      <label className="flex items-center justify-between rounded-lg border p-3">
-        <span className="text-sm">{t('editorShowSocial')}</span>
-        <Switch checked={s.showSocial ?? false} onCheckedChange={(v) => onChange({ showSocial: v })} />
-      </label>
-    </div>
-  )
-}
-
 function PlacesFields({ s, teamId, onChange }: { s: PlacesSection; teamId: string; onChange: (p: Patch) => void }) {
   const t = useTranslations('Website')
   const { team } = useAuth()
@@ -581,25 +281,43 @@ export function SectionEditor({
   teamId: string
   onChange: (patch: Patch) => void
 }) {
+  const tenant: SiteEditorTenant = {
+    kind: 'team',
+    id: teamId,
+    uploadImage: (sectionId, file) => uploadSiteImage(teamId, sectionId, file),
+  }
   switch (section.type) {
-    case 'hero':     return <HeroFields s={section} teamId={teamId} onChange={onChange} />
+    case 'hero':
+      return (
+        <HeroFields
+          s={section}
+          tenant={tenant}
+          onChange={onChange}
+          cta={<CtaEditor cta={section.cta} onChange={(cta) => onChange({ cta })} />}
+        />
+      )
     case 'content':
-    case 'about':    return <ContentFields s={section} teamId={teamId} onChange={onChange} />
-    case 'gallery':  return <GalleryFields s={section} teamId={teamId} onChange={onChange} />
+    case 'about':    return <ContentFields s={section} tenant={tenant} onChange={onChange} />
+    case 'gallery':  return <GalleryFields s={section} tenant={tenant} onChange={onChange} />
     case 'activities': return <ActivitiesFields s={section} onChange={onChange} />
     case 'pricing':  return <PricingFields s={section} onChange={onChange} />
     case 'schedule': return <ScheduleFields s={section} onChange={onChange} />
     case 'contact':  return <ContactFields s={section} onChange={onChange} />
     case 'places':   return <PlacesFields s={section} teamId={teamId} onChange={onChange} />
-    case 'features': return <FeaturesFields s={section} onChange={onChange} />
-    case 'cta_banner': return <CtaBannerFields s={section} onChange={onChange} />
-    case 'faq':      return <FaqFields s={section} onChange={onChange} />
+    // TEAM-ONLY FOR NOW, and only because nobody has done the org half yet.
+    // These four are purely presentational, so nothing about them is
+    // studio-specific the way pricing or schedule are — the org builder
+    // simply predates them. Offering them there means extending
+    // `OrgSiteSection`, `ORG_SECTION_LIBRARY` and `newOrgSection`, which is
+    // its own change; they are kept here so this merge preserves behaviour
+    // exactly rather than quietly widening it.
+    case 'features':    return <FeaturesFields s={section} onChange={onChange} />
+    case 'cta_banner':  return <CtaBannerFields s={section} onChange={onChange} />
+    case 'faq':         return <FaqFields s={section} onChange={onChange} />
     case 'testimonials': return <TestimonialsFields s={section} onChange={onChange} />
     default:         return null
   }
 }
-
-// ─── the item-list sections ──────────────────────────────────────────────────
 
 function FeaturesFields({ s, onChange }: { s: FeaturesSection; onChange: (p: Patch) => void }) {
   const t = useTranslations('Website')

@@ -376,6 +376,7 @@ function SlotBookingForm({
   onSubmittingChange,
   accentColor,
   hasAnyPrice,
+  settleAtStudio,
   benefitOnly,
   shopHref,
   priceAmount,
@@ -400,6 +401,9 @@ function SlotBookingForm({
   onSubmittingChange: (submitting: boolean) => void
   accentColor: string | null
   hasAnyPrice: boolean
+  /** The studio cannot take money online, so a priced length is booked here and
+   *  paid in person. Server-resolved (`listAvailability`) — never inferred. */
+  settleAtStudio: boolean
   /** This length is not sold individually (UX-70). Never true together with
    *  `hasAnyPrice`: the resolver reads the mode, not the leftover number. */
   benefitOnly: boolean
@@ -736,7 +740,11 @@ function SlotBookingForm({
    * rendered as "This slot is no longer available." — a false sentence and a
    * dead end for the studio's own subscribers.
    */
-  const owesPayment = hasAnyPrice && payNow != null
+  const owesPayment = hasAnyPrice && payNow != null && !settleAtStudio
+  /** There IS a price, and it is settled in person rather than here. Rendered
+   *  beside the figure so the visitor is not surprised at the door, and the
+   *  reason the Confirm button is not a Pay button. */
+  const paysAtStudio = hasAnyPrice && payNow != null && settleAtStudio
 
   /**
    * What every checkout call carries beyond the caller's identity.
@@ -1293,6 +1301,17 @@ function SlotBookingForm({
               meaningfully safer than an enabled one. */}
           {heldPending ? (
             <Skeleton className="h-6 w-44" />
+          ) : paysAtStudio && payNow != null ? (
+            /* THE PRICE IS REAL, THE TILL IS NOT HERE. The studio has no Stripe
+               account, so this length is booked now and paid in person. Saying
+               so on the same line as the figure is the whole point: the visitor
+               must not reach the door expecting to have paid already. */
+            <div className="flex flex-col gap-0.5">
+              <p className="text-base font-semibold">
+                {t('yourPrice', { price: formatCurrency(payNow, currency, locale) })}
+              </p>
+              <p className="text-xs text-muted-foreground">{t('payAtStudioNote')}</p>
+            </div>
           ) : owesPayment && payNow != null ? (
             <div className="flex items-baseline gap-2">
               {strikeBase != null && (
@@ -1781,6 +1800,10 @@ export default function AppointmentPicker({
   const showBranding = team.showBranding === true
 
   const [coaches, setCoaches] = useState<AvailCoach[]>([])
+  // Whether this studio can be paid ONLINE, answered by the server with the
+  // listing rather than guessed from the presence of a price. False until the
+  // load says otherwise — the safe direction is the ordinary paid door.
+  const [settleAtStudio, setSettleAtStudio] = useState(false)
   const [loading, setLoading] = useState(true)
   // Tracked separately from `coaches` — a failed load must never be mistaken for
   // the genuine "this coach has no open times" empty state (a coach would read
@@ -1945,7 +1968,7 @@ export default function AppointmentPicker({
       try {
         const availFn = httpsCallable<
           { teamId: string; days?: number; activityId?: string },
-          { coaches: AvailCoach[] }
+          { coaches: AvailCoach[]; settleAtStudio?: boolean }
         >(functions, 'listAvailability')
         const res = await availFn({
           teamId,
@@ -1955,6 +1978,7 @@ export default function AppointmentPicker({
         if (!alive) return
         const list = res.data.coaches ?? []
         setCoaches(list)
+        setSettleAtStudio(res.data.settleAtStudio === true)
         // Deep-link continuity: exactly one coach offers the preselected
         // activity — land straight on duration/day/time, no coach (or activity)
         // step shown. Decided here (not a separate effect) so there's no flash
@@ -2200,6 +2224,7 @@ export default function AppointmentPicker({
               onSubmittingChange={setBookSubmitting}
               accentColor={accentColor}
               hasAnyPrice={durationIsPriced(windowBooking)}
+              settleAtStudio={settleAtStudio}
               benefitOnly={windowBooking.benefitOnly}
               shopHref={publicHrefLocalized(locale, slug, 'shop', {
                 tab: 'subscriptions',

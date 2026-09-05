@@ -26,29 +26,24 @@ import { OrgProvider, useOrg } from '@/contexts/OrgContext'
 import { OrgRail } from '@/components/org/OrgRail'
 import { ChevronLeft } from 'lucide-react'
 import type { Route } from 'next'
-import { ORG_MANAGE_PATH, isOrgManageRoot, orgHref, orgItemForPath, orgRailSegment } from '@/lib/org-nav'
+import { ORG_MANAGE_PATH, isOrgManageRoot, orgHref, orgRailSegment } from '@/lib/org-nav'
 
-/**
- * The destination's own title.
+/*
+ * ── THE LAYOUT NO LONGER TITLES THE PAGE, AND MUST NOT AGAIN ────────────────
  *
- * The deleted tab strip carried a header, and almost no org page has an `<h1>`
- * of its own — so removing the strip without this would have left ten pages
- * untitled. It names the DESTINATION, not the organisation: which org you are
- * in is a property of the scope, said once and persistently by the sidebar's
- * indicator, and repeating it on every page is the noise the scope model exists
- * to remove.
+ * It used to, via an `OrgPageHeading` that read the catalogue and printed the
+ * destination's label unless the entry carried `ownsHeader: true`. The flag was
+ * the bug: it had to be REMEMBERED for every page that titled itself, it was set
+ * on five entries, and thirteen of the fourteen org pages title themselves. So
+ * eight pages rendered their name twice — a large heading from here and the
+ * page's own smaller one directly beneath it (Franco, 2026-08-28: "some pages
+ * still show some duplicated header").
+ *
+ * The default was simply the wrong way round, and a flag whose absence is
+ * invisible will keep being forgotten. Every page now owns its heading through
+ * the shared `PageHeader`, exactly as a studio's pages do — one `<h1>`, at one
+ * size, with the subtitle and the primary action the layout could never carry.
  */
-function OrgPageHeading({ pathname }: { pathname: string }) {
-  const t = useTranslations('Org')
-  const { affiliationTerm } = useOrg()
-  const item = orgItemForPath(pathname)
-  if (!item || item.ownsHeader) return null
-  const label =
-    item.dynamicLabel === 'affiliationTerm'
-      ? affiliationTerm
-      : t(item.labelKey as Parameters<typeof t>[0])
-  return <h1 className="mb-4 text-2xl font-semibold">{label}</h1>
-}
 
 function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNode }) {
   const t = useTranslations('Org')
@@ -79,12 +74,7 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
   // A sidebar row renders full-width, exactly as a studio's own pages do. Only
   // the rail destinations get the master-detail shell.
   if (!onRailRoute) {
-    return (
-      <>
-        <OrgPageHeading pathname={pathname} />
-        {children}
-      </>
-    )
+    return <>{children}</>
   }
 
   // `/manage` is the rail's own index, exactly as `/settings` is the studio's:
@@ -114,7 +104,6 @@ function OrgShell({ orgId, children }: { orgId: string; children: React.ReactNod
             {t('manageTitle')}
           </Link>
         )}
-        <OrgPageHeading pathname={pathname} />
         {children}
       </div>
     </div>

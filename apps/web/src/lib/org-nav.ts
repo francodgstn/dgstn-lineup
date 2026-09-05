@@ -37,8 +37,8 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { OrgRole } from '@linyup/shared'
 
-/** Where an org destination lives: a sidebar row, or a group in the rail. */
-export type OrgRailGroupKey = 'standards' | 'shared' | 'administration'
+/** Where an org destination lives: a sidebar row, or the rail's one group. */
+export type OrgRailGroupKey = 'general'
 
 export interface OrgNavItem {
   /** Stable id — React key, and the key the search keyword index is under. */
@@ -50,15 +50,6 @@ export interface OrgNavItem {
   icon: LucideIcon
   /** Which rail group it belongs to. Absent for the four sidebar rows. */
   group?: OrgRailGroupKey
-  /**
-   * The PAGE renders its own title, so the layout must not add a second one.
-   *
-   * Every org page used to be titled by the tab strip's header and almost none
-   * carried an `<h1>` of its own; deleting the strip would have left them
-   * untitled. The layout supplies the heading instead — except for the two that
-   * always had one, which say so here rather than being remembered.
-   */
-  ownsHeader?: boolean
   /**
    * Rendered with the tenant's own word for it rather than the static label —
    * an organisation renames "Affiliations" (`Organization.affiliation_term`),
@@ -77,10 +68,22 @@ export interface OrgNavItem {
 /**
  * THE SIDEBAR ROWS — what somebody opens while doing the organisation's work.
  *
- * Four, and the test for membership is "would a federation administrator open
- * this during a working day". Programme templates sits beside Events because it
- * is read while creating one; Website is authoring, exactly as a studio's
- * Website is a sidebar row rather than a setting.
+ * The test for membership is "would a federation administrator open this during
+ * a working day". Programme templates sits beside Events because it is read
+ * while creating one; Website is authoring, exactly as a studio's Website is a
+ * sidebar row rather than a setting.
+ *
+ * ── AFFILIATIONS AND PLACES WERE BEHIND THE RAIL, AND THAT WAS WRONG ────────
+ * Both are working destinations that a rail full of configuration was hiding
+ * (Franco, 2026-08-28). Affiliations is a ROSTER — the people the organisation
+ * has issued a licence, badge or membership to — which is daily work, not a
+ * setting; it now carries the vocabulary editors too, so the thing and the
+ * words for it are in one place instead of two. Places is a shared resource a
+ * studio books against, and it already rendered a full page with its own
+ * search and detail routes; it earns a row rather than a slot in a rail.
+ *
+ * What is left behind the rail is genuinely configurational, which is why it
+ * collapsed from three groups to one.
  */
 /**
  * THE SIDEBAR ROWS ARE NOT SORTED, and the rail below them is.
@@ -101,10 +104,6 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
     path: 'program-templates',
     labelKey: 'tabProgramTemplates',
     icon: ListTodo,
-    // The page renders a PageHeader with a subtitle the layout heading cannot
-    // carry, so it owned the title all along and the layout was printing a
-    // second copy of it verbatim above (Franco, 2026-08-28).
-    ownsHeader: true,
   },
   {
     // A CORE ORG FEATURE, not a setting (Franco, 2026-09-05).
@@ -121,7 +120,8 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
     icon: IdCard,
     dynamicLabel: 'affiliationTerm',
   },
-  { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe, ownsHeader: true },
+  { id: 'org-places', path: 'places', labelKey: 'tabPlaces', icon: MapPin },
+  { id: 'org-website', path: 'website', labelKey: 'tabWebsite', icon: Globe },
   // THE WAY IN TO THE RAIL, and the reason it is a row rather than a menu item.
   //
   // The rail rendered only on rail ROUTES, which is a chicken and egg: from
@@ -134,7 +134,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   // `/manage` is that place. It is also what makes the rail work on a phone,
   // where a rail is an INDEX rather than a column beside a detail pane — the
   // same shape `/settings` has.
-  { id: 'org-manage', path: 'manage', labelKey: 'manageTitle', icon: Settings2, ownsHeader: true },
+  { id: 'org-manage', path: 'manage', labelKey: 'manageTitle', icon: Settings2 },
 ]
 
 /**
@@ -178,14 +178,13 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
  * list; a way to get in touch, and an org feed, are named as later work.
  */
 export const ORG_STUDIO_NAV_ITEMS: OrgNavItem[] = [
-  { id: 'org-overview', path: 'overview', labelKey: 'navOverview', icon: Compass, ownsHeader: true },
+  { id: 'org-overview', path: 'overview', labelKey: 'navOverview', icon: Compass },
   { id: 'org-events', path: 'events', labelKey: 'tabEvents', icon: CalendarRange },
   {
     id: 'org-program-templates',
     path: 'program-templates',
     labelKey: 'tabProgramTemplates',
     icon: ListTodo,
-    ownsHeader: true,
   },
 ]
 
@@ -211,28 +210,29 @@ export function orgLandingPath(role: OrgRole | null): string {
 }
 
 /**
- * THE RAIL — everything configurational, grouped.
+ * THE RAIL — everything configurational, in ONE group.
  *
- * The grouping is not cosmetic. The first group is what an organisation IMPOSES
- * on its member studios, and it is already literally that in the data: an org's
- * `ranking_systems` override a studio's, and the affiliation types are the org's
- * to define. The second is what it LENDS them. The third is about the
- * organisation itself rather than about its studios.
+ * It used to carry three: what the organisation IMPOSES on its studios, what it
+ * LENDS them, and what is about the organisation itself. That grouping was true
+ * of the data and still wrong for the reader, because two of the three groups
+ * held one row each once Affiliations and Places moved to the sidebar — and a
+ * heading over a single row is a label pretending to be a category.
+ *
+ * So the remainder is one list (Franco, 2026-08-28). Ranking stays because it
+ * is a scale you set once and revisit rarely; the other four are the
+ * organisation's own administration.
  */
 export const ORG_RAIL_ITEMS: (OrgNavItem & { group: OrgRailGroupKey })[] = [
-  { id: 'org-ranking', path: 'ranking', labelKey: 'tabRanking', icon: Shield, group: 'standards' },
-  { id: 'org-places', path: 'places', labelKey: 'tabPlaces', icon: MapPin, group: 'shared', ownsHeader: true },
-  { id: 'org-members', path: 'members', labelKey: 'tabMembers', icon: Users, group: 'administration', adminOnly: true },
-  { id: 'org-plugins', path: 'plugins', labelKey: 'tabPlugins', icon: Blocks, group: 'administration', adminOnly: true },
-  { id: 'org-billing', path: 'billing', labelKey: 'tabBilling', icon: CreditCard, group: 'administration', adminOnly: true },
-  { id: 'org-settings', path: 'settings', labelKey: 'tabSettings', icon: Settings, group: 'administration', adminOnly: true },
+  { id: 'org-ranking', path: 'ranking', labelKey: 'tabRanking', icon: Shield, group: 'general' },
+  { id: 'org-members', path: 'members', labelKey: 'tabMembers', icon: Users, group: 'general', adminOnly: true },
+  { id: 'org-plugins', path: 'plugins', labelKey: 'tabPlugins', icon: Blocks, group: 'general', adminOnly: true },
+  { id: 'org-billing', path: 'billing', labelKey: 'tabBilling', icon: CreditCard, group: 'general', adminOnly: true },
+  { id: 'org-settings', path: 'settings', labelKey: 'tabSettings', icon: Settings, group: 'general', adminOnly: true },
 ]
 
 /** Group order in the rail, with the `Org` i18n key for each heading. */
 export const ORG_RAIL_GROUPS: { key: OrgRailGroupKey; labelKey: string }[] = [
-  { key: 'standards', labelKey: 'railGroupStandards' },
-  { key: 'shared', labelKey: 'railGroupShared' },
-  { key: 'administration', labelKey: 'railGroupAdministration' },
+  { key: 'general', labelKey: 'railGroupGeneral' },
 ]
 
 /** `/org/{orgId}/{path}` — the one place org hrefs are assembled. */
@@ -262,16 +262,4 @@ export function orgRailSegment(pathname: string): string | null {
 /** Is this the rail's own index — the org's answer to `/settings`? */
 export function isOrgManageRoot(pathname: string): boolean {
   return orgRailSegment(pathname) === ORG_MANAGE_PATH
-}
-
-/** The catalogue entry for a pathname, wherever it lives. */
-export function orgItemForPath(pathname: string): OrgNavItem | null {
-  const segment = pathname.match(/^\/org\/[^/]+\/([^/?#]+)/)?.[1]
-  if (!segment) return null
-  return (
-    ORG_NAV_ITEMS.find((i) => i.path === segment) ??
-    ORG_STUDIO_NAV_ITEMS.find((i) => i.path === segment) ??
-    ORG_RAIL_ITEMS.find((i) => i.path === segment) ??
-    null
-  )
 }

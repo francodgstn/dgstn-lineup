@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { isCheckinCompleted } from '@linyup/shared'
 
 // Table-driven tests for the ONE check-in completion predicate
@@ -169,5 +171,42 @@ describe('isCheckinCompleted — default arm (categories, then auto-confirm)', (
       checkinData: {},
       expected: true,
     },
+    {
+      // A DELIBERATE NARROWING, recorded here because it is a behaviour change.
+      //
+      // The rule used to live in core's `default` branch as a bare
+      // `Array.isArray(checkinData.categories)`, so it applied to ANY event type
+      // that happened to carry that key — a seminar with an empty `categories`
+      // array was held pending by the fighting cup's rule. The rules are keyed
+      // by event type now, so a plugin's rule reaches its own type and nothing
+      // else.
+      //
+      // Nothing writes `categories` outside the cup's own check-in form, so this
+      // is unreachable in practice; it is pinned so the narrowing is a decision
+      // somebody made rather than something that quietly stopped happening.
+      name: "one plugin's rule does not gate another type that carries its key",
+      eventType: 'seminar',
+      checkinData: { categories: [] },
+      expected: true,
+    },
   ])
+
+  it('the fighting-cup shape is no longer written into core', () => {
+    // The point of the move: `isCheckinCompleted` knew one tenant-specific
+    // plugin's payload. If `categories` reappears in that file, core has learned
+    // it again.
+    const src = readFileSync(
+      join(__dirname, '..', '..', '..', 'shared', 'src', 'utils', 'checkins.ts'),
+      'utf8'
+    )
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ 	]*\/\/.*$/gm, '')
+    assert.ok(
+      !code.includes('categories'),
+      'core reads a plugin payload key again — the rule belongs in PLUGIN_CHECKIN_COMPLETION'
+    )
+    assert.ok(
+      code.includes('PLUGIN_CHECKIN_COMPLETION'),
+      'the registry lookup is gone, so plugin rules reach nothing'
+    )
+  })
 })

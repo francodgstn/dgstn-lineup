@@ -133,15 +133,29 @@ fix is linking a real **test-mode** Connect account; the tooling already exists
 Until then the demo tenants show a free-only product, which is coherent but not
 what you would want to present.
 
-## 9. Org trials never expire
-**PARKED.** `handleTrialLifecycle` sweeps `TEAMS_COLLECTION` only, while
-`createOrganization` grants a 14-day trial that nothing ends. An unpaid org — and
-every studio it bills — sits on the top tier indefinitely. UX-35 removed the
-*accidental* sweep that used to catch member teams, so this is now the only thing
-between an unpaid org and unlimited access.
-**The decision:** what should a lapsed org trial do to its member teams? Free (like
-a team trial), a fresh Studio trial (like `removeTeamFromOrg` does), or read-only?
-Not guessed. *Meanwhile:* nothing expires, which is the pre-existing behaviour.
+## 9. Org trials never expire — RESOLVED, and this entry was stale
+**BUILT (UX-9), recorded here 2026-08-28.** The text below described the code as
+it was when the question was asked, and stayed on the board after the answer
+shipped — which is how a decision register misleads: a reader checking "do org
+trials expire?" found PARKED and believed it.
+
+`handleTrialLifecycle` has a **phase 2** that queries `ORGANIZATIONS_COLLECTION`
+for `plan_status == 'trial'` past `trial_ends_at` and calls `lapseOrganization`,
+which deactivates the org's installs, unpublishes its site, moves every active
+member studio to Free through `downgradeTeamToFree` and severs `org_id`. The
+decision the entry was waiting for — what a lapse does to member teams — was
+answered as **Free**, the same as a team trial.
+
+Both phases skip `tenantExemptFromTrialSweep` (internal / pilot / comped), and
+`lapseOrganization` refuses an exempt org outright.
+
+*Original text, for the record:* `handleTrialLifecycle` sweeps `TEAMS_COLLECTION`
+only, while `createOrganization` grants a 14-day trial that nothing ends. An
+unpaid org — and every studio it bills — sits on the top tier indefinitely.
+UX-35 removed the *accidental* sweep that used to catch member teams, so this is
+now the only thing between an unpaid org and unlimited access. The decision: what
+should a lapsed org trial do to its member teams? Free (like a team trial), a
+fresh Studio trial (like `removeTeamFromOrg` does), or read-only? Not guessed.
 
 ## 10. An org lapse mounts features it no longer pays for
 **PARKED.** On `past_due`/`cancelled` the webhook propagates `plan_status` to member

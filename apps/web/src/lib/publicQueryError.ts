@@ -20,10 +20,13 @@
 //      Stated as an absolute because the exceptions people reach for are not
 //      exceptions to THIS rule, they are exceptions to rule 2 — "the visitor
 //      must not see it" is an argument for silence on screen, never in the log.
-//      One genuine gap is outstanding rather than pretended away:
-//      `TrialBookingForm`'s failed session read still renders as "no trial
-//      sessions", recorded in docs/open-defects.md because closing it means
-//      threading an error state through the whole trial flow.
+//      It now has NO admitted exception. The one it carried —
+//      `TrialBookingForm`'s failed session read rendering as "no trial
+//      sessions" — turned out to be unreachable: `trial-booking/page.tsx` has
+//      redirected to `/booking` since the two flows merged, and nothing
+//      imported the component. It was deleted on 2026-08-28 rather than having
+//      an error state threaded through it, which is what the defect record had
+//      assumed the fix would cost.
 //   2. WHERE THE VISITOR CAN TELL THE DIFFERENCE, SHOW THEM. A list that could
 //      legitimately be empty must not render its empty state after a failed
 //      fetch; render `QueryErrorState` (components/ui/query-error) instead, with

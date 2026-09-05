@@ -59,4 +59,19 @@ export interface ListAvailabilityCoach {
 
 export interface ListAvailabilityResult {
   coaches: ListAvailabilityCoach[]
+  /**
+   * The studio cannot be paid ONLINE, so a priced length is booked here and
+   * settled at the door.
+   *
+   * A TEAM-level fact, not a per-duration one, and computed on the server
+   * (`appointments/window.ts`) rather than in each client so the web picker and
+   * the member app cannot disagree about which door a price opens.
+   *
+   * It exists because the fail-closed reading DROPPED a priced duration when the
+   * studio had no chargeable Connect account, and a visitor who reached one
+   * anyway was told "This slot is no longer available" — false, and it cost the
+   * studio the appointment. The length stays on the menu; this says where the
+   * money changes hands (Franco, 2026-08-28).
+   */
+  settleAtStudio: boolean
 }
