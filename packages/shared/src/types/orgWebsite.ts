@@ -6,6 +6,10 @@ import type {
   ContentSection,
   GallerySection,
   ContactSection,
+  FeaturesSection,
+  CtaBannerSection,
+  FaqSection,
+  TestimonialsSection,
   SiteMenuItem,
   SiteI18nManifest,
 } from './website'
@@ -74,12 +78,26 @@ export interface CoachesSection extends OrgSectionBase {
 }
 
 /** The org site section union: reused presentational sections + org aggregates.
- *  NO pricing / activities / schedule / places (team-scoped commerce). */
+ *
+ *  NO pricing / activities / schedule / places — those are team-scoped commerce
+ *  and an organisation has nothing to put in them.
+ *
+ *  Features, CTA banner, FAQ and testimonials are NOT commerce, and their
+ *  absence here was an oversight rather than a decision: they were added to the
+ *  team library after this union was written, and nothing pulled them across. A
+ *  federation has as much use for a highlights row or an FAQ as a studio does —
+ *  arguably more, since it is explaining itself to people who have never heard
+ *  of it. `SectionBlock` could already render all four for either tenant; only
+ *  the authoring side was missing (Franco, 2026-09-05). */
 export type OrgSiteSection =
   | HeroSection
   | ContentSection
   | GallerySection
   | ContactSection
+  | FeaturesSection
+  | CtaBannerSection
+  | FaqSection
+  | TestimonialsSection
   | ClubsSection
   | LocationsSection
   | CoachesSection

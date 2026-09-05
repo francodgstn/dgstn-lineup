@@ -5,10 +5,15 @@ import { newSectionId } from '@/plugins/website/defaults'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 
 // ─── section library (for the "Add section" menu) ──────────────────────────────
-// Org sites only ever offer presentational sections (hero/content/gallery/contact,
-// shared with the team site) plus the three org-only aggregate sections
-// (clubs/locations/coaches). NO pricing/activities/schedule/places — those are
-// team-scoped commerce sections that don't apply at the org level.
+// Org sites offer the PRESENTATIONAL sections — hero, content, gallery, features,
+// CTA banner, FAQ, testimonials, contact, all shared with the team site — plus
+// the three org-only aggregates (clubs / locations / coaches).
+//
+// NO pricing / activities / schedule / places: those are team-scoped commerce and
+// an organisation has nothing to put in them. That was always the rule, but four
+// presentational sections were missing anyway — they were added to the team
+// library after this file was written and nobody pulled them across, so a
+// federation could not put an FAQ on its own site (Franco, 2026-09-05).
 
 export const ORG_SECTION_LIBRARY: {
   type: OrgSiteSectionType
@@ -27,6 +32,15 @@ export const ORG_SECTION_LIBRARY: {
     icon: 'MapPin',
   },
   { type: 'coaches', labelKey: 'sectionCoaches', descKey: 'sectionCoachesDesc', icon: 'UserCog' },
+  { type: 'features', labelKey: 'sectionFeatures', descKey: 'sectionFeaturesDesc', icon: 'Sparkles' },
+  { type: 'cta_banner', labelKey: 'sectionCta', descKey: 'sectionCtaDesc', icon: 'Megaphone' },
+  { type: 'faq', labelKey: 'sectionFaq', descKey: 'sectionFaqDesc', icon: 'HelpCircle' },
+  {
+    type: 'testimonials',
+    labelKey: 'sectionTestimonials',
+    descKey: 'sectionTestimonialsDesc',
+    icon: 'Quote',
+  },
   { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'Mail' },
 ]
 
@@ -43,6 +57,27 @@ export function newOrgSection(type: OrgSiteSectionType): OrgSiteSection {
       return { id, type: 'content', body: '', imageSide: 'left' }
     case 'gallery':
       return { id, type, images: [], columns: 3 }
+    case 'features':
+      return {
+        id,
+        type,
+        columns: 3,
+        items: [
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+        ],
+      }
+    case 'cta_banner':
+      return { id, type, heading: 'Find a club near you', text: 'Our studios are open to new members.' }
+    case 'faq':
+      return { id, type, items: [{ question: 'A question?', answer: 'The answer.' }] }
+    case 'testimonials':
+      return {
+        id,
+        type,
+        items: [{ name: 'Alex', activity: 'Member', feedback: 'Best decision I made.' }],
+      }
     case 'clubs':
       return { id, type, columns: 3, showAddress: true }
     case 'locations':

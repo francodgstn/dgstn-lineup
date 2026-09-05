@@ -28,9 +28,13 @@ import { newSectionId } from '@/plugins/website/defaults'
 import {
   ContactFields,
   ContentFields,
+  CtaBannerFields,
+  FaqFields,
+  FeaturesFields,
   Field,
   GalleryFields,
   HeroFields,
+  TestimonialsFields,
   type SiteEditorTenant,
 } from '@/components/website/SiteSectionFields'
 
@@ -279,6 +283,24 @@ export function OrgSectionEditor({
       return <GalleryFields s={section} tenant={tenant} onChange={onChange} />
     case 'contact':
       return <ContactFields s={section} onChange={onChange} />
+    // The presentational four, from the shared module — the same components the
+    // team builder mounts. `OrgCtaEditor` is passed in for the same reason the
+    // hero above takes it: an org's call to action has no booking page to point
+    // at, so the TARGETS differ while the fields do not.
+    case 'features':
+      return <FeaturesFields s={section} onChange={onChange} />
+    case 'cta_banner':
+      return (
+        <CtaBannerFields
+          s={section}
+          onChange={onChange}
+          cta={<OrgCtaEditor cta={section.cta} onChange={onChange} />}
+        />
+      )
+    case 'faq':
+      return <FaqFields s={section} onChange={onChange} />
+    case 'testimonials':
+      return <TestimonialsFields s={section} onChange={onChange} />
     case 'clubs':
       return <ClubsFields s={section} onChange={onChange} />
     case 'locations':

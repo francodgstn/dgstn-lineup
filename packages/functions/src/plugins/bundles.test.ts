@@ -146,6 +146,9 @@ describe('the catalogue census', () => {
       'describes a member event type without offering an install; it credits the CONTAINER',
     'app/[locale]/(auth)/events/[id]/page.tsx':
       'resolves the plugin that owns an event type, installed or not',
+    'app/[locale]/(auth)/org/[orgId]/events/[id]/page.tsx':
+      'the ORG twin of the line above — same resolution by event type, for events the ' +
+      'organisation owns. Offers no install; org installs are the plugins page.',
     'components/events/CheckinPanel.tsx':
       'resolves the plugin providing a check-in form or exports for an event type',
     'hooks/useEventTypes.ts':
