@@ -1,6 +1,6 @@
 import type { Firestore } from 'firebase-admin/firestore'
 import type { ReadonlyFirestore } from './config'
-import { sourceDb, targetDb } from './config'
+import { sourceDb, targetDb, EXCLUDED_SOURCE_TEAMS } from './config'
 
 interface CountResult { collection: string; src: number; tgt: number; ok: boolean }
 
@@ -51,12 +51,20 @@ export async function verify(teamIds: string[], sampled = false): Promise<void> 
     // Every other row already survives sampling — the team-scoped ones are
     // scoped to the same ids, and `users` and `referrals` are migrated whole
     // either way.
+    // AND THE EXCLUDED CLUBS ARE NOT MISSING DATA. `EXCLUDED_SOURCE_TEAMS` is
+    // deliberately not copied, so the raw source count is higher than the target
+    // by exactly that many and the row would read as a failed migration forever.
+    // Subtracted rather than special-cased per collection: the excluded club's
+    // contacts and sessions are already absent from `countScoped`, which walks
+    // the MIGRATED team ids.
     const s =
       sampled && col === 'teams'
         ? teamIds.length
         : teamScoped.includes(col)
           ? await countScoped(col)
-          : await countCollection(src, col)
+          : col === 'teams'
+            ? (await countCollection(src, col)) - EXCLUDED_SOURCE_TEAMS.length
+            : await countCollection(src, col)
     const t = await countCollection(tgt, col)
     results.push({ collection: col, src: s, tgt: t, ok: col === 'users' ? true : t >= s })
   }

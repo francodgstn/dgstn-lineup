@@ -46,6 +46,26 @@ const HMD_BELT_LEVELS = [
  * exists rather than write a wrong document.
  */
 export const EXPECTED_HMD_MODULES = ['hmd-fighting-cup', 'hmd-belts'] as const
+
+/**
+ * Source clubs the migration deliberately does NOT copy.
+ *
+ * By ID, not by name: "Test Team" is a name a real club could plausibly take,
+ * and a name-matched exclusion would silently drop it. The id is exact and the
+ * migration preserves ids, so the same constant answers for source and target.
+ *
+ * `jtTJcfqxDkvjfDQz9JTM` — "This is a dummy team to be used only for demo and
+ * testing", per its own description. Franco's scratch club in hmd-lineup
+ * (2026-09-05: "we can actually ignore completely that one"). It carried 3
+ * contacts and 176 sessions of manual-test data into staging, which is noise in
+ * every count anyone reads and a studio nobody can explain on the roster.
+ *
+ * An excluded club is skipped WHOLE — no team document, and therefore no
+ * contacts, sessions or check-ins either, because every downstream pass is
+ * scoped by the ids pass 2 returns.
+ */
+export const EXCLUDED_SOURCE_TEAMS: string[] = ['jtTJcfqxDkvjfDQz9JTM']
+
 // `hmd-belts` joined the bundle on 2026-09-05 and this copy did not, which is
 // the drift direction the comment above does NOT cover: an EXTRA member the
 // list does not know about is not warned about — it is simply never checked, so
