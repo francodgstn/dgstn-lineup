@@ -3240,7 +3240,21 @@
     "language": "Lingua",
     "languageHint": "La lingua in cui sono scritti i contenuti e le comunicazioni di questa organizzazione — inviti, avvisi e contenuti condivisi. La lingua della tua dashboard viene scelta separatamente.",
     "pageTitle": "Impostazioni",
-    "pageSubtitle": "Dati, terminologia e indirizzo mittente dell'organizzazione."
+    "pageSubtitle": "Dati, terminologia e indirizzo mittente dell'organizzazione.",
+    "contactTitle": "Sede e contatti",
+    "contactDescription": "Dove ha sede l'organizzazione e come raggiungerla.",
+    "contactHint": "Mostrati sul sito dell'organizzazione, dove la sezione contatti li richiede. Un campo vuoto non compare.",
+    "hqStreetLabel": "Via",
+    "hqNumberLabel": "Numero",
+    "hqPostalLabel": "CAP",
+    "hqLocalityLabel": "Località",
+    "contactEmailLabel": "Email di contatto",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Telefono di contatto",
+    "contactWebsiteLabel": "Sito web",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Contatti salvati",
+    "contactError": "Impossibile salvare i contatti"
   },
   "OrgInvite": {
     "title": "Invito organizzazione",

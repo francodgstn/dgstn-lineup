@@ -279,7 +279,7 @@ export default function OrgWebsiteBuilderPage() {
       toast.error(t('limitSections', { max: MAX_SECTIONS }))
       return
     }
-    const sec = newOrgSection(type)
+    const sec = newOrgSection(type, org)
     mutate((d) => ({ ...d, sections: [...d.sections, sec] }))
     setOpenId(sec.id)
     setTab('sections')

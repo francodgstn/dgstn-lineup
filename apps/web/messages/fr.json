@@ -3240,7 +3240,21 @@
     "language": "Langue",
     "languageHint": "La langue dans laquelle le contenu et les communications de cette organisation sont rédigés — invitations, avis et contenu partagé. La langue de votre propre tableau de bord est choisie séparément.",
     "pageTitle": "Paramètres",
-    "pageSubtitle": "Informations, terminologie et adresse d'expéditeur de l'organisation."
+    "pageSubtitle": "Informations, terminologie et adresse d'expéditeur de l'organisation.",
+    "contactTitle": "Siège et contact",
+    "contactDescription": "Où l'organisation est établie et comment la joindre.",
+    "contactHint": "Affiché sur le site de l'organisation, là où la section contact les demande. Un champ vide n'apparaît pas.",
+    "hqStreetLabel": "Rue",
+    "hqNumberLabel": "Numéro",
+    "hqPostalLabel": "Code postal",
+    "hqLocalityLabel": "Localité",
+    "contactEmailLabel": "E-mail de contact",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Téléphone de contact",
+    "contactWebsiteLabel": "Site web",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Coordonnées enregistrées",
+    "contactError": "Impossible d'enregistrer les coordonnées"
   },
   "OrgInvite": {
     "title": "Invitation d'organisation",

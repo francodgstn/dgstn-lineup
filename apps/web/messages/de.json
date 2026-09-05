@@ -3240,7 +3240,21 @@
     "language": "Sprache",
     "languageHint": "Die Sprache, in der die Inhalte und Mitteilungen dieser Organisation verfasst werden – Einladungen, Hinweise und geteilte Inhalte. Die Sprache Ihres eigenen Dashboards wird separat gewählt.",
     "pageTitle": "Einstellungen",
-    "pageSubtitle": "Angaben, Begriffe und Absenderadresse der Organisation."
+    "pageSubtitle": "Angaben, Begriffe und Absenderadresse der Organisation.",
+    "contactTitle": "Hauptsitz und Kontakt",
+    "contactDescription": "Wo die Organisation ihren Sitz hat und wie man sie erreicht.",
+    "contactHint": "Erscheint auf der Website der Organisation, wo der Kontaktbereich danach fragt. Leere Felder werden nicht angezeigt.",
+    "hqStreetLabel": "Strasse",
+    "hqNumberLabel": "Nummer",
+    "hqPostalLabel": "PLZ",
+    "hqLocalityLabel": "Ort",
+    "contactEmailLabel": "Kontakt-E-Mail",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Kontakttelefon",
+    "contactWebsiteLabel": "Website",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Kontaktdaten gespeichert",
+    "contactError": "Kontaktdaten konnten nicht gespeichert werden"
   },
   "OrgInvite": {
     "title": "Organisationseinladung",

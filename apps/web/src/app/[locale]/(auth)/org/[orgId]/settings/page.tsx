@@ -1,6 +1,7 @@
 'use client'
 
 import { PageHeader } from '@/components/layout/PageHeader'
+import { OrgContactDetailsCard } from '@/components/org/OrgContactDetailsCard'
 import type { Route } from 'next'
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
@@ -587,6 +588,7 @@ export default function OrgSettingsPage() {
         </CardContent>
       </Card>
 
+      <OrgContactDetailsCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={showToast} />
       <OrgSocialLinksCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={showToast} />
 
       <OrgEmailSenderCard orgId={orgId} isAdmin={isAdmin} />

@@ -1,4 +1,10 @@
-import type { OrgSiteSection, OrgSiteSectionType, OrgSiteDraft, SiteMeta } from '@linyup/shared'
+import type {
+  OrgSiteSection,
+  OrgSiteSectionType,
+  OrgSiteDraft,
+  SiteMeta,
+  ContactAddress,
+} from '@linyup/shared'
 // Client-only unique id generator — shared verbatim with the team site builder
 // (React key + image path segment + anchor). Not org/team-specific.
 import { newSectionId } from '@/plugins/website/defaults'
@@ -44,7 +50,21 @@ export const ORG_SECTION_LIBRARY: {
   { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'Mail' },
 ]
 
-export function newOrgSection(type: OrgSiteSectionType): OrgSiteSection {
+/**
+ * A new section, with the organisation's own details already in it where that
+ * saves retyping.
+ *
+ * Only the CONTACT section takes them, and only as a starting value: the
+ * section owns its text from then on, exactly as a team's does, so an org can
+ * publish a different address on its site from the one it records in settings
+ * without the two fighting. The alternative — resolving the org document at
+ * RENDER time — would make the settings page a second, invisible editor of the
+ * published site.
+ */
+export function newOrgSection(
+  type: OrgSiteSectionType,
+  org?: { headquarters?: ContactAddress; contact_email?: string; contact_phone?: string } | null
+): OrgSiteSection {
   const id = newSectionId()
   switch (type) {
     case 'hero':
@@ -84,8 +104,23 @@ export function newOrgSection(type: OrgSiteSectionType): OrgSiteSection {
       return { id, type, columns: 3 }
     case 'coaches':
       return { id, type, columns: 3 }
-    case 'contact':
-      return { id, type, showSocial: true }
+    case 'contact': {
+      const hq = org?.headquarters
+      const address = [
+        [hq?.route, hq?.street_number].filter(Boolean).join(' '),
+        [hq?.postal_code, hq?.locality].filter(Boolean).join(' '),
+      ]
+        .filter(Boolean)
+        .join(', ')
+      return {
+        id,
+        type,
+        showSocial: true,
+        ...(address ? { address } : {}),
+        ...(org?.contact_phone ? { phone: org.contact_phone } : {}),
+        ...(org?.contact_email ? { email: org.contact_email } : {}),
+      }
+    }
   }
 }
 
