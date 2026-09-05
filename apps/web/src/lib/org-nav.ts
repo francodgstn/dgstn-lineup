@@ -224,6 +224,18 @@ export function orgLandingPath(role: OrgRole | null): string {
  */
 export const ORG_RAIL_ITEMS: (OrgNavItem & { group: OrgRailGroupKey })[] = [
   { id: 'org-ranking', path: 'ranking', labelKey: 'tabRanking', icon: Shield, group: 'general' },
+  // WHAT AN AFFILIATION IS, as opposed to WHO HOLDS ONE. The roster is a
+  // sidebar row (an organiser opens it during a working day); its vocabulary and
+  // policy are configuration, so they belong in the rail — reachable from the
+  // roster through a related link rather than mixed into it.
+  {
+    id: 'org-affiliation-settings',
+    path: 'affiliation-settings',
+    labelKey: 'affiliationSettings',
+    icon: IdCard,
+    group: 'general',
+    adminOnly: true,
+  },
   { id: 'org-members', path: 'members', labelKey: 'tabMembers', icon: Users, group: 'general', adminOnly: true },
   { id: 'org-plugins', path: 'plugins', labelKey: 'tabPlugins', icon: Blocks, group: 'general', adminOnly: true },
   { id: 'org-billing', path: 'billing', labelKey: 'tabBilling', icon: CreditCard, group: 'general', adminOnly: true },

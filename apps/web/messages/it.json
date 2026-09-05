@@ -2995,7 +2995,7 @@
     "tabAffiliations": "Affiliazioni",
     "tabMembers": "Membri",
     "tabBilling": "Fatturazione",
-    "tabSettings": "Impostazioni",
+    "tabSettings": "Generale",
     "backToDashboard": "Torna alla dashboard",
     "pluginsTitle": "Plugin dell'organizzazione",
     "pluginsSubtitle": "Installa i plugin una volta e diventano disponibili per tutti gli studi dell'organizzazione.",
@@ -3032,7 +3032,8 @@
     "railGroupGeneral": "Generale",
     "railGroupStandards": "Standard che definisci",
     "railGroupShared": "Risorse condivise",
-    "railGroupAdministration": "Amministrazione"
+    "railGroupAdministration": "Amministrazione",
+    "affiliationSettings": "Impostazioni di affiliazione"
   },
   "OrgTeams": {
     "title": "Studi",
@@ -7956,5 +7957,9 @@
     "week": "7 giorni",
     "month": "30 giorni",
     "note": "Su {members} membri. Conta chi ha aperto l'app o effettuato l'accesso alla tua pagina pubblica — non cosa ha fatto."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Impostazioni di affiliazione",
+    "pageSubtitle": "Come si chiama un'affiliazione, gli stati e i tipi che può assumere e se un club può definire i propri."
   }
 }

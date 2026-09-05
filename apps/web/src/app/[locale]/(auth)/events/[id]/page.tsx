@@ -1,14 +1,11 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useRegisterTab } from '@/contexts/OpenTabsContext'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  doc, getDoc, collection, getDocs, query, orderBy,
-  updateDoc, serverTimestamp, Timestamp,
-} from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -52,23 +49,6 @@ import { Tip } from '@/components/ui/tip'
 
 // ─── subcollection types ──────────────────────────────────────────────────────
 
-/**
- * An attendee / invitee name, linked to the person's record — the same fix
- * UX-63 made on /bookings and UX-91 on the session rosters. Both rows already
- * hold the contact id; a row without one stays plain text rather than linking
- * to nothing. (The org-scoped event page deliberately does NOT link: the person
- * there belongs to a member team and /contacts/{id} resolves in the current
- * tenant — see UX-98.)
- */
-function EventPersonName({ contactId, children }: { contactId?: string; children: ReactNode }) {
-  if (!contactId) return <p className="text-sm font-medium">{children}</p>
-  return (
-    <Link href={`/contacts/${contactId}` as Route} className="text-sm font-medium hover:underline">
-      {children}
-    </Link>
-  )
-}
-
 // ─── edit schema ──────────────────────────────────────────────────────────────
 
 const editSchema = z
@@ -101,10 +81,6 @@ function formatTime(ts?: { toDate(): Date } | null) {
   if (!ts) return ''
   return ts.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
-function formatDateTime(ts?: { toDate(): Date } | null) {
-  if (!ts) return '—'
-  return ts.toDate().toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
 function eventDuration(e: Event): string {
   if (!e.start || !e.end) return ''
   const ms = (e.end as { toDate(): Date }).toDate().getTime() - (e.start as { toDate(): Date }).toDate().getTime()
@@ -124,15 +100,6 @@ function statusVariant(status?: string): 'default' | 'secondary' | 'destructive'
     default: return 'secondary'
   }
 }
-function invStatusVariant(status?: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'responded': return 'default'
-    case 'opened': return 'secondary'
-    case 'declined': return 'destructive'
-    default: return 'outline'
-  }
-}
-
 // ─── edit dialog ──────────────────────────────────────────────────────────────
 
 function EditEventDialog({

@@ -1,8 +1,9 @@
 'use client'
 
 import { PageHeader } from '@/components/layout/PageHeader'
+import type { Route } from 'next'
 import { useState, useEffect } from 'react'
-import { useTranslations, useLocale } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { useParams } from 'next/navigation'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -14,13 +15,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Settings, ChevronDown, Languages, Lock, Mail, Copy, CheckCircle2, Clock, XCircle, Share2 } from 'lucide-react'
-import { deleteField } from 'firebase/firestore'
+import { Settings, Mail, Copy, CheckCircle2, Clock, XCircle, Share2 } from 'lucide-react'
 import { ORGANIZATIONS_COLLECTION } from '@linyup/shared'
 import type { Organization } from '@linyup/shared'
 import { useEmailSenderSettings } from '@/hooks/useEmailSenderSettings'
@@ -40,279 +39,6 @@ const ORG_LANGUAGES = [
 
 
 // ─── terminology card ─────────────────────────────────────────────────────────
-
-const LOCALES: { key: 'en' | 'de' | 'fr' | 'it'; flag: string; label: string }[] = [
-  { key: 'en', flag: '🇬🇧', label: 'EN' },
-  { key: 'de', flag: '🇩🇪', label: 'DE' },
-  { key: 'fr', flag: '🇫🇷', label: 'FR' },
-  { key: 'it', flag: '🇮🇹', label: 'IT' },
-]
-
-// Common, fully translated affiliation terms offered as one-click presets. The
-// dropdown shows each in the admin's own language; picking one stores all four.
-type TermPresetKey = 'membership' | 'affiliation' | 'license' | 'subscription' | 'pass'
-const AFFILIATION_TERM_PRESETS: Record<TermPresetKey, Record<'en' | 'de' | 'fr' | 'it', string>> = {
-  membership: { en: 'Membership', de: 'Mitgliedschaft', fr: 'Adhésion', it: 'Iscrizione' },
-  affiliation: { en: 'Affiliation', de: 'Zugehörigkeit', fr: 'Affiliation', it: 'Affiliazione' },
-  license: { en: 'License', de: 'Lizenz', fr: 'Licence', it: 'Licenza' },
-  subscription: { en: 'Subscription', de: 'Abonnement', fr: 'Abonnement', it: 'Abbonamento' },
-  pass: { en: 'Pass', de: 'Pass', fr: 'Pass', it: 'Pass' },
-}
-const TERM_PRESET_KEYS: TermPresetKey[] = ['membership', 'affiliation', 'license', 'subscription', 'pass']
-
-// Does a saved term map exactly equal one of the presets? (so editing re-selects it)
-function detectTermPreset(m: Partial<Record<string, string>>): TermPresetKey | null {
-  for (const k of TERM_PRESET_KEYS) {
-    const dict = AFFILIATION_TERM_PRESETS[k]
-    if (LOCALES.every(({ key }) => (m[key] ?? '') === dict[key])) return k
-  }
-  return null
-}
-
-function TerminologyCard({
-  orgId,
-  org,
-  isAdmin,
-  onSaved,
-}: {
-  orgId: string
-  org: Organization | null
-  isAdmin: boolean
-  onSaved: (msg: string) => void
-}) {
-  const t = useTranslations('OrgSettings')
-  const locale = useLocale()
-  const qc = useQueryClient()
-
-  // '' = default (cleared), a preset key, or 'custom'.
-  const [preset, setPreset] = useState<TermPresetKey | 'custom' | ''>('')
-  const [def, setDef] = useState('') // custom default term (used for every language)
-  const [translations, setTranslations] = useState<Partial<Record<'en' | 'de' | 'fr' | 'it', string>>>({})
-  const [showTranslations, setShowTranslations] = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    const m = org?.affiliation_term ?? {}
-    const detected = detectTermPreset(m)
-    if (detected) {
-      setPreset(detected)
-      setDef('')
-      setTranslations({})
-      setShowTranslations(false)
-    } else if (Object.keys(m).length > 0) {
-      const d = m.en ?? Object.values(m).find((v) => v && v.trim()) ?? ''
-      const overrides: Partial<Record<'en' | 'de' | 'fr' | 'it', string>> = {}
-      for (const { key } of LOCALES) if (m[key] && m[key] !== d) overrides[key] = m[key]!
-      setPreset('custom')
-      setDef(d)
-      setTranslations(overrides)
-      setShowTranslations(Object.keys(overrides).length > 0)
-    } else {
-      setPreset('')
-      setDef('')
-      setTranslations({})
-      setShowTranslations(false)
-    }
-  }, [org])
-
-  const isCustom = preset === 'custom'
-  const presetLabel = (k: TermPresetKey) =>
-    AFFILIATION_TERM_PRESETS[k][locale as 'en'] ?? AFFILIATION_TERM_PRESETS[k].en
-
-  function onPresetChange(p: TermPresetKey | 'custom' | '') {
-    setPreset(p)
-    if (p === 'custom') {
-      // Seed the default with the current resolved term so the user can tweak it.
-      if (!def.trim()) {
-        const current = LOCALES.map(({ key }) => org?.affiliation_term?.[key]).find((v) => v && v.trim())
-        setDef(current ?? '')
-      }
-    } else {
-      setTranslations({})
-      setShowTranslations(false)
-    }
-  }
-
-  function updateTranslation(loc: 'en' | 'de' | 'fr' | 'it', value: string) {
-    setTranslations((prev) => ({ ...prev, [loc]: value }))
-  }
-
-  async function handleSave() {
-    setSaving(true)
-    try {
-      let value: Partial<Record<string, string>> | ReturnType<typeof deleteField>
-      if (preset === '') {
-        value = deleteField()
-      } else if (preset !== 'custom') {
-        value = { ...AFFILIATION_TERM_PRESETS[preset] }
-      } else {
-        const d = def.trim()
-        if (!d) {
-          setSaving(false)
-          return
-        }
-        // Every language gets its override or the default — so one term is enough.
-        const map: Partial<Record<string, string>> = {}
-        for (const { key } of LOCALES) map[key] = translations[key]?.trim() || d
-        value = map
-      }
-      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { affiliation_term: value })
-      qc.invalidateQueries({ queryKey: ['org', orgId] })
-      qc.invalidateQueries({ queryKey: ['org-membership-term'] })
-      onSaved(t('terminologySaveSuccess'))
-    } catch {
-      onSaved(t('terminologySaveError'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Languages className="h-4 w-4" />
-          {t('terminologyTitle')}
-        </CardTitle>
-        <CardDescription>{t('terminologyDescription')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label>{t('terminologyTermLabel')}</Label>
-          <Select
-            value={preset}
-            onValueChange={(v) => onPresetChange(v as TermPresetKey | 'custom' | '')}
-            disabled={!isAdmin}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={t('terminologyPresetDefault')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">{t('terminologyPresetDefault')}</SelectItem>
-              {TERM_PRESET_KEYS.map((k) => (
-                <SelectItem key={k} value={k}>{presetLabel(k)}</SelectItem>
-              ))}
-              <SelectItem value="custom">{t('terminologyPresetCustom')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {isCustom && (
-          <div className="space-y-2">
-            <div className="space-y-1.5">
-              <Label>{t('terminologyDefaultLabel')}</Label>
-              <Input
-                value={def}
-                onChange={(e) => setDef(e.target.value)}
-                placeholder="Affiliation"
-                maxLength={30}
-                disabled={!isAdmin}
-              />
-              <p className="text-xs text-muted-foreground">{t('terminologyDefaultHint')}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowTranslations((v) => !v)}
-              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showTranslations ? '' : '-rotate-90'}`} />
-              {t('terminologyAddTranslations')}
-            </button>
-            {showTranslations && (
-              <div className="space-y-2 rounded-lg border p-3">
-                {LOCALES.map(({ key, flag, label }) => (
-                  <div key={key} className="grid grid-cols-[3rem_1fr] items-center gap-2">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <span>{flag}</span>
-                      <span>{label}</span>
-                    </span>
-                    <Input
-                      value={translations[key] ?? ''}
-                      onChange={(e) => updateTranslation(key, e.target.value)}
-                      placeholder={def || 'Affiliation'}
-                      maxLength={30}
-                      disabled={!isAdmin}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <p className="text-xs text-muted-foreground">{t('affiliationTermHint')}</p>
-        {isAdmin && (
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? '…' : t('saveButton')}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── membership lock card ─────────────────────────────────────────────────────
-
-function MembershipLockCard({
-  orgId,
-  org,
-  isAdmin,
-  onSaved,
-}: {
-  orgId: string
-  org: Organization | null
-  isAdmin: boolean
-  onSaved: (msg: string, type?: 'success' | 'error') => void
-}) {
-  const t = useTranslations('OrgSettings')
-  const qc = useQueryClient()
-  const [saving, setSaving] = useState(false)
-  const locked = org?.lock_affiliation ?? false
-
-  async function handleToggle(next: boolean) {
-    setSaving(true)
-    try {
-      await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, orgId), { lock_affiliation: next })
-      qc.invalidateQueries({ queryKey: ['org', orgId] })
-      onSaved(t('lockAffiliationSaved'))
-    } catch {
-      onSaved(t('lockAffiliationError'), 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (!isAdmin) return null
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Lock className="h-4 w-4" />
-          {t('lockAffiliationTitle')}
-        </CardTitle>
-        <CardDescription>{t('lockAffiliationDescription')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">
-            {locked ? t('lockAffiliationEnabled') : t('lockAffiliationDisabled')}
-          </p>
-          <Switch
-            checked={locked}
-            onCheckedChange={handleToggle}
-            disabled={saving}
-            aria-label={t('lockAffiliationTitle')}
-          />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-
-// ─── org social links card ────────────────────────────────────────────────────
 
 /**
  * The organisation's own social profiles.
@@ -732,6 +458,7 @@ function OrgEmailSenderCard({ orgId, isAdmin }: { orgId: string; isAdmin: boolea
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function OrgSettingsPage() {
+  const tNav = useTranslations('Org')
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgSettings')
   const { org, loading, isAdmin } = useOrg()
@@ -785,7 +512,16 @@ export default function OrgSettingsPage() {
           the only genuine dependant, with no title at all. The first card keeps
           its own "General" heading, because it labels that card and not the
           page. */}
-      <PageHeader title={t('pageTitle')} subtitle={t('pageSubtitle')} />
+      <PageHeader
+        title={t('pageTitle')}
+        subtitle={t('pageSubtitle')}
+        // What this page NO LONGER answers. Terminology and the affiliation lock
+        // moved to their own destination; a reader who came here looking for
+        // them needs the way there, not a dead end.
+        quickLinks={[
+          { href: `/org/${orgId}/affiliation-settings` as Route, label: tNav('affiliationSettings') },
+        ]}
+      />
 
       <Card>
         <CardHeader>
@@ -851,10 +587,7 @@ export default function OrgSettingsPage() {
         </CardContent>
       </Card>
 
-      <TerminologyCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg) => showToast(msg)} />
       <OrgSocialLinksCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={showToast} />
-
-      <MembershipLockCard orgId={orgId} org={org} isAdmin={isAdmin} onSaved={(msg, type) => showToast(msg, type)} />
 
       <OrgEmailSenderCard orgId={orgId} isAdmin={isAdmin} />
 

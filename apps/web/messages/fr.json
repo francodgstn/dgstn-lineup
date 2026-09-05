@@ -2995,7 +2995,7 @@
     "tabAffiliations": "Affiliations",
     "tabMembers": "Membres",
     "tabBilling": "Facturation",
-    "tabSettings": "Paramètres",
+    "tabSettings": "Général",
     "backToDashboard": "Retour au tableau de bord",
     "pluginsTitle": "Plugins de l'organisation",
     "pluginsSubtitle": "Installez des plugins une fois et ils seront disponibles pour tous les studios de cette organisation.",
@@ -3032,7 +3032,8 @@
     "railGroupGeneral": "Général",
     "railGroupStandards": "Standards que vous définissez",
     "railGroupShared": "Ressources partagées",
-    "railGroupAdministration": "Administration"
+    "railGroupAdministration": "Administration",
+    "affiliationSettings": "Paramètres d'affiliation"
   },
   "OrgTeams": {
     "title": "Studios",
@@ -7956,5 +7957,9 @@
     "week": "7 jours",
     "month": "30 jours",
     "note": "Sur {members} membres. Compte celles et ceux qui ont ouvert l'application ou se sont connectés à votre page publique — pas ce qu'ils y ont fait."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Paramètres d'affiliation",
+    "pageSubtitle": "Le nom donné à une affiliation, les statuts et types qu'elle peut prendre, et si un club peut définir les siens."
   }
 }

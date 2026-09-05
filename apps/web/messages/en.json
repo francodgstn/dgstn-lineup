@@ -2995,7 +2995,7 @@
     "tabAffiliations": "Affiliations",
     "tabMembers": "Members",
     "tabBilling": "Billing",
-    "tabSettings": "Settings",
+    "tabSettings": "General",
     "backToDashboard": "Back to dashboard",
     "pluginsTitle": "Organization Plugins",
     "pluginsSubtitle": "Install plugins once and they become available to all studios in this organization.",
@@ -3032,7 +3032,8 @@
     "railGroupGeneral": "General",
     "railGroupStandards": "Standards you set",
     "railGroupShared": "Shared resources",
-    "railGroupAdministration": "Administration"
+    "railGroupAdministration": "Administration",
+    "affiliationSettings": "Affiliation settings"
   },
   "OrgTeams": {
     "title": "Studios",
@@ -7956,5 +7957,9 @@
     "week": "7 days",
     "month": "30 days",
     "note": "Of {members} members. Counts anyone who opened the app or signed into your public page — not what they did there."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Affiliation settings",
+    "pageSubtitle": "What an affiliation is called, the statuses and types it can take, and whether a studio may set its own."
   }
 }

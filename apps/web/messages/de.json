@@ -2995,7 +2995,7 @@
     "tabAffiliations": "Affiliationen",
     "tabMembers": "Mitglieder",
     "tabBilling": "Abrechnung",
-    "tabSettings": "Einstellungen",
+    "tabSettings": "Allgemein",
     "backToDashboard": "Zurück zum Dashboard",
     "pluginsTitle": "Organisations-Plugins",
     "pluginsSubtitle": "Plugins einmalig installieren und sie werden für alle Studios dieser Organisation verfügbar.",
@@ -3032,7 +3032,8 @@
     "railGroupGeneral": "Allgemein",
     "railGroupStandards": "Vorgaben der Organisation",
     "railGroupShared": "Gemeinsame Ressourcen",
-    "railGroupAdministration": "Verwaltung"
+    "railGroupAdministration": "Verwaltung",
+    "affiliationSettings": "Zugehörigkeits-Einstellungen"
   },
   "OrgTeams": {
     "title": "Studios",
@@ -7956,5 +7957,9 @@
     "week": "7 Tage",
     "month": "30 Tage",
     "note": "Von {members} Mitgliedern. Zählt alle, die die App geöffnet oder sich auf deiner öffentlichen Seite angemeldet haben — nicht, was sie dort getan haben."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Zugehörigkeits-Einstellungen",
+    "pageSubtitle": "Wie eine Zugehörigkeit heisst, welche Status und Typen sie annehmen kann und ob eine Schule eigene festlegen darf."
   }
 }
