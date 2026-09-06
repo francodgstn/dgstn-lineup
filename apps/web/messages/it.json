@@ -4692,7 +4692,12 @@
     "confirmDeleteMessage": "I contatti con questo tipo manterranno le loro affiliazioni, ma non sarà possibile aggiungerne di nuove.",
     "noTypes": "Nessun tipo di affiliazione ancora.",
     "saved": "Salvato.",
-    "deleted": "Eliminato."
+    "deleted": "Eliminato.",
+    "validityModeLabel": "Come scade",
+    "validityModeMonths": "Un numero fisso di mesi dall'adesione",
+    "validityModeFixedDate": "La stessa data ogni anno, per tutti",
+    "resetDayLabel": "Data di rinnovo",
+    "resetDayHint": "Vengono usati solo giorno e mese. Tutti scadono in questa data indipendentemente da quando si sono iscritti, quindi chi si iscrive poco prima ha un primo periodo breve."
   },
   "CustomForms": {
     "title": "Moduli",

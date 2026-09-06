@@ -4692,7 +4692,12 @@
     "confirmDeleteMessage": "Contacts with this type will keep their affiliation records, but you won't be able to add new ones.",
     "noTypes": "No affiliation types yet.",
     "saved": "Saved.",
-    "deleted": "Deleted."
+    "deleted": "Deleted.",
+    "validityModeLabel": "How it expires",
+    "validityModeMonths": "A fixed number of months from joining",
+    "validityModeFixedDate": "The same date every year, for everyone",
+    "resetDayLabel": "Renewal date",
+    "resetDayHint": "Only the day and month are used. Everyone expires on this date regardless of when they joined, so someone joining shortly before it gets a short first term."
   },
   "CustomForms": {
     "title": "Forms",

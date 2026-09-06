@@ -1,3 +1,4 @@
+import type { AffiliationValidityMode } from '../utils/affiliationValidity'
 import type { Timestamp } from './common'
 
 // ─── Affiliation axis — "do they belong, and to what?" ───────────────────────
@@ -53,7 +54,20 @@ export interface AffiliationType {
   default_issuer: AffiliationIssuer
   issuer_name?: string // governing body, for 'external' types
   org_id?: string // for 'org' types — which org this type belongs to
+  /**
+   * HOW this type decides when membership lapses. Absent ⇒ 'months', which is
+   * every type that exists today.
+   *
+   * `fixed_date` is the federation model: everyone renews on the same day
+   * regardless of when they joined, which is how HMD works — 1 September, every
+   * year, whoever you are (Franco, 2026-09-05). Someone joining in August gets
+   * a short first term, deliberately: one clock for the whole roster is the
+   * point, and pro-rating it would put them back on their own.
+   */
+  validity_mode?: AffiliationValidityMode
   default_validity_months?: number
+  /** `fixed_date` mode: the reset day as `MM-DD` (e.g. '09-01' for 1 September). */
+  reset_month_day?: string
   // Display-only fee metadata. Linyup never charges this — the member pays the issuer
   // directly. `fee_amount` is in major currency units (shown with the team's default_currency);
   // `issuer_url` optionally points to where the member pays / renews with the issuer.

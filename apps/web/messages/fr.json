@@ -4692,7 +4692,12 @@
     "confirmDeleteMessage": "Les contacts avec ce type conserveront leurs affiliations, mais vous ne pourrez plus en ajouter de nouvelles.",
     "noTypes": "Aucun type d'affiliation pour l'instant.",
     "saved": "Enregistré.",
-    "deleted": "Supprimé."
+    "deleted": "Supprimé.",
+    "validityModeLabel": "Mode d'expiration",
+    "validityModeMonths": "Un nombre de mois fixe à partir de l'adhésion",
+    "validityModeFixedDate": "La même date chaque année, pour tous",
+    "resetDayLabel": "Date de renouvellement",
+    "resetDayHint": "Seuls le jour et le mois sont utilisés. Tout le monde expire à cette date, quelle que soit la date d'adhésion : qui adhère peu avant a une première période courte."
   },
   "CustomForms": {
     "title": "Formulaires",

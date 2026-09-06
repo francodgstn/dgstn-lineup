@@ -519,6 +519,10 @@ export function OrgAffiliationTypesCard({ orgId, isAdmin }: { orgId: string; isA
     const [label, setLabel] = useState(editing?.label ?? '')
     const [defaultIssuer, setDefaultIssuer] = useState<AffiliationIssuer>(editing?.default_issuer ?? 'org')
     const [validityMonths, setValidityMonths] = useState(editing?.default_validity_months?.toString() ?? '')
+    const [validityMode, setValidityMode] = useState<'months' | 'fixed_date'>(
+      editing?.validity_mode ?? 'months'
+    )
+    const [resetDay, setResetDay] = useState(editing?.reset_month_day ?? '09-01')
     const [active, setActive] = useState(editing?.active ?? true)
     const [saving, setSaving] = useState(false)
 
@@ -531,7 +535,12 @@ export function OrgAffiliationTypesCard({ orgId, isAdmin }: { orgId: string; isA
           key: key.trim(),
           label: label.trim(),
           default_issuer: defaultIssuer,
-          ...(validityMonths ? { default_validity_months: Number(validityMonths) } : {}),
+          validity_mode: validityMode,
+          ...(validityMode === 'fixed_date'
+            ? { reset_month_day: resetDay }
+            : validityMonths
+              ? { default_validity_months: Number(validityMonths) }
+              : {}),
           active,
           order: editing?.order ?? types.length,
           org_id: orgId,
@@ -583,9 +592,34 @@ export function OrgAffiliationTypesCard({ orgId, isAdmin }: { orgId: string; isA
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>{t('defaultValidityLabel')}</Label>
-              <Input type="number" min={0} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} placeholder={t('defaultValidityPlaceholder')} />
+              <Label>{t('validityModeLabel')}</Label>
+              <Select value={validityMode} onValueChange={(v) => setValidityMode(v as 'months' | 'fixed_date')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="months">{t('validityModeMonths')}</SelectItem>
+                  <SelectItem value="fixed_date">{t('validityModeFixedDate')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {validityMode === 'months' ? (
+              <div className="space-y-1.5">
+                <Label>{t('defaultValidityLabel')}</Label>
+                <Input type="number" min={0} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} placeholder={t('defaultValidityPlaceholder')} />
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>{t('resetDayLabel')}</Label>
+                {/* A date input for the picker, of which only month and day are
+                    kept — the YEAR is meaningless here, so it is never stored.
+                    2000 is a leap year, so 29 February stays selectable. */}
+                <Input
+                  type="date"
+                  value={`2000-${resetDay}`}
+                  onChange={(e) => setResetDay(e.target.value.slice(5) || '09-01')}
+                />
+                <p className="text-xs text-muted-foreground">{t('resetDayHint')}</p>
+              </div>
+            )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4 rounded border-input accent-primary" />
               {t('activeLabel')}

@@ -4692,7 +4692,12 @@
     "confirmDeleteMessage": "Kontakte mit diesem Typ behalten ihre Affiliationseinträge, aber es können keine neuen hinzugefügt werden.",
     "noTypes": "Noch keine Affiliationstypen.",
     "saved": "Gespeichert.",
-    "deleted": "Gelöscht."
+    "deleted": "Gelöscht.",
+    "validityModeLabel": "Wie sie abläuft",
+    "validityModeMonths": "Eine feste Anzahl Monate ab Beitritt",
+    "validityModeFixedDate": "Jedes Jahr dasselbe Datum, für alle",
+    "resetDayLabel": "Erneuerungsdatum",
+    "resetDayHint": "Nur Tag und Monat werden verwendet. Alle laufen an diesem Datum ab, unabhängig vom Beitrittsdatum — wer kurz davor beitritt, hat eine kurze erste Periode."
   },
   "CustomForms": {
     "title": "Formulare",
