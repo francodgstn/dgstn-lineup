@@ -5744,7 +5744,12 @@
     "emptySearch": "Aucun résultat pour « {query} ».",
     "emptyTypeFilter": "Aucun événement de ce type.",
     "viewList": "Liste",
-    "viewCalendar": "Calendrier"
+    "viewCalendar": "Calendrier",
+    "printButton": "Imprimer",
+    "printTitle": "Calendrier de la saison",
+    "printFrom": "Du",
+    "printTo": "Au",
+    "printEmpty": "Aucun événement dans cette période."
   },
   "OrgEventDetail": {
     "backToEvents": "Événements de l'organisation",

@@ -5744,7 +5744,12 @@
     "emptySearch": "Nessun risultato per «{query}».",
     "emptyTypeFilter": "Nessun evento di questo tipo.",
     "viewList": "Elenco",
-    "viewCalendar": "Calendario"
+    "viewCalendar": "Calendario",
+    "printButton": "Stampa",
+    "printTitle": "Calendario della stagione",
+    "printFrom": "Dal",
+    "printTo": "Al",
+    "printEmpty": "Nessun evento in questo periodo."
   },
   "OrgEventDetail": {
     "backToEvents": "Eventi dell'organizzazione",

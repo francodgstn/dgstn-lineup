@@ -51,7 +51,7 @@ import { DateTimePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight, Printer } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { eventTypeLabel } from '@/lib/eventTypeLabel'
 import { BUILTIN_EVENT_TYPES, EVENTS_COLLECTION } from '@linyup/shared'
@@ -363,7 +363,17 @@ export default function OrgEventsPage() {
               </button>
             ))}
         </div>
-        <div className="flex items-center gap-0.5 rounded-lg border bg-background p-0.5 mb-1.5">
+        <div className="flex items-center gap-2 mb-1.5">
+          {/* The season on paper. A link rather than a button because it IS a
+              page — one you can bookmark with a window already chosen. */}
+          <Link
+            href={`/org/${orgId}/events/print` as Route}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            {t('printButton')}
+          </Link>
+        <div className="flex items-center gap-0.5 rounded-lg border bg-background p-0.5">
           {(['list', 'calendar'] as const).map((v) => (
             <button
               key={v}
@@ -379,6 +389,7 @@ export default function OrgEventsPage() {
               {v === 'list' ? t('viewList') : t('viewCalendar')}
             </button>
           ))}
+        </div>
         </div>
       </div>
 

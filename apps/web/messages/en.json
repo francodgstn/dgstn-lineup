@@ -5744,7 +5744,12 @@
     "emptySearch": "No results for “{query}”.",
     "emptyTypeFilter": "No events of this type.",
     "viewList": "List",
-    "viewCalendar": "Calendar"
+    "viewCalendar": "Calendar",
+    "printButton": "Print",
+    "printTitle": "Season calendar",
+    "printFrom": "From",
+    "printTo": "To",
+    "printEmpty": "No events fall in this window."
   },
   "OrgEventDetail": {
     "backToEvents": "Organization events",

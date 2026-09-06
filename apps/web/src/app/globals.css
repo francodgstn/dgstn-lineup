@@ -416,3 +416,32 @@
     box-shadow: none !important;
   }
 }
+
+/* ── Print: the season calendar ──────────────────────────────────────────────
+   The THIRD printable surface (/org/{orgId}/events/print). A federation's
+   season goes on club noticeboards, and it used to be retyped from a calendar
+   somebody had already entered here.
+
+   The controls above the sheet carry `.no-print` and are dropped by the
+   manifest block's rule; what remains is the month-grouped list.
+
+   A MONTH IS NEVER SPLIT when it fits on one sheet — a printed calendar whose
+   September ends mid-page and resumes overleaf is the specific thing that makes
+   one hard to read. `break-inside: avoid` per month rather than a page break
+   per month, so a short season still prints on one sheet. */
+@media print {
+  .calendar-print {
+    max-width: none;
+    padding: 0;
+  }
+
+  .calendar-print h1,
+  .calendar-print h2 {
+    display: block !important;
+  }
+
+  .calendar-print .calendar-print-month {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
