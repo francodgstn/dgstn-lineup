@@ -5742,7 +5742,9 @@
     "searchPlaceholder": "Nach Titel suchen…",
     "filterAllTypes": "Alle Typen",
     "emptySearch": "Keine Ergebnisse für „{query}“.",
-    "emptyTypeFilter": "Keine Veranstaltungen dieses Typs."
+    "emptyTypeFilter": "Keine Veranstaltungen dieses Typs.",
+    "viewList": "Liste",
+    "viewCalendar": "Kalender"
   },
   "OrgEventDetail": {
     "backToEvents": "Organisationsveranstaltungen",
