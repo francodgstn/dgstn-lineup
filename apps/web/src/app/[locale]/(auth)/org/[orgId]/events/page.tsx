@@ -1,6 +1,20 @@
 'use client'
 
 import { PageHeader } from '@/components/layout/PageHeader'
+import dynamic from 'next/dynamic'
+
+// The team's calendar, mounted here with no sessions. It already takes
+// `events[]`, buckets them by date (multi-day events span every day they cover)
+// and opens each one in a peek sheet — the schedule page has been passing it
+// both all along. Reusing it was the whole point of the request; a second
+// calendar is a second set of month-boundary bugs.
+//
+// `ssr: false` for the same reason the schedule page does it: the grid measures
+// itself on mount.
+const SessionsCalendar = dynamic(
+  () => import('../../../sessions/SessionsCalendar'),
+  { ssr: false }
+)
 import { useCallback, useMemo, useState } from 'react'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -37,7 +51,7 @@ import { DateTimePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarRange, MapPin, CalendarDays, ChevronRight, Printer } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { eventTypeLabel } from '@/lib/eventTypeLabel'
 import { BUILTIN_EVENT_TYPES, EVENTS_COLLECTION } from '@linyup/shared'
@@ -258,6 +272,7 @@ export default function OrgEventsPage() {
   const [tab, setTab] = useTabParam(ORG_EVENT_TABS, 'upcoming')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Event | null>(null)
+  const [view, setView] = useState<'list' | 'calendar'>('list')
   const [deleting, setDeleting] = useState<Event | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState(ALL_TYPES)
@@ -329,24 +344,71 @@ export default function OrgEventsPage() {
         }
       />
 
-      {/* Tab */}
-      <div className="flex gap-1 border-b text-sm">
-        {(['upcoming', 'past'] as const).map((tabKey) => (
-          <button
-            key={tabKey}
-            onClick={() => setTab(tabKey)}
-            className={`px-4 py-2 border-b-2 -mb-px font-medium capitalize transition-colors ${
-              tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+      {/* Tab, and the view switch.
+          UPCOMING/PAST IS A LIST IDEA. A calendar shows a month — whatever falls
+          in it, on both sides of today — so the tabs are hidden in calendar mode
+          rather than left there filtering a grid they cannot describe. */}
+      <div className="flex items-center justify-between gap-3 border-b">
+        <div className="flex gap-1 text-sm">
+          {view === 'list' &&
+            (['upcoming', 'past'] as const).map((tabKey) => (
+              <button
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
+                className={`px-4 py-2 border-b-2 -mb-px font-medium capitalize transition-colors ${
+                  tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tabKey === 'upcoming' ? t('tabUpcoming') : t('tabPast')}
+              </button>
+            ))}
+        </div>
+        <div className="flex items-center gap-2 mb-1.5">
+          {/* The season on paper. A link rather than a button because it IS a
+              page — one you can bookmark with a window already chosen. */}
+          <Link
+            href={`/org/${orgId}/events/print` as Route}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            {tabKey === 'upcoming' ? t('tabUpcoming') : t('tabPast')}
-          </button>
-        ))}
+            <Printer className="h-3.5 w-3.5" />
+            {t('printButton')}
+          </Link>
+        <div className="flex items-center gap-0.5 rounded-lg border bg-background p-0.5">
+          {(['list', 'calendar'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                view === v
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {v === 'list' ? t('viewList') : t('viewCalendar')}
+            </button>
+          ))}
+        </div>
+        </div>
       </div>
+
+      {/* The federation's calendar. Both halves, because a month contains both. */}
+      {view === 'calendar' && (
+        <SessionsCalendar
+          sessions={[]}
+          activities={[]}
+          events={[...(upcoming.data ?? []), ...(past.data ?? [])]}
+          onEdit={() => {}}
+          onDelete={() => {}}
+          onEventEdit={isAdmin ? (e) => { setEditing(e); setDialogOpen(true) } : undefined}
+          onEventDelete={isAdmin ? (e) => setDeleting(e) : undefined}
+        />
+      )}
 
       {/* Filter row — stacked on a phone, one line from sm up, so it can never
           overflow sideways. */}
-      {!current.isLoading && hasAnyEvent && (
+      {view === 'list' && !current.isLoading && hasAnyEvent && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="sm:max-w-xs sm:flex-1">
             <SearchInput
@@ -370,7 +432,7 @@ export default function OrgEventsPage() {
         </div>
       )}
 
-      {current.isLoading ? (
+      {view === 'list' && (current.isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
         </div>
@@ -431,7 +493,7 @@ export default function OrgEventsPage() {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
       {user && (
         <OrgEventDialog
