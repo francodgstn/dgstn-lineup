@@ -28,9 +28,13 @@ import { newSectionId } from '@/plugins/website/defaults'
 import {
   ContactFields,
   ContentFields,
+  CtaBannerFields,
+  FaqFields,
+  FeaturesFields,
   Field,
   GalleryFields,
   HeroFields,
+  TestimonialsFields,
   type SiteEditorTenant,
 } from '@/components/website/SiteSectionFields'
 
@@ -133,10 +137,29 @@ function ClubsFields({ s, onChange }: { s: ClubsSection; onChange: (p: Patch) =>
       <Field label={t('editorSubheading')}>
         <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
       </Field>
-      <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
+      <Field label={t('editorOrgClubsLayout')}>
+        <Select
+          value={s.layout ?? 'cards'}
+          onValueChange={(v) => onChange({ layout: v as 'cards' | 'list' })}
+        >
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cards">{t('editorOrgClubsLayoutCards')}</SelectItem>
+            <SelectItem value="list">{t('editorOrgClubsLayoutList')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      {/* Columns only mean something in the grid — a list has one. */}
+      {(s.layout ?? 'cards') === 'cards' && (
+        <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
+      )}
       <label className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm">{t('editorOrgShowAddressOnCards')}</span>
         <Switch checked={s.showAddress ?? false} onCheckedChange={(v) => onChange({ showAddress: v })} />
+      </label>
+      <label className="flex items-center justify-between rounded-lg border p-3">
+        <span className="text-sm">{t('editorOrgClubsSearchable')}</span>
+        <Switch checked={s.searchable ?? false} onCheckedChange={(v) => onChange({ searchable: v })} />
       </label>
     </div>
   )
@@ -279,6 +302,24 @@ export function OrgSectionEditor({
       return <GalleryFields s={section} tenant={tenant} onChange={onChange} />
     case 'contact':
       return <ContactFields s={section} onChange={onChange} />
+    // The presentational four, from the shared module — the same components the
+    // team builder mounts. `OrgCtaEditor` is passed in for the same reason the
+    // hero above takes it: an org's call to action has no booking page to point
+    // at, so the TARGETS differ while the fields do not.
+    case 'features':
+      return <FeaturesFields s={section} onChange={onChange} />
+    case 'cta_banner':
+      return (
+        <CtaBannerFields
+          s={section}
+          onChange={onChange}
+          cta={<OrgCtaEditor cta={section.cta} onChange={onChange} />}
+        />
+      )
+    case 'faq':
+      return <FaqFields s={section} onChange={onChange} />
+    case 'testimonials':
+      return <TestimonialsFields s={section} onChange={onChange} />
     case 'clubs':
       return <ClubsFields s={section} onChange={onChange} />
     case 'locations':

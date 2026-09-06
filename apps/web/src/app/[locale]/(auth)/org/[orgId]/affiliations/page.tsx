@@ -1,6 +1,7 @@
 'use client'
 
 import { PageHeader } from '@/components/layout/PageHeader'
+import type { Route } from 'next'
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -31,10 +32,6 @@ import {
 import {  } from 'lucide-react'
 import { renewAffiliationCall } from '@/components/affiliations/renew'
 import { AffiliationBulkBar, RenewConfirmDialog } from '@/components/affiliations/RenewUI'
-import {
-  MembershipStatusesCard,
-  OrgAffiliationTypesCard,
-} from '@/components/org/AffiliationVocabularyCards'
 
 // ─── colour map ───────────────────────────────────────────────────────────────
 
@@ -370,6 +367,7 @@ function ContactAffiliationRow({
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function OrgAffiliationsPage() {
+  const tNav = useTranslations('Org')
   const { orgId } = useParams<{ orgId: string }>()
   const t = useTranslations('OrgAffiliations')
   const { isAdmin, affiliationTerm } = useOrg()
@@ -526,6 +524,16 @@ export default function OrgAffiliationsPage() {
         subtitle={
           contacts ? t('subtitle', { total: contacts.length, active: totalActive }) : undefined
         }
+        // THE ROSTER, AND THE WAY TO WHAT DEFINES IT. The statuses and types
+        // used to render beneath this list, which made a roster you scrolled
+        // past to reach a form. They now have their own destination and this is
+        // the link to it (Franco, 2026-09-05).
+        quickLinks={[
+          {
+            href: `/org/${orgId}/affiliation-settings` as Route,
+            label: tNav('affiliationSettings'),
+          },
+        ]}
       />
 
       {/* Type selector */}
@@ -739,8 +747,6 @@ export default function OrgAffiliationsPage() {
           administrator now adds "Suspended" on the screen that shows who is
           suspended. Each card applies the `isAdmin` gate itself. */}
       <div className="space-y-4 border-t pt-6">
-        <MembershipStatusesCard orgId={orgId} isAdmin={isAdmin} />
-        <OrgAffiliationTypesCard orgId={orgId} isAdmin={isAdmin} />
       </div>
     </div>
   )

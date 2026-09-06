@@ -1,14 +1,25 @@
-import type { OrgSiteSection, OrgSiteSectionType, OrgSiteDraft, SiteMeta } from '@linyup/shared'
+import type {
+  OrgSiteSection,
+  OrgSiteSectionType,
+  OrgSiteDraft,
+  SiteMeta,
+  ContactAddress,
+} from '@linyup/shared'
 // Client-only unique id generator — shared verbatim with the team site builder
 // (React key + image path segment + anchor). Not org/team-specific.
 import { newSectionId } from '@/plugins/website/defaults'
 import { DEFAULT_ACCENT } from '@/components/ui/color-picker'
 
 // ─── section library (for the "Add section" menu) ──────────────────────────────
-// Org sites only ever offer presentational sections (hero/content/gallery/contact,
-// shared with the team site) plus the three org-only aggregate sections
-// (clubs/locations/coaches). NO pricing/activities/schedule/places — those are
-// team-scoped commerce sections that don't apply at the org level.
+// Org sites offer the PRESENTATIONAL sections — hero, content, gallery, features,
+// CTA banner, FAQ, testimonials, contact, all shared with the team site — plus
+// the three org-only aggregates (clubs / locations / coaches).
+//
+// NO pricing / activities / schedule / places: those are team-scoped commerce and
+// an organisation has nothing to put in them. That was always the rule, but four
+// presentational sections were missing anyway — they were added to the team
+// library after this file was written and nobody pulled them across, so a
+// federation could not put an FAQ on its own site (Franco, 2026-09-05).
 
 export const ORG_SECTION_LIBRARY: {
   type: OrgSiteSectionType
@@ -27,10 +38,33 @@ export const ORG_SECTION_LIBRARY: {
     icon: 'MapPin',
   },
   { type: 'coaches', labelKey: 'sectionCoaches', descKey: 'sectionCoachesDesc', icon: 'UserCog' },
+  { type: 'features', labelKey: 'sectionFeatures', descKey: 'sectionFeaturesDesc', icon: 'Sparkles' },
+  { type: 'cta_banner', labelKey: 'sectionCta', descKey: 'sectionCtaDesc', icon: 'Megaphone' },
+  { type: 'faq', labelKey: 'sectionFaq', descKey: 'sectionFaqDesc', icon: 'HelpCircle' },
+  {
+    type: 'testimonials',
+    labelKey: 'sectionTestimonials',
+    descKey: 'sectionTestimonialsDesc',
+    icon: 'Quote',
+  },
   { type: 'contact', labelKey: 'sectionContact', descKey: 'sectionContactDesc', icon: 'Mail' },
 ]
 
-export function newOrgSection(type: OrgSiteSectionType): OrgSiteSection {
+/**
+ * A new section, with the organisation's own details already in it where that
+ * saves retyping.
+ *
+ * Only the CONTACT section takes them, and only as a starting value: the
+ * section owns its text from then on, exactly as a team's does, so an org can
+ * publish a different address on its site from the one it records in settings
+ * without the two fighting. The alternative — resolving the org document at
+ * RENDER time — would make the settings page a second, invisible editor of the
+ * published site.
+ */
+export function newOrgSection(
+  type: OrgSiteSectionType,
+  org?: { headquarters?: ContactAddress; contact_email?: string; contact_phone?: string } | null
+): OrgSiteSection {
   const id = newSectionId()
   switch (type) {
     case 'hero':
@@ -43,14 +77,50 @@ export function newOrgSection(type: OrgSiteSectionType): OrgSiteSection {
       return { id, type: 'content', body: '', imageSide: 'left' }
     case 'gallery':
       return { id, type, images: [], columns: 3 }
+    case 'features':
+      return {
+        id,
+        type,
+        columns: 3,
+        items: [
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+          { icon: 'Sparkles', title: 'Feature', text: 'A short line about it.' },
+        ],
+      }
+    case 'cta_banner':
+      return { id, type, heading: 'Find a club near you', text: 'Our studios are open to new members.' }
+    case 'faq':
+      return { id, type, items: [{ question: 'A question?', answer: 'The answer.' }] }
+    case 'testimonials':
+      return {
+        id,
+        type,
+        items: [{ name: 'Alex', activity: 'Member', feedback: 'Best decision I made.' }],
+      }
     case 'clubs':
       return { id, type, columns: 3, showAddress: true }
     case 'locations':
       return { id, type, columns: 3 }
     case 'coaches':
       return { id, type, columns: 3 }
-    case 'contact':
-      return { id, type, showSocial: true }
+    case 'contact': {
+      const hq = org?.headquarters
+      const address = [
+        [hq?.route, hq?.street_number].filter(Boolean).join(' '),
+        [hq?.postal_code, hq?.locality].filter(Boolean).join(' '),
+      ]
+        .filter(Boolean)
+        .join(', ')
+      return {
+        id,
+        type,
+        showSocial: true,
+        ...(address ? { address } : {}),
+        ...(org?.contact_phone ? { phone: org.contact_phone } : {}),
+        ...(org?.contact_email ? { email: org.contact_email } : {}),
+      }
+    }
   }
 }
 

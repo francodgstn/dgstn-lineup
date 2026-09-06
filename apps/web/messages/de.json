@@ -1386,7 +1386,8 @@
     "invitation_free": "Kostenlos",
     "detail_tabProgram": "Programm",
     "detail_tabRsvps": "Rückmeldungen",
-    "detail_rsvpsEmpty": "Noch hat niemand zugesagt."
+    "detail_rsvpsEmpty": "Noch hat niemand zugesagt.",
+    "detail_tabCategories": "Kategorien"
   },
   "EventProgram": {
     "emptyTitle": "Noch kein Programm",
@@ -2994,7 +2995,7 @@
     "tabAffiliations": "Affiliationen",
     "tabMembers": "Mitglieder",
     "tabBilling": "Abrechnung",
-    "tabSettings": "Einstellungen",
+    "tabSettings": "Allgemein",
     "backToDashboard": "Zurück zum Dashboard",
     "pluginsTitle": "Organisations-Plugins",
     "pluginsSubtitle": "Plugins einmalig installieren und sie werden für alle Studios dieser Organisation verfügbar.",
@@ -3031,7 +3032,8 @@
     "railGroupGeneral": "Allgemein",
     "railGroupStandards": "Vorgaben der Organisation",
     "railGroupShared": "Gemeinsame Ressourcen",
-    "railGroupAdministration": "Verwaltung"
+    "railGroupAdministration": "Verwaltung",
+    "affiliationSettings": "Zugehörigkeits-Einstellungen"
   },
   "OrgTeams": {
     "title": "Studios",
@@ -3238,7 +3240,21 @@
     "language": "Sprache",
     "languageHint": "Die Sprache, in der die Inhalte und Mitteilungen dieser Organisation verfasst werden – Einladungen, Hinweise und geteilte Inhalte. Die Sprache Ihres eigenen Dashboards wird separat gewählt.",
     "pageTitle": "Einstellungen",
-    "pageSubtitle": "Angaben, Begriffe und Absenderadresse der Organisation."
+    "pageSubtitle": "Angaben, Begriffe und Absenderadresse der Organisation.",
+    "contactTitle": "Hauptsitz und Kontakt",
+    "contactDescription": "Wo die Organisation ihren Sitz hat und wie man sie erreicht.",
+    "contactHint": "Erscheint auf der Website der Organisation, wo der Kontaktbereich danach fragt. Leere Felder werden nicht angezeigt.",
+    "hqStreetLabel": "Strasse",
+    "hqNumberLabel": "Nummer",
+    "hqPostalLabel": "PLZ",
+    "hqLocalityLabel": "Ort",
+    "contactEmailLabel": "Kontakt-E-Mail",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Kontakttelefon",
+    "contactWebsiteLabel": "Website",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Kontaktdaten gespeichert",
+    "contactError": "Kontaktdaten konnten nicht gespeichert werden"
   },
   "OrgInvite": {
     "title": "Organisationseinladung",
@@ -3503,7 +3519,11 @@
     "sectionFeatures": "Highlights",
     "sectionFeaturesDesc": "Eine Reihe Icon-Karten für Ihre wichtigsten Vorteile",
     "sectionTestimonials": "Stimmen",
-    "sectionTestimonialsDesc": "Mitglieder-Stimmen, einzeln"
+    "sectionTestimonialsDesc": "Mitglieder-Stimmen, einzeln",
+    "editorOrgClubsLayout": "Darstellung",
+    "editorOrgClubsLayoutCards": "Karten",
+    "editorOrgClubsLayoutList": "Scrollende Liste",
+    "editorOrgClubsSearchable": "Besucher die Clubs durchsuchen lassen"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -4672,7 +4692,12 @@
     "confirmDeleteMessage": "Kontakte mit diesem Typ behalten ihre Affiliationseinträge, aber es können keine neuen hinzugefügt werden.",
     "noTypes": "Noch keine Affiliationstypen.",
     "saved": "Gespeichert.",
-    "deleted": "Gelöscht."
+    "deleted": "Gelöscht.",
+    "validityModeLabel": "Wie sie abläuft",
+    "validityModeMonths": "Eine feste Anzahl Monate ab Beitritt",
+    "validityModeFixedDate": "Jedes Jahr dasselbe Datum, für alle",
+    "resetDayLabel": "Erneuerungsdatum",
+    "resetDayHint": "Nur Tag und Monat werden verwendet. Alle laufen an diesem Datum ab, unabhängig vom Beitrittsdatum — wer kurz davor beitritt, hat eine kurze erste Periode."
   },
   "CustomForms": {
     "title": "Formulare",
@@ -5738,7 +5763,9 @@
     "statusPending": "Ausstehend",
     "titleUnconfirm": "Bestätigung aufheben",
     "titleConfirm": "Bestätigen",
-    "emptyCheckins": "Noch keine Check-ins."
+    "emptyCheckins": "Noch keine Check-ins.",
+    "eventDetail_rsvpsHint": "Wer zugesagt hat, über alle Mitgliedsschulen hinweg. Namen sind keine Links — die Kontakte einer Schule gehören ihr allein.",
+    "eventDetail_invitationsHint": "Alle zu dieser Veranstaltung eingeladenen Personen. Beim erneuten Senden werden bereits eingeladene Personen übersprungen, sofern du nicht erneut senden wählst."
   },
   "OrgRanking": {
     "title": "Rangsysteme",
@@ -7234,7 +7261,9 @@
     "navFeatures": "Highlights",
     "navTestimonials": "Stimmen",
     "schemeToDark": "Zu Dunkel wechseln",
-    "schemeToLight": "Zu Hell wechseln"
+    "schemeToLight": "Zu Hell wechseln",
+    "searchClubs": "Clubs suchen",
+    "noClubsMatch": "Kein Club passt zu dieser Suche."
   },
   "OrgMemberInvite": {
     "title": "Einladung zur Organisation",
@@ -7953,5 +7982,9 @@
     "week": "7 Tage",
     "month": "30 Tage",
     "note": "Von {members} Mitgliedern. Zählt alle, die die App geöffnet oder sich auf deiner öffentlichen Seite angemeldet haben — nicht, was sie dort getan haben."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Zugehörigkeits-Einstellungen",
+    "pageSubtitle": "Wie eine Zugehörigkeit heisst, welche Status und Typen sie annehmen kann und ob eine Schule eigene festlegen darf."
   }
 }

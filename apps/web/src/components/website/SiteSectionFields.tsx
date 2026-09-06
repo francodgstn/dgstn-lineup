@@ -45,7 +45,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
-import { ImageIcon, X, Plus } from 'lucide-react'
+import { ImageIcon, X, Plus, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { IconPicker } from '@/components/ui/icon-picker'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -54,6 +56,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import type {
+  FeaturesSection,
+  CtaBannerSection,
+  FaqSection,
+  TestimonialsSection,
   HeroSection, ContentSection, GallerySection, ContactSection,
 } from '@linyup/shared'
 import { RichTextEditor } from '@/components/RichTextEditor'
@@ -365,5 +371,222 @@ export function ContactFields({ s, onChange }: { s: ContactSection; onChange: (p
         <Switch checked={s.showSocial ?? false} onCheckedChange={(v) => onChange({ showSocial: v })} />
       </label>
     </div>
+  )
+}
+
+// ─── presentational sections, shared by BOTH builders ───────────────────────
+//
+// Features, CTA banner, FAQ and testimonials say something about whoever owns
+// the site; none of them is commerce, so none is studio-only. They lived in the
+// team editor purely because that is where they were written, and the org
+// builder simply predated them.
+
+export function FeaturesFields({ s, onChange }: { s: FeaturesSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
+  const items = s.items ?? []
+  const set = (i: number, patch: Partial<(typeof items)[number]>) =>
+    onChange({ items: items.map((it, j) => (j === i ? { ...it, ...patch } : it)) })
+  return (
+    <div className="space-y-3">
+      <Field label={t('editorHeadingOptional')}>
+        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
+      </Field>
+      <Field label={t('editorSubheadingOptional')}>
+        <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
+      </Field>
+      <Field label={t('editorColumns')}>
+        <Select value={String(s.columns)} onValueChange={(v) => onChange({ columns: Number(v) })}>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="4">4</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <div className="space-y-3">
+        {items.map((item, i) => (
+          <div key={i} className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-start gap-2">
+              <IconPicker value={item.icon} onChange={(name) => set(i, { icon: name })} />
+              <Input
+                value={item.title}
+                placeholder={t('editorFeatureTitle')}
+                onChange={(e) => set(i, { title: e.target.value })}
+                className="h-9"
+              />
+              <button
+                type="button"
+                onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                disabled={items.length <= 1}
+                className="mt-1.5 text-muted-foreground hover:text-destructive disabled:opacity-40"
+                aria-label={t('editorItemRemove')}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <Textarea
+              value={item.text ?? ''}
+              placeholder={t('editorFeatureText')}
+              onChange={(e) => set(i, { text: e.target.value })}
+              rows={2}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                value={item.linkLabel ?? ''}
+                placeholder={t('editorLinkLabel')}
+                onChange={(e) => set(i, { linkLabel: e.target.value })}
+                className="h-9"
+              />
+              <Input
+                value={item.linkUrl ?? ''}
+                placeholder="https://…"
+                onChange={(e) => set(i, { linkUrl: e.target.value })}
+                className="h-9"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <AddItemButton
+        label={t('editorAddFeature')}
+        onClick={() => onChange({ items: [...items, { icon: 'Sparkles', title: '' }] })}
+      />
+    </div>
+  )
+}
+
+export function CtaBannerFields({
+  s,
+  onChange,
+  cta,
+}: {
+  s: CtaBannerSection
+  onChange: (p: Patch) => void
+  /** The tenant's own call-to-action control, passed in for the same reason
+   *  `HeroFields` takes one: a studio's CTA can point at its booking page or
+   *  signup form, and an organisation has neither. */
+  cta: React.ReactNode
+}) {
+  const t = useTranslations('Website')
+  return (
+    <div className="space-y-3">
+      <Field label={t('editorHeading')}>
+        <Input value={s.heading} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
+      </Field>
+      <Field label={t('editorTextOptional')}>
+        <Textarea value={s.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} rows={2} />
+      </Field>
+      {cta}
+    </div>
+  )
+}
+
+export function FaqFields({ s, onChange }: { s: FaqSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
+  const items = s.items ?? []
+  const set = (i: number, patch: Partial<(typeof items)[number]>) =>
+    onChange({ items: items.map((it, j) => (j === i ? { ...it, ...patch } : it)) })
+  return (
+    <div className="space-y-3">
+      <Field label={t('editorHeadingOptional')}>
+        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
+      </Field>
+      <div className="space-y-3">
+        {items.map((item, i) => (
+          <div key={i} className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-start gap-2">
+              <Input
+                value={item.question}
+                placeholder={t('editorFaqQuestion')}
+                onChange={(e) => set(i, { question: e.target.value })}
+                className="h-9"
+              />
+              <button
+                type="button"
+                onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                disabled={items.length <= 1}
+                className="mt-1.5 text-muted-foreground hover:text-destructive disabled:opacity-40"
+                aria-label={t('editorItemRemove')}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <Textarea
+              value={item.answer}
+              placeholder={t('editorFaqAnswer')}
+              onChange={(e) => set(i, { answer: e.target.value })}
+              rows={2}
+            />
+          </div>
+        ))}
+      </div>
+      <AddItemButton
+        label={t('editorAddFaq')}
+        onClick={() => onChange({ items: [...items, { question: '', answer: '' }] })}
+      />
+    </div>
+  )
+}
+
+export function TestimonialsFields({ s, onChange }: { s: TestimonialsSection; onChange: (p: Patch) => void }) {
+  const t = useTranslations('Website')
+  const items = s.items ?? []
+  const set = (i: number, patch: Partial<(typeof items)[number]>) =>
+    onChange({ items: items.map((it, j) => (j === i ? { ...it, ...patch } : it)) })
+  return (
+    <div className="space-y-3">
+      <Field label={t('editorHeadingOptional')}>
+        <Input value={s.heading ?? ''} onChange={(e) => onChange({ heading: e.target.value })} className="h-9" />
+      </Field>
+      <div className="space-y-3">
+        {items.map((item, i) => (
+          <div key={i} className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-start gap-2">
+              <Input
+                value={item.name}
+                placeholder={t('editorTestimonialName')}
+                onChange={(e) => set(i, { name: e.target.value })}
+                className="h-9"
+              />
+              <Input
+                value={item.activity ?? ''}
+                placeholder={t('editorTestimonialActivity')}
+                onChange={(e) => set(i, { activity: e.target.value })}
+                className="h-9"
+              />
+              <button
+                type="button"
+                onClick={() => onChange({ items: items.filter((_, j) => j !== i) })}
+                disabled={items.length <= 1}
+                className="mt-1.5 text-muted-foreground hover:text-destructive disabled:opacity-40"
+                aria-label={t('editorItemRemove')}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <Textarea
+              value={item.feedback}
+              placeholder={t('editorTestimonialFeedback')}
+              onChange={(e) => set(i, { feedback: e.target.value })}
+              rows={2}
+            />
+          </div>
+        ))}
+      </div>
+      <AddItemButton
+        label={t('editorAddTestimonial')}
+        onClick={() => onChange({ items: [...items, { name: '', feedback: '' }] })}
+      />
+    </div>
+  )
+}
+
+function AddItemButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick} className="w-full">
+      <Plus className="mr-1.5 h-3.5 w-3.5" />
+      {label}
+    </Button>
   )
 }

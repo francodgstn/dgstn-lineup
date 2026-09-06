@@ -1386,7 +1386,8 @@
     "invitation_free": "Free",
     "detail_tabProgram": "Program",
     "detail_tabRsvps": "RSVPs",
-    "detail_rsvpsEmpty": "No one has accepted yet."
+    "detail_rsvpsEmpty": "No one has accepted yet.",
+    "detail_tabCategories": "Categories"
   },
   "EventProgram": {
     "emptyTitle": "No programme yet",
@@ -2994,7 +2995,7 @@
     "tabAffiliations": "Affiliations",
     "tabMembers": "Members",
     "tabBilling": "Billing",
-    "tabSettings": "Settings",
+    "tabSettings": "General",
     "backToDashboard": "Back to dashboard",
     "pluginsTitle": "Organization Plugins",
     "pluginsSubtitle": "Install plugins once and they become available to all studios in this organization.",
@@ -3031,7 +3032,8 @@
     "railGroupGeneral": "General",
     "railGroupStandards": "Standards you set",
     "railGroupShared": "Shared resources",
-    "railGroupAdministration": "Administration"
+    "railGroupAdministration": "Administration",
+    "affiliationSettings": "Affiliation settings"
   },
   "OrgTeams": {
     "title": "Studios",
@@ -3238,7 +3240,21 @@
     "language": "Language",
     "languageHint": "The language this organisation's content and communications are written in — invitations, notices and shared content. Your own dashboard language is chosen separately.",
     "pageTitle": "Settings",
-    "pageSubtitle": "The organisation's own details, terminology and sender address."
+    "pageSubtitle": "The organisation's own details, terminology and sender address.",
+    "contactTitle": "Headquarters and contact",
+    "contactDescription": "Where the organisation is based, and how people reach it.",
+    "contactHint": "Shown on your organisation's website where its contact section asks for them. Leave a field empty to keep it off the page.",
+    "hqStreetLabel": "Street",
+    "hqNumberLabel": "Number",
+    "hqPostalLabel": "Postcode",
+    "hqLocalityLabel": "Town or city",
+    "contactEmailLabel": "Contact email",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Contact phone",
+    "contactWebsiteLabel": "Website",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Contact details saved",
+    "contactError": "Could not save the contact details"
   },
   "OrgInvite": {
     "title": "Organization invitation",
@@ -3503,7 +3519,11 @@
     "sectionFeatures": "Highlights",
     "sectionFeaturesDesc": "A row of icon cards for your key features",
     "sectionTestimonials": "Testimonials",
-    "sectionTestimonialsDesc": "Member reviews, one at a time"
+    "sectionTestimonialsDesc": "Member reviews, one at a time",
+    "editorOrgClubsLayout": "Layout",
+    "editorOrgClubsLayoutCards": "Cards",
+    "editorOrgClubsLayoutList": "Scrolling list",
+    "editorOrgClubsSearchable": "Let visitors search the clubs"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -4672,7 +4692,12 @@
     "confirmDeleteMessage": "Contacts with this type will keep their affiliation records, but you won't be able to add new ones.",
     "noTypes": "No affiliation types yet.",
     "saved": "Saved.",
-    "deleted": "Deleted."
+    "deleted": "Deleted.",
+    "validityModeLabel": "How it expires",
+    "validityModeMonths": "A fixed number of months from joining",
+    "validityModeFixedDate": "The same date every year, for everyone",
+    "resetDayLabel": "Renewal date",
+    "resetDayHint": "Only the day and month are used. Everyone expires on this date regardless of when they joined, so someone joining shortly before it gets a short first term."
   },
   "CustomForms": {
     "title": "Forms",
@@ -5738,7 +5763,9 @@
     "statusPending": "Pending",
     "titleUnconfirm": "Unconfirm",
     "titleConfirm": "Confirm",
-    "emptyCheckins": "No check-ins yet."
+    "emptyCheckins": "No check-ins yet.",
+    "eventDetail_rsvpsHint": "Who accepted, across every member studio. Names are not links — a studio's contacts are its own.",
+    "eventDetail_invitationsHint": "Everyone invited to this event. Sending again skips people who already have an invitation unless you choose to resend."
   },
   "OrgRanking": {
     "title": "Ranking systems",
@@ -7234,7 +7261,9 @@
     "navFeatures": "Features",
     "navTestimonials": "Reviews",
     "schemeToDark": "Switch to dark",
-    "schemeToLight": "Switch to light"
+    "schemeToLight": "Switch to light",
+    "searchClubs": "Search clubs",
+    "noClubsMatch": "No club matches that search."
   },
   "OrgMemberInvite": {
     "title": "Organisation invitation",
@@ -7953,5 +7982,9 @@
     "week": "7 days",
     "month": "30 days",
     "note": "Of {members} members. Counts anyone who opened the app or signed into your public page — not what they did there."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Affiliation settings",
+    "pageSubtitle": "What an affiliation is called, the statuses and types it can take, and whether a studio may set its own."
   }
 }

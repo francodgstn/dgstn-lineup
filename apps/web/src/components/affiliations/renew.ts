@@ -1,3 +1,7 @@
+import {
+  resolveAffiliationValidUntil,
+  type AffiliationValidityConfig,
+} from '@linyup/shared'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 
@@ -45,10 +49,15 @@ export function addMonths(date: Date, months: number): Date {
  *  current expiry by the type's default validity (fallback 12 months). */
 export function previewRenewedUntil(
   currentValidUntil: Date | null | undefined,
-  defaultValidityMonths: number | null | undefined,
+  type: AffiliationValidityConfig | number | null | undefined,
 ): Date {
-  const now = new Date()
-  const base =
-    currentValidUntil && currentValidUntil.getTime() > now.getTime() ? currentValidUntil : now
-  return addMonths(base, defaultValidityMonths && defaultValidityMonths > 0 ? defaultValidityMonths : 12)
+  // Delegates to the SHARED resolver, which is also what `renewAffiliation`
+  // runs — so the date previewed here and the date saved are the same date by
+  // construction rather than by two implementations happening to agree.
+  //
+  // The number form is the old signature (a month count), kept so existing
+  // callers keep working while they are updated to pass the type.
+  const config: AffiliationValidityConfig | null | undefined =
+    typeof type === 'number' ? { default_validity_months: type } : type
+  return resolveAffiliationValidUntil({ type: config, currentValidUntil })
 }

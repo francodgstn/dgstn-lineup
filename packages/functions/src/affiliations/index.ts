@@ -18,6 +18,7 @@ import {
   TEAMS_COLLECTION,
   DEFAULT_ORG_AFFILIATION_STATUSES,
   planSupportsAffiliations,
+  resolveAffiliationValidUntil,
   type Affiliation,
   type AffiliationType,
   type OrgAffiliationStatusDef,
@@ -437,17 +438,22 @@ export const renewAffiliation = onCall(async (request) => {
 
   // Validity window: extend from the later of now / current expiry so no time is lost.
   const type = await resolveAffiliationType(teamId, affData.affiliation_type_id, affData.issuer, affData.org_id)
-  const months =
-    typeof data.months === 'number' && data.months > 0
-      ? Math.floor(data.months)
-      : (type?.default_validity_months ?? 12)
-
+  // ONE RESOLVER, shared with the web preview. The two used to compute this
+  // separately and agreed only because both were three lines of `addMonths`; a
+  // second validity mode would have made the preview and the saved record
+  // disagree, which is the worst way to find out.
   const now = admin.firestore.Timestamp.now()
-  const currentUntilMs = affData.valid_until
-    ? (affData.valid_until as unknown as admin.firestore.Timestamp).toMillis()
-    : 0
-  const base = new Date(Math.max(now.toMillis(), currentUntilMs))
-  const newValidUntil = admin.firestore.Timestamp.fromDate(addMonths(base, months))
+  const currentUntil = affData.valid_until
+    ? (affData.valid_until as unknown as admin.firestore.Timestamp).toDate()
+    : null
+  const newValidUntil = admin.firestore.Timestamp.fromDate(
+    resolveAffiliationValidUntil({
+      type,
+      currentValidUntil: currentUntil,
+      now: now.toDate(),
+      monthsOverride: typeof data.months === 'number' ? data.months : null,
+    })
+  )
 
   // Flip back to the issuer's "active" status (reverses the daily expiry task).
   const activeStatusId = await resolveActiveStatusId(affData.issuer, affData.org_id)

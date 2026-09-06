@@ -1,5 +1,6 @@
 import type { Timestamp } from './common'
 import type { SaasStatus, RankingSystem, TenantFlags, SocialLink } from './team'
+import type { ContactAddress } from './contact'
 import type { Sha256Hex } from '../utils/identity'
 import { normalizeEmail } from '../utils/normalizeEmail'
 
@@ -37,6 +38,25 @@ export interface Organization {
   // Site translations treat it as the source locale (resolveSiteSourceLocale in
   // shared/utils/siteTranslation.ts: validated value, else 'en').
   language?: 'en' | 'de' | 'fr' | 'it'
+  /**
+   * WHERE THE FEDERATION IS, AND HOW TO REACH IT.
+   *
+   * `ContactAddress` — the same four-part shape a contact's address uses, not a
+   * free-text line — because it is the shape every reader in the codebase
+   * already knows how to render, and a string would have to be parsed by the
+   * first one that wanted a city.
+   *
+   * Public-facing: the org website's contact section shows these, the way a
+   * studio's primary place does. Absent on every existing organisation, and the
+   * section renders whatever is filled in, so this is additive.
+   */
+  headquarters?: ContactAddress
+  /** Where to write to the organisation. Shown publicly when set. */
+  contact_email?: string
+  /** Where to call the organisation. Shown publicly when set. */
+  contact_phone?: string
+  /** The organisation's public website, if it has one outside Linyup. */
+  contact_website?: string
   // When true, a contact's affiliation status is read-only for team managers.
   // Only org admins (and org-level automations when implemented) may change it.
   lock_affiliation?: boolean

@@ -4884,7 +4884,8 @@ function AffiliationsTab({
       {renewTarget && (() => {
         const typeDef = affiliationTypes.find((at) => at.id === renewTarget.affiliation_type_id)
         const currentUntil = renewTarget.valid_until ? tsToDate(renewTarget.valid_until) : null
-        const newUntil = previewRenewedUntil(currentUntil, typeDef?.default_validity_months)
+        // The TYPE, not just its month count — a fixed-date type has no month count.
+        const newUntil = previewRenewedUntil(currentUntil, typeDef)
         const newUntilStr = newUntil.toLocaleDateString([], {
           day: '2-digit',
           month: 'short',

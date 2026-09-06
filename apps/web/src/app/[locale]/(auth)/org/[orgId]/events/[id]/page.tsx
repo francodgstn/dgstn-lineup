@@ -19,12 +19,27 @@ import { EVENTS_COLLECTION, CHECKINS_COLLECTION } from '@linyup/shared'
 import type { Event, EventCheckin, EventType } from '@linyup/shared'
 import type { Route } from 'next'
 import { ProgramTab } from '@/components/events/program/ProgramTab'
+import { EventRsvpList, EventInvitationList } from '@/components/events/EventPeopleLists'
+import { PLUGIN_REGISTRY } from '@/plugins/registry'
+import { pluginSlot } from '@/plugins/slots'
 import { DuplicateEventDialog } from '@/components/events/DuplicateEventDialog'
 import { Tip } from '@/components/ui/tip'
 
 interface Team { id: string; name: string }
 
 const EVENT_TYPES: EventType[] = ['competition', 'camp', 'exam', 'seminar', 'workshop']
+
+type OrgEventTab = 'overview' | 'program' | 'checkins' | 'categories' | 'rsvps' | 'invitations'
+
+/** The team page's StatCard without the icon column — three numbers, one row. */
+function OrgStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-2xl font-semibold tabular-nums">{value}</p>
+    </div>
+  )
+}
 
 function eventTypeLabel(t: ReturnType<typeof useTranslations>, type: string): string {
   return (EVENT_TYPES as string[]).includes(type) ? t(`type_${type}` as Parameters<typeof t>[0]) : type
@@ -89,7 +104,15 @@ export default function OrgEventDetailPage() {
 
   const [teamFilter, setTeamFilter] = useState<string>('all')
   const [toggling, setToggling] = useState<string | null>(null)
-  const [tab, setTab] = useState<'program' | 'checkins'>('checkins')
+  // PARITY WITH THE TEAM EVENT PAGE. An organisation RUNS the federation's
+  // events — HMD's Fighting Cup is the case — and could previously see only the
+  // programme and the check-ins, which is the half of the story that happens on
+  // the day. Who accepted, who was asked and the competition categories were all
+  // team-only, on events the org itself owns.
+  //
+  // Overview leads, as it does on the team page; check-ins keeps its own render
+  // path below (it is `hidden` rather than unmounted, to hold its filter state).
+  const [tab, setTab] = useState<OrgEventTab>('overview')
   const [duplicateOpen, setDuplicateOpen] = useState(false)
   const router = useRouter()
 
@@ -124,6 +147,17 @@ export default function OrgEventDetailPage() {
   }
 
   const event = eventQ.data
+
+  // The plugin that owns this event TYPE, resolved exactly as the team page
+  // resolves it — by type id, through the slot convention, so neither page ever
+  // names a plugin. `hmd-fighting-cup` is why an org needs this at all: the
+  // federation runs the cup, so its categories belong in org scope too.
+  const eventPlugin = PLUGIN_REGISTRY.find((p) => p.eventType?.id === event?.type)
+  const showCategoriesTab = !!eventPlugin?.eventType?.hasCategories
+  const CategoryManager =
+    eventPlugin && showCategoriesTab
+      ? pluginSlot<{ eventId: string }>(eventPlugin.id, 'CategoryManager')
+      : null
 
   return (
     <div className="space-y-5">
@@ -186,8 +220,20 @@ export default function OrgEventDetailPage() {
       {event && (
         <div className="flex gap-1 border-b">
           {([
+            { key: 'overview' as const, label: tp('detail_tabOverview') },
             { key: 'program' as const, label: tp('detail_tabProgram') },
             { key: 'checkins' as const, label: t('checkinsTitle') },
+            ...(showCategoriesTab
+              ? [{ key: 'categories' as const, label: tp('detail_tabCategories') }]
+              : []),
+            {
+              key: 'rsvps' as const,
+              label: `${tp('detail_tabRsvps')}${event.attendees_count ? ` (${event.attendees_count})` : ''}`,
+            },
+            {
+              key: 'invitations' as const,
+              label: `${tp('detail_tabInvitations')}${event.invitations_sent_count ? ` (${event.invitations_sent_count})` : ''}`,
+            },
           ]).map((entry) => (
             <button
               key={entry.key}
@@ -202,6 +248,52 @@ export default function OrgEventDetailPage() {
               {entry.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Overview — the counters the event doc already carries. No publish card:
+          publishing an org event is `Event.publicVisibility`, which the org
+          events LIST owns, and a second control for one flag is how the two
+          disagree. */}
+      {event && tab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <OrgStat label={t('checkinsTitle')} value={event.participants_count ?? 0} />
+            <OrgStat label={tp('detail_statsRSVP')} value={event.attendees_count ?? 0} />
+            <OrgStat label={tp('detail_statsInvited')} value={event.invitations_sent_count ?? 0} />
+          </div>
+          {event.description ? (
+            <div>
+              <h3 className="text-sm font-medium mb-2">{tp('detail_fieldDescription')}</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">{tp('detail_noDescription')}</p>
+          )}
+        </div>
+      )}
+
+      {/* Categories — plugin-provided (hmd-fighting-cup). Resolved through the
+          same slot the team page uses, so a plugin contributing one gets it in
+          both scopes without either page naming it. */}
+      {event && tab === 'categories' && showCategoriesTab && CategoryManager && (
+        <CategoryManager eventId={eventId} />
+      )}
+
+      {/* RSVPs and invitations — the shared lists. `linkContacts` is OFF here:
+          an org-wide event draws replies from every member studio, and
+          `/contacts/{id}` is a studio route an org admin cannot read. */}
+      {event && tab === 'rsvps' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">{t('eventDetail_rsvpsHint')}</p>
+          <EventRsvpList eventId={eventId} />
+        </div>
+      )}
+
+      {event && tab === 'invitations' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">{t('eventDetail_invitationsHint')}</p>
+          <EventInvitationList eventId={eventId} />
         </div>
       )}
 

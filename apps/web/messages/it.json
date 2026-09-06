@@ -1386,7 +1386,8 @@
     "invitation_free": "Gratuito",
     "detail_tabProgram": "Programma",
     "detail_tabRsvps": "RSVP",
-    "detail_rsvpsEmpty": "Nessuno ha ancora accettato."
+    "detail_rsvpsEmpty": "Nessuno ha ancora accettato.",
+    "detail_tabCategories": "Categorie"
   },
   "EventProgram": {
     "emptyTitle": "Nessun programma",
@@ -2994,7 +2995,7 @@
     "tabAffiliations": "Affiliazioni",
     "tabMembers": "Membri",
     "tabBilling": "Fatturazione",
-    "tabSettings": "Impostazioni",
+    "tabSettings": "Generale",
     "backToDashboard": "Torna alla dashboard",
     "pluginsTitle": "Plugin dell'organizzazione",
     "pluginsSubtitle": "Installa i plugin una volta e diventano disponibili per tutti gli studi dell'organizzazione.",
@@ -3031,7 +3032,8 @@
     "railGroupGeneral": "Generale",
     "railGroupStandards": "Standard che definisci",
     "railGroupShared": "Risorse condivise",
-    "railGroupAdministration": "Amministrazione"
+    "railGroupAdministration": "Amministrazione",
+    "affiliationSettings": "Impostazioni di affiliazione"
   },
   "OrgTeams": {
     "title": "Studi",
@@ -3238,7 +3240,21 @@
     "language": "Lingua",
     "languageHint": "La lingua in cui sono scritti i contenuti e le comunicazioni di questa organizzazione — inviti, avvisi e contenuti condivisi. La lingua della tua dashboard viene scelta separatamente.",
     "pageTitle": "Impostazioni",
-    "pageSubtitle": "Dati, terminologia e indirizzo mittente dell'organizzazione."
+    "pageSubtitle": "Dati, terminologia e indirizzo mittente dell'organizzazione.",
+    "contactTitle": "Sede e contatti",
+    "contactDescription": "Dove ha sede l'organizzazione e come raggiungerla.",
+    "contactHint": "Mostrati sul sito dell'organizzazione, dove la sezione contatti li richiede. Un campo vuoto non compare.",
+    "hqStreetLabel": "Via",
+    "hqNumberLabel": "Numero",
+    "hqPostalLabel": "CAP",
+    "hqLocalityLabel": "Località",
+    "contactEmailLabel": "Email di contatto",
+    "contactEmailPlaceholder": "info@example.org",
+    "contactPhoneLabel": "Telefono di contatto",
+    "contactWebsiteLabel": "Sito web",
+    "contactWebsitePlaceholder": "https://example.org",
+    "contactSaved": "Contatti salvati",
+    "contactError": "Impossibile salvare i contatti"
   },
   "OrgInvite": {
     "title": "Invito organizzazione",
@@ -3503,7 +3519,11 @@
     "sectionFeatures": "Punti forti",
     "sectionFeaturesDesc": "Una riga di schede con icone per i tuoi punti forti",
     "sectionTestimonials": "Testimonianze",
-    "sectionTestimonialsDesc": "Recensioni dei membri, una alla volta"
+    "sectionTestimonialsDesc": "Recensioni dei membri, una alla volta",
+    "editorOrgClubsLayout": "Disposizione",
+    "editorOrgClubsLayoutCards": "Schede",
+    "editorOrgClubsLayoutList": "Elenco scorrevole",
+    "editorOrgClubsSearchable": "Consenti ai visitatori di cercare i club"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -4672,7 +4692,12 @@
     "confirmDeleteMessage": "I contatti con questo tipo manterranno le loro affiliazioni, ma non sarà possibile aggiungerne di nuove.",
     "noTypes": "Nessun tipo di affiliazione ancora.",
     "saved": "Salvato.",
-    "deleted": "Eliminato."
+    "deleted": "Eliminato.",
+    "validityModeLabel": "Come scade",
+    "validityModeMonths": "Un numero fisso di mesi dall'adesione",
+    "validityModeFixedDate": "La stessa data ogni anno, per tutti",
+    "resetDayLabel": "Data di rinnovo",
+    "resetDayHint": "Vengono usati solo giorno e mese. Tutti scadono in questa data indipendentemente da quando si sono iscritti, quindi chi si iscrive poco prima ha un primo periodo breve."
   },
   "CustomForms": {
     "title": "Moduli",
@@ -5738,7 +5763,9 @@
     "statusPending": "In attesa",
     "titleUnconfirm": "Annulla conferma",
     "titleConfirm": "Conferma",
-    "emptyCheckins": "Ancora nessun check-in."
+    "emptyCheckins": "Ancora nessun check-in.",
+    "eventDetail_rsvpsHint": "Chi ha accettato, in tutti i club membri. I nomi non sono link — i contatti di un club appartengono al club.",
+    "eventDetail_invitationsHint": "Tutte le persone invitate a questo evento. Un nuovo invio salta chi ha già un invito, a meno che tu non scelga di reinviare."
   },
   "OrgRanking": {
     "title": "Sistemi di graduazione",
@@ -7234,7 +7261,9 @@
     "navFeatures": "Punti forti",
     "navTestimonials": "Recensioni",
     "schemeToDark": "Passa a scuro",
-    "schemeToLight": "Passa a chiaro"
+    "schemeToLight": "Passa a chiaro",
+    "searchClubs": "Cerca club",
+    "noClubsMatch": "Nessun club corrisponde a questa ricerca."
   },
   "OrgMemberInvite": {
     "title": "Invito all'organizzazione",
@@ -7953,5 +7982,9 @@
     "week": "7 giorni",
     "month": "30 giorni",
     "note": "Su {members} membri. Conta chi ha aperto l'app o effettuato l'accesso alla tua pagina pubblica — non cosa ha fatto."
+  },
+  "OrgAffiliationSettings": {
+    "pageTitle": "Impostazioni di affiliazione",
+    "pageSubtitle": "Come si chiama un'affiliazione, gli stati e i tipi che può assumere e se un club può definire i propri."
   }
 }
