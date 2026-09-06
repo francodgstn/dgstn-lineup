@@ -7988,5 +7988,24 @@
   "OrgAffiliationSettings": {
     "pageTitle": "Affiliation settings",
     "pageSubtitle": "What an affiliation is called, the statuses and types it can take, and whether a studio may set its own."
+  },
+  "FightingCup": {
+    "exportCsv": "Export CSV",
+    "lineupPdf": "Lineup PDF",
+    "addCategoriesFirst": "Add categories first",
+    "colCategory": "Category",
+    "colGender": "Gender",
+    "colAgeRange": "Age",
+    "colCompetitors": "Competitors",
+    "colGroup": "Group",
+    "colLastname": "Lastname",
+    "colFirstname": "Firstname",
+    "colAge": "Age",
+    "colBelt": "Belt",
+    "colWeight": "Weight",
+    "colClub": "Club",
+    "colCat": "Cat.",
+    "entered": "entered",
+    "totalCompetitors": "Total competitors"
   }
 }

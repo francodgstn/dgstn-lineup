@@ -7988,5 +7988,24 @@
   "OrgAffiliationSettings": {
     "pageTitle": "Paramètres d'affiliation",
     "pageSubtitle": "Le nom donné à une affiliation, les statuts et types qu'elle peut prendre, et si un club peut définir les siens."
+  },
+  "FightingCup": {
+    "exportCsv": "Exporter en CSV",
+    "lineupPdf": "PDF des listes",
+    "addCategoriesFirst": "Ajoutez d'abord des catégories",
+    "colCategory": "Catégorie",
+    "colGender": "Genre",
+    "colAgeRange": "Âge",
+    "colCompetitors": "Participants",
+    "colGroup": "Groupe",
+    "colLastname": "Nom",
+    "colFirstname": "Prénom",
+    "colAge": "Âge",
+    "colBelt": "Ceinture",
+    "colWeight": "Poids",
+    "colClub": "Club",
+    "colCat": "Cat.",
+    "entered": "inscrits",
+    "totalCompetitors": "Total des participants"
   }
 }

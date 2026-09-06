@@ -7988,5 +7988,24 @@
   "OrgAffiliationSettings": {
     "pageTitle": "Impostazioni di affiliazione",
     "pageSubtitle": "Come si chiama un'affiliazione, gli stati e i tipi che può assumere e se un club può definire i propri."
+  },
+  "FightingCup": {
+    "exportCsv": "Esporta CSV",
+    "lineupPdf": "PDF delle liste",
+    "addCategoriesFirst": "Aggiungi prima le categorie",
+    "colCategory": "Categoria",
+    "colGender": "Genere",
+    "colAgeRange": "Età",
+    "colCompetitors": "Partecipanti",
+    "colGroup": "Gruppo",
+    "colLastname": "Cognome",
+    "colFirstname": "Nome",
+    "colAge": "Età",
+    "colBelt": "Cintura",
+    "colWeight": "Peso",
+    "colClub": "Club",
+    "colCat": "Cat.",
+    "entered": "iscritti",
+    "totalCompetitors": "Totale partecipanti"
   }
 }

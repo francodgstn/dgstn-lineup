@@ -7988,5 +7988,24 @@
   "OrgAffiliationSettings": {
     "pageTitle": "Zugehörigkeits-Einstellungen",
     "pageSubtitle": "Wie eine Zugehörigkeit heisst, welche Status und Typen sie annehmen kann und ob eine Schule eigene festlegen darf."
+  },
+  "FightingCup": {
+    "exportCsv": "CSV exportieren",
+    "lineupPdf": "Startlisten-PDF",
+    "addCategoriesFirst": "Zuerst Kategorien anlegen",
+    "colCategory": "Kategorie",
+    "colGender": "Geschlecht",
+    "colAgeRange": "Alter",
+    "colCompetitors": "Teilnehmende",
+    "colGroup": "Gruppe",
+    "colLastname": "Nachname",
+    "colFirstname": "Vorname",
+    "colAge": "Alter",
+    "colBelt": "Gürtel",
+    "colWeight": "Gewicht",
+    "colClub": "Club",
+    "colCat": "Kat.",
+    "entered": "gemeldet",
+    "totalCompetitors": "Teilnehmende gesamt"
   }
 }
