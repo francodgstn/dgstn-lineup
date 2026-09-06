@@ -56,6 +56,27 @@ export interface ClubsSection extends OrgSectionBase {
   columns: 2 | 3 | 4
   /** Show each club's primary address on its card. */
   showAddress?: boolean
+  /**
+   * How the directory is laid out.
+   *
+   * `cards` (the default, and what every existing section keeps) is a grid of
+   * image cards — right for a federation of a handful of clubs, where each one
+   * gets to look like somewhere you might go.
+   *
+   * `list` is compact rows in a fixed-height box that scrolls inside itself, for
+   * a federation with enough clubs that a grid becomes a page you scroll past
+   * rather than a directory you use. HMD has sixteen (Franco, 2026-09-05).
+   *
+   * Absent ⇒ `cards`, so this is additive to every published site.
+   */
+  layout?: 'cards' | 'list'
+  /**
+   * Offer a search box above the directory.
+   *
+   * Independent of `layout` on purpose — a long grid is as hard to scan as a
+   * long list, so both views can have one.
+   */
+  searchable?: boolean
 }
 
 /** Locations — every club's primary address aggregated (live), plus optional

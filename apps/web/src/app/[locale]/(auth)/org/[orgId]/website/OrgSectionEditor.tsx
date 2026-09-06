@@ -137,10 +137,29 @@ function ClubsFields({ s, onChange }: { s: ClubsSection; onChange: (p: Patch) =>
       <Field label={t('editorSubheading')}>
         <Input value={s.subheading ?? ''} onChange={(e) => onChange({ subheading: e.target.value })} className="h-9" />
       </Field>
-      <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
+      <Field label={t('editorOrgClubsLayout')}>
+        <Select
+          value={s.layout ?? 'cards'}
+          onValueChange={(v) => onChange({ layout: v as 'cards' | 'list' })}
+        >
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cards">{t('editorOrgClubsLayoutCards')}</SelectItem>
+            <SelectItem value="list">{t('editorOrgClubsLayoutList')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      {/* Columns only mean something in the grid — a list has one. */}
+      {(s.layout ?? 'cards') === 'cards' && (
+        <ColumnsField columns={s.columns} onChange={(v) => onChange({ columns: v })} />
+      )}
       <label className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm">{t('editorOrgShowAddressOnCards')}</span>
         <Switch checked={s.showAddress ?? false} onCheckedChange={(v) => onChange({ showAddress: v })} />
+      </label>
+      <label className="flex items-center justify-between rounded-lg border p-3">
+        <span className="text-sm">{t('editorOrgClubsSearchable')}</span>
+        <Switch checked={s.searchable ?? false} onCheckedChange={(v) => onChange({ searchable: v })} />
       </label>
     </div>
   )

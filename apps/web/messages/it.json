@@ -3519,7 +3519,11 @@
     "sectionFeatures": "Punti forti",
     "sectionFeaturesDesc": "Una riga di schede con icone per i tuoi punti forti",
     "sectionTestimonials": "Testimonianze",
-    "sectionTestimonialsDesc": "Recensioni dei membri, una alla volta"
+    "sectionTestimonialsDesc": "Recensioni dei membri, una alla volta",
+    "editorOrgClubsLayout": "Disposizione",
+    "editorOrgClubsLayoutCards": "Schede",
+    "editorOrgClubsLayoutList": "Elenco scorrevole",
+    "editorOrgClubsSearchable": "Consenti ai visitatori di cercare i club"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -7252,7 +7256,9 @@
     "navFeatures": "Punti forti",
     "navTestimonials": "Recensioni",
     "schemeToDark": "Passa a scuro",
-    "schemeToLight": "Passa a chiaro"
+    "schemeToLight": "Passa a chiaro",
+    "searchClubs": "Cerca club",
+    "noClubsMatch": "Nessun club corrisponde a questa ricerca."
   },
   "OrgMemberInvite": {
     "title": "Invito all'organizzazione",

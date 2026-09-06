@@ -3519,7 +3519,11 @@
     "sectionFeatures": "Highlights",
     "sectionFeaturesDesc": "A row of icon cards for your key features",
     "sectionTestimonials": "Testimonials",
-    "sectionTestimonialsDesc": "Member reviews, one at a time"
+    "sectionTestimonialsDesc": "Member reviews, one at a time",
+    "editorOrgClubsLayout": "Layout",
+    "editorOrgClubsLayoutCards": "Cards",
+    "editorOrgClubsLayoutList": "Scrolling list",
+    "editorOrgClubsSearchable": "Let visitors search the clubs"
   },
   "Kiosk": {
     "title": "Kiosk",
@@ -7252,7 +7256,9 @@
     "navFeatures": "Features",
     "navTestimonials": "Reviews",
     "schemeToDark": "Switch to dark",
-    "schemeToLight": "Switch to light"
+    "schemeToLight": "Switch to light",
+    "searchClubs": "Search clubs",
+    "noClubsMatch": "No club matches that search."
   },
   "OrgMemberInvite": {
     "title": "Organisation invitation",
